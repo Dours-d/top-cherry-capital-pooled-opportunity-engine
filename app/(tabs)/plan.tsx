@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { FlatList, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
-import { LISTINGS, PROFILES, formatCurrency, type Listing } from "@/lib/market-data";
+import { LISTINGS, PROFILES, formatCurrency, recommendAllocations, type Listing } from "@/lib/market-data";
 
 const PLAN_STORAGE_KEY = "topCherry.capitalPlan";
 const DEFAULT_BUDGET = 25000;
@@ -20,7 +20,7 @@ export default function PlanScreen() {
   const colors = useColors();
   const [budget, setBudget] = useState(DEFAULT_BUDGET);
   const [budgetText, setBudgetText] = useState(String(DEFAULT_BUDGET));
-  const [allocations, setAllocations] = useState<AllocationMap>({ [LISTINGS[0].id]: 1 });
+  const [allocations, setAllocations] = useState<AllocationMap>(() => recommendAllocations(DEFAULT_BUDGET));
   const [profileFilter, setProfileFilter] = useState("all");
 
   useEffect(() => {
@@ -32,6 +32,7 @@ export default function PlanScreen() {
         setBudgetText(String(saved.budget));
       }
       if (saved.allocations) setAllocations(saved.allocations);
+      else setAllocations(recommendAllocations(saved.budget ?? DEFAULT_BUDGET));
     });
   }, []);
 
@@ -55,7 +56,9 @@ export default function PlanScreen() {
     setBudgetText(sanitized);
     const nextBudget = Math.max(0, Number(sanitized || 0));
     setBudget(nextBudget);
-    persist(nextBudget, allocations);
+    const nextAllocations = recommendAllocations(nextBudget);
+    setAllocations(nextAllocations);
+    persist(nextBudget, nextAllocations);
   };
 
   const updateQuantity = (listing: Listing, delta: number) => {
@@ -80,7 +83,7 @@ export default function PlanScreen() {
           <View style={styles.header}><Text style={[styles.eyebrow, { color: colors.muted }]}>CAPITAL ALLOCATION</Text><Text style={[styles.title, { color: colors.foreground }]}>Pool your edge.</Text><Text style={[styles.subtitle, { color: colors.muted }]}>Size each opportunity against one shared budget, not in isolation.</Text></View>
           <View style={[styles.budgetCard, { backgroundColor: colors.surface, borderColor: colors.border }]}><View style={styles.budgetHeader}><View><Text style={[styles.cardEyebrow, { color: colors.muted }]}>TOTAL INVESTABLE CAPITAL</Text><Text style={[styles.budgetHint, { color: colors.muted }]}>How much are you putting to work?</Text></View><MaterialIcons name="account-balance-wallet" size={22} color={colors.primary} /></View><View style={[styles.budgetInputWrap, { backgroundColor: colors.background }]}><Text style={[styles.currency, { color: colors.muted }]}>$</Text><TextInput value={budgetText} onChangeText={updateBudget} keyboardType="number-pad" style={[styles.budgetInput, { color: colors.foreground }]} /></View></View>
           <View style={[styles.summaryCard, { backgroundColor: colors.foreground }]}><View style={styles.summaryTop}><Text style={[styles.summaryEyebrow, { color: colors.primary }]}>PLAN SUMMARY</Text><Text style={[styles.summaryCount, { color: colors.background }]}>{selectedCount} opportunities</Text></View><View style={styles.summaryNumbers}><SummaryStat label="Deployed" value={formatCurrency(deployed)} color={colors.background} /><SummaryStat label="Remaining" value={formatCurrency(Math.max(0, remaining))} color={colors.background} /><SummaryStat label="Proj. upside" value={`+${formatCurrency(Math.max(0, upside))}`} color={colors.primary} /></View><View style={styles.progressTrack}><View style={[styles.progressFill, { backgroundColor: colors.primary, width: `${Math.min(100, budget ? (deployed / budget) * 100 : 0)}%` }]} /></View><Text style={[styles.progressText, { color: colors.muted }]}>{budget ? `${((deployed / budget) * 100).toFixed(0)}% of capital allocated` : "Set a budget to begin"}</Text></View>
-          <View style={styles.sectionHeader}><View><Text style={[styles.sectionTitle, { color: colors.foreground }]}>Allocation opportunities</Text><Text style={[styles.sectionCaption, { color: colors.muted }]}>Quantity × opportunity cost</Text></View><Pressable onPress={() => { setAllocations({}); persist(budget, {}); }}><Text style={[styles.resetText, { color: colors.primary }]}>Reset</Text></Pressable></View>
+          <View style={styles.sectionHeader}><View><Text style={[styles.sectionTitle, { color: colors.foreground }]}>Allocation opportunities</Text><Text style={[styles.sectionCaption, { color: colors.muted }]}>Quantity × opportunity cost</Text></View><Pressable onPress={() => { const next = recommendAllocations(budget); setAllocations(next); persist(budget, next); }}><Text style={[styles.resetText, { color: colors.primary }]}>Recalculate</Text></Pressable></View>
           <FlatList horizontal data={[{ slug: "all", name: "All" }, ...PROFILES]} keyExtractor={(item) => item.slug} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips} renderItem={({ item }) => <Pressable onPress={() => setProfileFilter(item.slug)} style={[styles.chip, { backgroundColor: profileFilter === item.slug ? colors.foreground : colors.surface, borderColor: colors.border }]}><Text style={[styles.chipText, { color: profileFilter === item.slug ? colors.background : colors.muted }]}>{item.name}</Text></Pressable>} />
         </View>}
         renderItem={({ item }) => <AllocationCard listing={item} quantity={allocations[item.id] ?? 0} budget={budget} deployed={deployed} colors={colors} onChange={(delta) => updateQuantity(item, delta)} />}

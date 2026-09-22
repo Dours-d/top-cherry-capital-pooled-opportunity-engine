@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { LISTINGS, PROFILES, formatCurrency, getProfile, getProfileListings } from "../lib/market-data";
+import { LISTINGS, PROFILES, formatCurrency, getProfile, getProfileListings, recommendAllocations } from "../lib/market-data";
 
 describe("Top Cherry market data", () => {
   it("ships the three default market profiles", () => {
@@ -28,5 +28,14 @@ describe("Top Cherry market data", () => {
 
   it("formats deal prices as whole-dollar USD", () => {
     expect(formatCurrency(13800)).toBe("$13,800");
+  });
+
+  it("changes the recommended mix when the available capital changes", () => {
+    const modest = recommendAllocations(3000);
+    const powerful = recommendAllocations(25000);
+
+    expect(Object.keys(modest)).not.toEqual(Object.keys(powerful));
+    expect(modest["tudor-black-bay"]).toBeGreaterThan(0);
+    expect(powerful["pokemon-charizard"] ?? 0).toBeGreaterThan(0);
   });
 });
