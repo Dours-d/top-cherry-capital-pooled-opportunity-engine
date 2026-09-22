@@ -16,6 +16,8 @@ import {
 } from "react-native";
 import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
+import { useAuth } from "@/hooks/use-auth";
+import { trpc } from "@/lib/trpc";
 import {
   LISTINGS,
   PROFILES,
@@ -32,8 +34,30 @@ const triggerHaptic = () => {
   }
 };
 
+const toSavedDealInput = (listing: Listing) => ({
+  listingId: listing.id,
+  profileSlug: listing.profileSlug,
+  brand: listing.brand,
+  model: listing.model,
+  askingPrice: listing.askingPrice,
+  marketValue: listing.marketValue,
+  score: listing.score,
+  marginPercentage: listing.margin,
+  condition: listing.condition,
+  platformSource: listing.platform,
+  location: listing.location,
+  escrowProtected: listing.escrowProtected,
+  verified: listing.verified,
+  url: listing.url,
+});
+
 export default function HomeScreen() {
   const colors = useColors();
+  const { isAuthenticated } = useAuth();
+  const savedQuery = trpc.savedDeals.list.useQuery(undefined, { enabled: isAuthenticated });
+  const toggleSavedMutation = trpc.savedDeals.toggle.useMutation({
+    onSuccess: () => void savedQuery.refetch(),
+  });
   const [activeSlug, setActiveSlug] = useState(PROFILES[0].slug);
   const [savedIds, setSavedIds] = useState<string[]>([]);
   const [filter, setFilter] = useState<"all" | "top" | "escrow">("all");
@@ -54,6 +78,12 @@ export default function HomeScreen() {
       }
     });
   }, []);
+
+  useEffect(() => {
+    if (isAuthenticated && savedQuery.data) {
+      setSavedIds(savedQuery.data.map((deal) => deal.listingId));
+    }
+  }, [isAuthenticated, savedQuery.data]);
 
   const activeProfile = getProfile(activeSlug);
 
@@ -86,13 +116,14 @@ export default function HomeScreen() {
     void AsyncStorage.setItem(PROFILE_STORAGE_KEY, slug);
   };
 
-  const toggleSaved = (id: string) => {
+  const toggleSaved = (listing: Listing) => {
     triggerHaptic();
     setSavedIds((current) => {
-      const next = current.includes(id) ? current.filter((savedId) => savedId !== id) : [...current, id];
-      void AsyncStorage.setItem(SAVED_STORAGE_KEY, JSON.stringify(next));
+      const next = current.includes(listing.id) ? current.filter((savedId) => savedId !== listing.id) : [...current, listing.id];
+      if (!isAuthenticated) void AsyncStorage.setItem(SAVED_STORAGE_KEY, JSON.stringify(next));
       return next;
     });
+    if (isAuthenticated) toggleSavedMutation.mutate(toSavedDealInput(listing));
   };
 
   return (
@@ -229,7 +260,7 @@ export default function HomeScreen() {
             isSaved={savedIds.includes(item.id)}
             colors={colors}
             onPress={() => setSelectedListing(item)}
-            onSave={() => toggleSaved(item.id)}
+            onSave={() => toggleSaved(item)}
           />
         )}
         ListEmptyComponent={
@@ -268,7 +299,7 @@ export default function HomeScreen() {
                 <Text style={[styles.trustText, { color: colors.foreground }]}>{selectedListing.escrowProtected ? "Escrow protected listing" : "Review seller protection before buying"}</Text>
               </View>
               <View style={styles.modalActions}>
-                <Pressable onPress={() => toggleSaved(selectedListing.id)} style={({ pressed }) => [styles.secondaryButton, { borderColor: colors.border }, pressed && styles.pressed]}>
+                <Pressable onPress={() => toggleSaved(selectedListing)} style={({ pressed }) => [styles.secondaryButton, { borderColor: colors.border }, pressed && styles.pressed]}>
                   <MaterialIcons name={savedIds.includes(selectedListing.id) ? "bookmark" : "bookmark-border"} size={20} color={colors.foreground} />
                   <Text style={[styles.secondaryButtonText, { color: colors.foreground }]}>{savedIds.includes(selectedListing.id) ? "Saved" : "Save deal"}</Text>
                 </Pressable>

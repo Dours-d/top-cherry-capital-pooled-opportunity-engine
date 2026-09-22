@@ -13,6 +13,7 @@ const MAPPING = {
   "paperplane.fill": "bookmark",
   "chevron.left.forwardslash.chevron.right": "person",
   "chevron.right": "chevron-right",
+  "chart.bar.fill": "bar-chart",
 } as IconMapping;
 
 export function IconSymbol({
