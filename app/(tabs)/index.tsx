@@ -208,7 +208,7 @@ export default function HomeScreen() {
                   >
                     <View style={styles.profileCardTop}>
                       <View style={[styles.profileIcon, { backgroundColor: isActive ? "rgba(16, 24, 20, 0.08)" : colors.background }]}>
-                        <MaterialIcons name={item.slug === "luxury_watches" ? "watch" : item.slug === "camera_gear" ? "photo-camera" : "style"} size={19} color={colors.foreground} />
+                        <MaterialIcons name={item.icon} size={19} color={colors.foreground} />
                       </View>
                       {isActive ? <MaterialIcons name="check-circle" size={19} color={colors.foreground} /> : null}
                     </View>
