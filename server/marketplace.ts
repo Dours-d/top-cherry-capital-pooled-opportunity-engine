@@ -3,6 +3,8 @@ export type MarketplaceSource = {
   name: string;
   mode: "normalized-import";
   status: "adapter-ready" | "credentials-required";
+  coverage: "specialist" | "regional-general";
+  regions: string[];
   capabilities: string[];
 };
 
@@ -22,10 +24,14 @@ export type NormalizedMarketplaceListing = {
 };
 
 export const MARKETPLACE_SOURCES: MarketplaceSource[] = [
-  { slug: "chrono24", name: "Chrono24", mode: "normalized-import", status: "credentials-required", capabilities: ["watches", "escrow", "listing-links"] },
-  { slug: "ebay", name: "eBay", mode: "normalized-import", status: "credentials-required", capabilities: ["watches", "camera-gear", "collectibles", "listing-links"] },
-  { slug: "mpb", name: "MPB", mode: "normalized-import", status: "credentials-required", capabilities: ["camera-gear", "listing-links"] },
-  { slug: "goldin", name: "Goldin", mode: "normalized-import", status: "credentials-required", capabilities: ["collectibles", "listing-links"] },
+  { slug: "chrono24", name: "Chrono24", mode: "normalized-import", status: "credentials-required", coverage: "specialist", regions: ["EU", "global"], capabilities: ["watches", "escrow", "listing-links"] },
+  { slug: "ebay", name: "eBay", mode: "normalized-import", status: "credentials-required", coverage: "specialist", regions: ["global"], capabilities: ["watches", "camera-gear", "collectibles", "listing-links"] },
+  { slug: "mpb", name: "MPB", mode: "normalized-import", status: "credentials-required", coverage: "specialist", regions: ["EU", "UK", "US"], capabilities: ["camera-gear", "listing-links"] },
+  { slug: "goldin", name: "Goldin", mode: "normalized-import", status: "credentials-required", coverage: "specialist", regions: ["US", "global"], capabilities: ["collectibles", "listing-links"] },
+  { slug: "wallapop", name: "Wallapop", mode: "normalized-import", status: "credentials-required", coverage: "regional-general", regions: ["ES", "IT"], capabilities: ["home-and-living", "local-pickup", "general-goods"] },
+  { slug: "leboncoin", name: "Leboncoin", mode: "normalized-import", status: "credentials-required", coverage: "regional-general", regions: ["FR"], capabilities: ["home-and-living", "local-pickup", "general-goods"] },
+  { slug: "kleinanzeigen", name: "Kleinanzeigen", mode: "normalized-import", status: "credentials-required", coverage: "regional-general", regions: ["DE"], capabilities: ["home-and-living", "local-pickup", "general-goods"] },
+  { slug: "marktplaats", name: "Marktplaats", mode: "normalized-import", status: "credentials-required", coverage: "regional-general", regions: ["NL"], capabilities: ["home-and-living", "local-pickup", "general-goods"] },
 ];
 
 export const scoreNormalizedListing = (listing: NormalizedMarketplaceListing) => {

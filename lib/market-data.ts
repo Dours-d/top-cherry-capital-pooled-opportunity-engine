@@ -6,7 +6,7 @@ export type MarketProfile = {
   accent: string;
   threshold: number;
   count: number;
-  icon: "watch" | "photo-camera" | "style" | "headphones" | "directions-car" | "music-note" | "diamond" | "sports-soccer";
+  icon: "watch" | "photo-camera" | "style" | "headphones" | "directions-car" | "music-note" | "diamond" | "sports-soccer" | "home";
 };
 
 export type Listing = {
@@ -45,6 +45,7 @@ export const PROFILES: MarketProfile[] = [
   { slug: "musical_instruments", name: "Musical instruments", shortName: "Instruments", description: "Well-kept instruments with durable secondary demand.", accent: "#D8F2E5", threshold: 24, count: 7, icon: "music-note" },
   { slug: "fine_jewellery", name: "Fine jewellery", shortName: "Jewellery", description: "Portable value where provenance and materials matter.", accent: "#F7DCEB", threshold: 32, count: 5, icon: "diamond" },
   { slug: "sports_collectibles", name: "Sports collectibles", shortName: "Sports", description: "Authenticated pieces with event-driven demand.", accent: "#DBE9F5", threshold: 34, count: 8, icon: "sports-soccer" },
+  { slug: "home_and_living", name: "Home & living", shortName: "Home", description: "Furniture, appliances, and design pieces suited to local pickup.", accent: "#F1E7D5", threshold: 22, count: 15, icon: "home" },
 ];
 
 export const LISTINGS: Listing[] = [
@@ -59,6 +60,10 @@ export const LISTINGS: Listing[] = [
   { id: "gibson-les-paul-59", profileSlug: "musical_instruments", brand: "Gibson", model: "Custom Shop 1959 Reissue", askingPrice: 5200, marketValue: 7200, score: 87, margin: 27.8, condition: "Near mint", platform: "Reverb", location: "Nashville, US", escrowProtected: false, verified: true, age: "2 hrs ago", url: "https://reverb.com/" },
   { id: "cartier-love-bracelet", profileSlug: "fine_jewellery", brand: "Cartier", model: "Love bracelet, yellow gold", askingPrice: 6100, marketValue: 8200, score: 83, margin: 25.6, condition: "Very good", platform: "The RealReal", location: "Paris, FR", escrowProtected: true, verified: true, age: "3 hrs ago", url: "https://www.therealreal.com/" },
   { id: "jordan-1-chicago", profileSlug: "sports_collectibles", brand: "Nike", model: "Air Jordan 1 Chicago 1985", askingPrice: 4600, marketValue: 6900, score: 90, margin: 33.3, condition: "Authenticated", platform: "StockX", location: "Chicago, US", escrowProtected: true, verified: true, age: "4 hrs ago", url: "https://stockx.com/" },
+  { id: "vitra-eames-chair", profileSlug: "home_and_living", brand: "Vitra", model: "Eames Lounge Chair", askingPrice: 2200, marketValue: 3300, score: 82, margin: 33.3, condition: "Very good", platform: "Wallapop", location: "Barcelona, ES", escrowProtected: false, verified: false, age: "18 min ago", url: "https://es.wallapop.com/" },
+  { id: "miele-coffee-system", profileSlug: "home_and_living", brand: "Miele", model: "Built-in coffee system", askingPrice: 900, marketValue: 1500, score: 84, margin: 40, condition: "Excellent", platform: "Leboncoin", location: "Lyon, FR", escrowProtected: false, verified: false, age: "35 min ago", url: "https://www.leboncoin.fr/" },
+  { id: "usm-sideboard", profileSlug: "home_and_living", brand: "USM Haller", model: "Modular sideboard", askingPrice: 1400, marketValue: 2400, score: 86, margin: 41.7, condition: "Good", platform: "Kleinanzeigen", location: "Berlin, DE", escrowProtected: false, verified: false, age: "1 hr ago", url: "https://www.kleinanzeigen.de/" },
+  { id: "design-lamp", profileSlug: "home_and_living", brand: "Flos", model: "Arco floor lamp", askingPrice: 650, marketValue: 1100, score: 83, margin: 40.9, condition: "Very good", platform: "Marktplaats", location: "Amsterdam, NL", escrowProtected: false, verified: false, age: "2 hrs ago", url: "https://www.marktplaats.nl/" },
 ];
 
 export const getProfile = (slug: string) => PROFILES.find((profile) => profile.slug === slug) ?? PROFILES[0];

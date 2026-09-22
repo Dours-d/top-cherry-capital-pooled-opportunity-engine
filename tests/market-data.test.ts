@@ -12,6 +12,7 @@ describe("Top Cherry market data", () => {
       "musical_instruments",
       "fine_jewellery",
       "sports_collectibles",
+      "home_and_living",
     ]);
     expect(PROFILES.every((profile) => profile.icon)).toBe(true);
   });
@@ -41,7 +42,8 @@ describe("Top Cherry market data", () => {
     const powerful = recommendAllocations(25000);
 
     expect(Object.keys(modest)).not.toEqual(Object.keys(powerful));
-    expect(modest["focal-utopia"]).toBeGreaterThan(0);
+    expect(Object.keys(modest).length).toBeGreaterThan(0);
+    expect(Object.keys(modest).every((id) => LISTINGS.find((listing) => listing.id === id)!.askingPrice <= 3000)).toBe(true);
     expect(powerful["pokemon-charizard"] ?? 0).toBeGreaterThan(0);
   });
 });
