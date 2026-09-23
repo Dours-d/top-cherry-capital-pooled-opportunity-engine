@@ -61,6 +61,7 @@ export default function HomeScreen() {
   const [activeSlug, setActiveSlug] = useState(PROFILES[0].slug);
   const [savedIds, setSavedIds] = useState<string[]>([]);
   const [filter, setFilter] = useState<"all" | "top" | "escrow">("all");
+  const [sourceFilter, setSourceFilter] = useState("all");
   const [query, setQuery] = useState("");
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
   const [showNotice, setShowNotice] = useState(false);
@@ -92,12 +93,13 @@ export default function HomeScreen() {
     return LISTINGS.filter((listing) => {
       const belongsToProfile = listing.profileSlug === activeSlug;
       const matchesFilter = filter === "all" || (filter === "top" ? listing.score >= 85 : listing.escrowProtected);
+      const matchesSource = sourceFilter === "all" || listing.platform === sourceFilter;
       const matchesQuery =
         !normalizedQuery ||
         `${listing.brand} ${listing.model} ${listing.platform}`.toLowerCase().includes(normalizedQuery);
-      return belongsToProfile && matchesFilter && matchesQuery;
+      return belongsToProfile && matchesFilter && matchesSource && matchesQuery;
     });
-  }, [activeSlug, filter, query]);
+  }, [activeSlug, filter, query, sourceFilter]);
 
   const profileListings = useMemo(
     () => LISTINGS.filter((listing) => listing.profileSlug === activeSlug),
@@ -112,6 +114,7 @@ export default function HomeScreen() {
     triggerHaptic();
     setActiveSlug(slug);
     setFilter("all");
+    setSourceFilter("all");
     setQuery("");
     void AsyncStorage.setItem(PROFILE_STORAGE_KEY, slug);
   };
@@ -252,6 +255,21 @@ export default function HomeScreen() {
                 ))}
               </View>
             </View>
+            <FlatList
+              horizontal
+              data={["all", ...Array.from(new Set(profileListings.map((listing) => listing.platform)))]}
+              keyExtractor={(item) => item}
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.sourceRail}
+              renderItem={({ item }) => (
+                <Pressable
+                  onPress={() => { triggerHaptic(); setSourceFilter(item); }}
+                  style={({ pressed }) => [styles.filterButton, { backgroundColor: sourceFilter === item ? colors.primary : colors.surface, borderColor: colors.border }, pressed && styles.pressed]}
+                >
+                  <Text style={[styles.filterButtonText, { color: sourceFilter === item ? colors.foreground : colors.muted }]}>{item === "all" ? "All sources" : item}</Text>
+                </Pressable>
+              )}
+            />
           </View>
         }
         renderItem={({ item }) => (
@@ -390,6 +408,7 @@ const styles = StyleSheet.create({
   sectionCaption: { fontSize: 12, marginTop: 3, maxWidth: 260 },
   linkText: { fontSize: 13, fontWeight: "700" },
   profileRail: { gap: 10, paddingRight: 20 },
+  sourceRail: { gap: 6, paddingBottom: 2, paddingRight: 20 },
   profileCard: { width: 142, minHeight: 128, borderRadius: 18, borderWidth: 1, padding: 13, justifyContent: "space-between" },
   profileCardTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   profileIcon: { width: 32, height: 32, borderRadius: 11, alignItems: "center", justifyContent: "center" },
