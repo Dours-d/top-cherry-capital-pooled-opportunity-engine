@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { LISTINGS, PROFILES, formatCurrency, getProfile, getProfileListings, recommendAllocations } from "../lib/market-data";
+import { LISTINGS, PROFILES, formatCurrency, getListingEconomics, getProfile, getProfileListings, recommendAllocations } from "../lib/market-data";
 
 describe("Top Cherry market data", () => {
   it("ships a broad marketplace-independent default category registry", () => {
@@ -45,5 +45,12 @@ describe("Top Cherry market data", () => {
     expect(Object.keys(modest).length).toBeGreaterThan(0);
     expect(Object.keys(modest).every((id) => LISTINGS.find((listing) => listing.id === id)!.askingPrice <= 3000)).toBe(true);
     expect(powerful["pokemon-charizard"] ?? 0).toBeGreaterThan(0);
+  });
+
+  it("deducts transaction and pickup costs from net upside", () => {
+    const economics = getListingEconomics(LISTINGS.find((listing) => listing.id === "design-lamp")!);
+    expect(economics.grossUpside).toBe(450);
+    expect(economics.travelCost).toBeGreaterThan(0);
+    expect(economics.netUpside).toBeLessThan(economics.grossUpside);
   });
 });

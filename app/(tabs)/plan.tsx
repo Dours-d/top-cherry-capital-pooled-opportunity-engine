@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { FlatList, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
-import { LISTINGS, PROFILES, formatCurrency, recommendAllocations, type Listing } from "@/lib/market-data";
+import { LISTINGS, PROFILES, formatCurrency, getListingEconomics, recommendAllocations, type Listing } from "@/lib/market-data";
 
 const PLAN_STORAGE_KEY = "topCherry.capitalPlan";
 const DEFAULT_BUDGET = 25000;
@@ -42,8 +42,7 @@ export default function PlanScreen() {
   );
   const rows = LISTINGS.map((listing) => ({ listing, quantity: allocations[listing.id] ?? 0 }));
   const deployed = rows.reduce((sum, row) => sum + row.quantity * row.listing.askingPrice, 0);
-  const projectedValue = rows.reduce((sum, row) => sum + row.quantity * row.listing.marketValue, 0);
-  const upside = projectedValue - deployed;
+  const upside = rows.reduce((sum, row) => sum + row.quantity * getListingEconomics(row.listing).netUpside, 0);
   const remaining = budget - deployed;
   const selectedCount = rows.filter((row) => row.quantity > 0).length;
 
@@ -87,7 +86,7 @@ export default function PlanScreen() {
           <FlatList horizontal data={[{ slug: "all", name: "All" }, ...PROFILES]} keyExtractor={(item) => item.slug} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips} renderItem={({ item }) => <Pressable onPress={() => setProfileFilter(item.slug)} style={[styles.chip, { backgroundColor: profileFilter === item.slug ? colors.foreground : colors.surface, borderColor: colors.border }]}><Text style={[styles.chipText, { color: profileFilter === item.slug ? colors.background : colors.muted }]}>{item.name}</Text></Pressable>} />
         </View>}
         renderItem={({ item }) => <AllocationCard listing={item} quantity={allocations[item.id] ?? 0} budget={budget} deployed={deployed} colors={colors} onChange={(delta) => updateQuantity(item, delta)} />}
-        ListFooterComponent={<View style={[styles.formulaCard, { backgroundColor: colors.surface, borderColor: colors.border }]}><MaterialIcons name="calculate" size={19} color={colors.primary} /><View style={styles.formulaCopy}><Text style={[styles.formulaTitle, { color: colors.foreground }]}>How the plan is calculated</Text><Text style={[styles.formulaText, { color: colors.muted }]}>Deployed = quantity × asking price. Projected upside = quantity × (market value − asking price). Opportunity cost shows the share of your total pool committed to each deal.</Text></View></View>}
+        ListFooterComponent={<View style={[styles.formulaCard, { backgroundColor: colors.surface, borderColor: colors.border }]}><MaterialIcons name="calculate" size={19} color={colors.primary} /><View style={styles.formulaCopy}><Text style={[styles.formulaTitle, { color: colors.foreground }]}>How the plan is calculated</Text><Text style={[styles.formulaText, { color: colors.muted }]}>Net upside = market value − asking price − shipping − transaction fees − estimated travel cost. Opportunity cost shows the share of your total pool committed to each deal.</Text></View></View>}
       />
     </ScreenContainer>
   );
@@ -99,7 +98,7 @@ function SummaryStat({ label, value, color }: { label: string; value: string; co
 
 function AllocationCard({ listing, quantity, budget, deployed, colors, onChange }: { listing: Listing; quantity: number; budget: number; deployed: number; colors: ReturnType<typeof useColors>; onChange: (delta: number) => void }) {
   const capital = quantity * listing.askingPrice;
-  const projectedUpside = quantity * (listing.marketValue - listing.askingPrice);
+  const projectedUpside = quantity * getListingEconomics(listing).netUpside;
   const opportunityCost = budget ? (capital / budget) * 100 : 0;
   const canAdd = deployed + listing.askingPrice <= budget;
   return <View style={[styles.allocationCard, { backgroundColor: colors.surface, borderColor: quantity > 0 ? colors.primary : colors.border }]}><View style={styles.allocationTop}><View style={styles.sourceRow}><View style={[styles.sourceIcon, { backgroundColor: colors.background }]}><Text style={[styles.sourceText, { color: colors.foreground }]}>{listing.platform.slice(0, 1)}</Text></View><View><Text style={[styles.platform, { color: colors.muted }]}>{listing.platform} · {listing.location}</Text><Text style={[styles.brand, { color: colors.foreground }]}>{listing.brand}</Text></View></View><View style={[styles.scorePill, { backgroundColor: colors.primary }]}><Text style={[styles.score, { color: colors.foreground }]}>{listing.score}</Text><Text style={[styles.scoreLabel, { color: colors.foreground }]}>SCORE</Text></View></View><Text style={[styles.model, { color: colors.muted }]} numberOfLines={1}>{listing.model}</Text><View style={styles.mathRow}><View><Text style={[styles.mathLabel, { color: colors.muted }]}>UNIT COST</Text><Text style={[styles.mathValue, { color: colors.foreground }]}>{formatCurrency(listing.askingPrice)}</Text></View><View><Text style={[styles.mathLabel, { color: colors.muted }]}>UNIT UPSIDE</Text><Text style={[styles.mathValue, { color: colors.success }]}>+{formatCurrency(listing.marketValue - listing.askingPrice)}</Text></View><View style={styles.quantityControl}><Pressable onPress={() => onChange(-1)} disabled={quantity === 0} style={[styles.quantityButton, { backgroundColor: colors.background, opacity: quantity === 0 ? 0.35 : 1 }]}><Text style={[styles.quantityButtonText, { color: colors.foreground }]}>−</Text></Pressable><Text style={[styles.quantityText, { color: colors.foreground }]}>{quantity}</Text><Pressable onPress={() => onChange(1)} disabled={!canAdd} style={[styles.quantityButton, { backgroundColor: colors.primary, opacity: canAdd ? 1 : 0.35 }]}><Text style={[styles.quantityButtonText, { color: colors.foreground }]}>+</Text></Pressable></View></View><View style={[styles.allocationFooter, { borderTopColor: colors.border }]}><View><Text style={[styles.footerLabel, { color: colors.muted }]}>COMMITTED</Text><Text style={[styles.footerValue, { color: colors.foreground }]}>{formatCurrency(capital)}</Text></View><View><Text style={[styles.footerLabel, { color: colors.muted }]}>OPPORTUNITY COST</Text><Text style={[styles.footerValue, { color: colors.foreground }]}>{opportunityCost.toFixed(1)}%</Text></View><View style={styles.upsideBlock}><Text style={[styles.footerLabel, { color: colors.muted }]}>PLAN UPSIDE</Text><Text style={[styles.footerValue, { color: colors.success }]}>+{formatCurrency(projectedUpside)}</Text></View></View></View>;

@@ -25,6 +25,7 @@ import {
   SAVED_STORAGE_KEY,
   formatCurrency,
   getProfile,
+  getListingCountry,
   type Listing,
 } from "@/lib/market-data";
 
@@ -62,6 +63,8 @@ export default function HomeScreen() {
   const [savedIds, setSavedIds] = useState<string[]>([]);
   const [filter, setFilter] = useState<"all" | "top" | "escrow">("all");
   const [sourceFilter, setSourceFilter] = useState("all");
+  const [countryFilter, setCountryFilter] = useState("all");
+  const [radiusFilter, setRadiusFilter] = useState(0);
   const [query, setQuery] = useState("");
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
   const [showNotice, setShowNotice] = useState(false);
@@ -94,12 +97,14 @@ export default function HomeScreen() {
       const belongsToProfile = listing.profileSlug === activeSlug;
       const matchesFilter = filter === "all" || (filter === "top" ? listing.score >= 85 : listing.escrowProtected);
       const matchesSource = sourceFilter === "all" || listing.platform === sourceFilter;
+      const matchesCountry = countryFilter === "all" || getListingCountry(listing) === countryFilter;
+      const matchesRadius = radiusFilter === 0 || (listing.pickupDistanceKm !== undefined && listing.pickupDistanceKm <= radiusFilter);
       const matchesQuery =
         !normalizedQuery ||
         `${listing.brand} ${listing.model} ${listing.platform}`.toLowerCase().includes(normalizedQuery);
-      return belongsToProfile && matchesFilter && matchesSource && matchesQuery;
+      return belongsToProfile && matchesFilter && matchesSource && matchesCountry && matchesRadius && matchesQuery;
     });
-  }, [activeSlug, filter, query, sourceFilter]);
+  }, [activeSlug, countryFilter, filter, query, radiusFilter, sourceFilter]);
 
   const profileListings = useMemo(
     () => LISTINGS.filter((listing) => listing.profileSlug === activeSlug),
@@ -115,6 +120,8 @@ export default function HomeScreen() {
     setActiveSlug(slug);
     setFilter("all");
     setSourceFilter("all");
+    setCountryFilter("all");
+    setRadiusFilter(0);
     setQuery("");
     void AsyncStorage.setItem(PROFILE_STORAGE_KEY, slug);
   };
@@ -270,6 +277,32 @@ export default function HomeScreen() {
                 </Pressable>
               )}
             />
+            <View style={styles.locationFilterRow}>
+              <FlatList
+                horizontal
+                data={["all", ...Array.from(new Set(profileListings.map(getListingCountry)))]}
+                keyExtractor={(item) => `country-${item}`}
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.sourceRail}
+                renderItem={({ item }) => (
+                  <Pressable onPress={() => { triggerHaptic(); setCountryFilter(item); }} style={({ pressed }) => [styles.filterButton, { backgroundColor: countryFilter === item ? colors.foreground : colors.surface, borderColor: colors.border }, pressed && styles.pressed]}>
+                    <Text style={[styles.filterButtonText, { color: countryFilter === item ? colors.background : colors.muted }]}>{item === "all" ? "All countries" : item}</Text>
+                  </Pressable>
+                )}
+              />
+              <FlatList
+                horizontal
+                data={[0, 25, 100, 250]}
+                keyExtractor={(item) => `radius-${item}`}
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.sourceRail}
+                renderItem={({ item }) => (
+                  <Pressable onPress={() => { triggerHaptic(); setRadiusFilter(item); }} style={({ pressed }) => [styles.filterButton, { backgroundColor: radiusFilter === item ? colors.primary : colors.surface, borderColor: colors.border }, pressed && styles.pressed]}>
+                    <Text style={[styles.filterButtonText, { color: radiusFilter === item ? colors.foreground : colors.muted }]}>{item === 0 ? "Any distance" : `≤${item} km`}</Text>
+                  </Pressable>
+                )}
+              />
+            </View>
           </View>
         }
         renderItem={({ item }) => (
@@ -409,6 +442,7 @@ const styles = StyleSheet.create({
   linkText: { fontSize: 13, fontWeight: "700" },
   profileRail: { gap: 10, paddingRight: 20 },
   sourceRail: { gap: 6, paddingBottom: 2, paddingRight: 20 },
+  locationFilterRow: { marginTop: 4, gap: 2 },
   profileCard: { width: 142, minHeight: 128, borderRadius: 18, borderWidth: 1, padding: 13, justifyContent: "space-between" },
   profileCardTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   profileIcon: { width: 32, height: 32, borderRadius: 11, alignItems: "center", justifyContent: "center" },

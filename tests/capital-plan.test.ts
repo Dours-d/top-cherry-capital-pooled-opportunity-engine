@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { LISTINGS } from "../lib/market-data";
-import { MARKETPLACE_SOURCES, previewNormalizedImport, scoreNormalizedListing } from "../server/marketplace";
+import { MARKETPLACE_SOURCES, getMarketplaceReadiness, previewNormalizedImport, scoreNormalizedListing } from "../server/marketplace";
 
 describe("pooled capital planning", () => {
   it("calculates deployed capital and projected upside from quantities", () => {
@@ -43,5 +43,12 @@ describe("pooled capital planning", () => {
     const regional = MARKETPLACE_SOURCES.filter((source) => source.coverage === "regional-general");
     expect(regional.map((source) => source.slug)).toEqual(["wallapop", "leboncoin", "kleinanzeigen", "marktplaats"]);
     expect(regional.every((source) => source.capabilities.includes("local-pickup"))).toBe(true);
+  });
+
+  it("reports live-ingestion readiness without exposing credential values", () => {
+    const readiness = getMarketplaceReadiness("wallapop", { NODE_ENV: "test" });
+    expect(readiness.configured).toBe(false);
+    expect(readiness.nextStep).toBe("configure WALLAPOP_API_TOKEN");
+    expect(readiness).not.toHaveProperty("token");
   });
 });

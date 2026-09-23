@@ -25,6 +25,11 @@ export type Listing = {
   verified: boolean;
   age: string;
   url: string;
+  countryCode?: string;
+  pickupDistanceKm?: number;
+  shippingCost?: number;
+  transactionFee?: number;
+  travelCost?: number;
 };
 
 export const PROFILE_STORAGE_KEY = "topCherry.activeProfile";
@@ -60,14 +65,25 @@ export const LISTINGS: Listing[] = [
   { id: "gibson-les-paul-59", profileSlug: "musical_instruments", brand: "Gibson", model: "Custom Shop 1959 Reissue", askingPrice: 5200, marketValue: 7200, score: 87, margin: 27.8, condition: "Near mint", platform: "Reverb", location: "Nashville, US", escrowProtected: false, verified: true, age: "2 hrs ago", url: "https://reverb.com/" },
   { id: "cartier-love-bracelet", profileSlug: "fine_jewellery", brand: "Cartier", model: "Love bracelet, yellow gold", askingPrice: 6100, marketValue: 8200, score: 83, margin: 25.6, condition: "Very good", platform: "The RealReal", location: "Paris, FR", escrowProtected: true, verified: true, age: "3 hrs ago", url: "https://www.therealreal.com/" },
   { id: "jordan-1-chicago", profileSlug: "sports_collectibles", brand: "Nike", model: "Air Jordan 1 Chicago 1985", askingPrice: 4600, marketValue: 6900, score: 90, margin: 33.3, condition: "Authenticated", platform: "StockX", location: "Chicago, US", escrowProtected: true, verified: true, age: "4 hrs ago", url: "https://stockx.com/" },
-  { id: "vitra-eames-chair", profileSlug: "home_and_living", brand: "Vitra", model: "Eames Lounge Chair", askingPrice: 2200, marketValue: 3300, score: 82, margin: 33.3, condition: "Very good", platform: "Wallapop", location: "Barcelona, ES", escrowProtected: false, verified: false, age: "18 min ago", url: "https://es.wallapop.com/" },
-  { id: "miele-coffee-system", profileSlug: "home_and_living", brand: "Miele", model: "Built-in coffee system", askingPrice: 900, marketValue: 1500, score: 84, margin: 40, condition: "Excellent", platform: "Leboncoin", location: "Lyon, FR", escrowProtected: false, verified: false, age: "35 min ago", url: "https://www.leboncoin.fr/" },
-  { id: "usm-sideboard", profileSlug: "home_and_living", brand: "USM Haller", model: "Modular sideboard", askingPrice: 1400, marketValue: 2400, score: 86, margin: 41.7, condition: "Good", platform: "Kleinanzeigen", location: "Berlin, DE", escrowProtected: false, verified: false, age: "1 hr ago", url: "https://www.kleinanzeigen.de/" },
-  { id: "design-lamp", profileSlug: "home_and_living", brand: "Flos", model: "Arco floor lamp", askingPrice: 650, marketValue: 1100, score: 83, margin: 40.9, condition: "Very good", platform: "Marktplaats", location: "Amsterdam, NL", escrowProtected: false, verified: false, age: "2 hrs ago", url: "https://www.marktplaats.nl/" },
+  { id: "vitra-eames-chair", profileSlug: "home_and_living", brand: "Vitra", model: "Eames Lounge Chair", askingPrice: 2200, marketValue: 3300, score: 82, margin: 33.3, condition: "Very good", platform: "Wallapop", location: "Barcelona, ES", escrowProtected: false, verified: false, age: "18 min ago", url: "https://es.wallapop.com/", countryCode: "ES", pickupDistanceKm: 18 },
+  { id: "miele-coffee-system", profileSlug: "home_and_living", brand: "Miele", model: "Built-in coffee system", askingPrice: 900, marketValue: 1500, score: 84, margin: 40, condition: "Excellent", platform: "Leboncoin", location: "Lyon, FR", escrowProtected: false, verified: false, age: "35 min ago", url: "https://www.leboncoin.fr/", countryCode: "FR", pickupDistanceKm: 42 },
+  { id: "usm-sideboard", profileSlug: "home_and_living", brand: "USM Haller", model: "Modular sideboard", askingPrice: 1400, marketValue: 2400, score: 86, margin: 41.7, condition: "Good", platform: "Kleinanzeigen", location: "Berlin, DE", escrowProtected: false, verified: false, age: "1 hr ago", url: "https://www.kleinanzeigen.de/", countryCode: "DE", pickupDistanceKm: 75 },
+  { id: "design-lamp", profileSlug: "home_and_living", brand: "Flos", model: "Arco floor lamp", askingPrice: 650, marketValue: 1100, score: 83, margin: 40.9, condition: "Very good", platform: "Marktplaats", location: "Amsterdam, NL", escrowProtected: false, verified: false, age: "2 hrs ago", url: "https://www.marktplaats.nl/", countryCode: "NL", pickupDistanceKm: 12 },
 ];
 
 export const getProfile = (slug: string) => PROFILES.find((profile) => profile.slug === slug) ?? PROFILES[0];
 export const getProfileListings = (slug: string) => LISTINGS.filter((listing) => listing.profileSlug === slug);
+
+export const getListingCountry = (listing: Listing) => listing.countryCode ?? listing.location.split(",").at(-1)?.trim() ?? "";
+
+export const getListingEconomics = (listing: Listing) => {
+  const shipping = listing.shippingCost ?? (listing.pickupDistanceKm ? 0 : Math.round(listing.askingPrice * 0.02));
+  const transactionFee = listing.transactionFee ?? Math.round(listing.askingPrice * 0.03);
+  const travelCost = listing.travelCost ?? (listing.pickupDistanceKm ? Math.round(listing.pickupDistanceKm * 0.35) : 0);
+  const grossUpside = listing.marketValue - listing.askingPrice;
+  const totalCosts = shipping + transactionFee + travelCost;
+  return { grossUpside, shipping, transactionFee, travelCost, totalCosts, netUpside: grossUpside - totalCosts };
+};
 
 export const recommendAllocations = (budget: number, listings: Listing[] = LISTINGS): Record<string, number> => {
   const safeBudget = Math.max(0, Math.floor(budget));
@@ -79,7 +95,7 @@ export const recommendAllocations = (budget: number, listings: Listing[] = LISTI
       return;
     }
     const listing = listings[index];
-    const unitUpside = Math.max(0, listing.marketValue - listing.askingPrice);
+    const unitUpside = Math.max(0, getListingEconomics(listing).netUpside);
     const maxUnits = Math.min(4, Math.floor(remaining / listing.askingPrice));
     for (let units = 0; units <= maxUnits; units += 1) {
       if (units > 0) allocations[listing.id] = units;
