@@ -35,6 +35,21 @@ export type Listing = {
 export const PROFILE_STORAGE_KEY = "topCherry.activeProfile";
 export const SAVED_STORAGE_KEY = "topCherry.savedListings";
 export const NOTIFICATIONS_STORAGE_KEY = "topCherry.notifications";
+export const ECONOMICS_STORAGE_KEY = "topCherry.economics";
+
+export type EconomicsAssumptions = {
+  homeCountry: string;
+  transactionFeeRate: number;
+  shippingRate: number;
+  travelCostPerKm: number;
+};
+
+export const DEFAULT_ECONOMICS: EconomicsAssumptions = {
+  homeCountry: "UK",
+  transactionFeeRate: 0.03,
+  shippingRate: 0.02,
+  travelCostPerKm: 0.35,
+};
 
 /**
  * Top Cherry categories are normalized investment themes, not marketplace
@@ -76,16 +91,16 @@ export const getProfileListings = (slug: string) => LISTINGS.filter((listing) =>
 
 export const getListingCountry = (listing: Listing) => listing.countryCode ?? listing.location.split(",").at(-1)?.trim() ?? "";
 
-export const getListingEconomics = (listing: Listing) => {
-  const shipping = listing.shippingCost ?? (listing.pickupDistanceKm ? 0 : Math.round(listing.askingPrice * 0.02));
-  const transactionFee = listing.transactionFee ?? Math.round(listing.askingPrice * 0.03);
-  const travelCost = listing.travelCost ?? (listing.pickupDistanceKm ? Math.round(listing.pickupDistanceKm * 0.35) : 0);
+export const getListingEconomics = (listing: Listing, assumptions: EconomicsAssumptions = DEFAULT_ECONOMICS) => {
+  const shipping = listing.shippingCost ?? (listing.pickupDistanceKm ? 0 : Math.round(listing.askingPrice * assumptions.shippingRate));
+  const transactionFee = listing.transactionFee ?? Math.round(listing.askingPrice * assumptions.transactionFeeRate);
+  const travelCost = listing.travelCost ?? (listing.pickupDistanceKm ? Math.round(listing.pickupDistanceKm * assumptions.travelCostPerKm) : 0);
   const grossUpside = listing.marketValue - listing.askingPrice;
   const totalCosts = shipping + transactionFee + travelCost;
   return { grossUpside, shipping, transactionFee, travelCost, totalCosts, netUpside: grossUpside - totalCosts };
 };
 
-export const recommendAllocations = (budget: number, listings: Listing[] = LISTINGS): Record<string, number> => {
+export const recommendAllocations = (budget: number, listings: Listing[] = LISTINGS, assumptions: EconomicsAssumptions = DEFAULT_ECONOMICS): Record<string, number> => {
   const safeBudget = Math.max(0, Math.floor(budget));
   let best: { allocations: Record<string, number>; upside: number; score: number; count: number } = { allocations: {}, upside: 0, score: 0, count: 0 };
   const visit = (index: number, remaining: number, allocations: Record<string, number>, upside: number, score: number, count: number) => {
@@ -95,7 +110,7 @@ export const recommendAllocations = (budget: number, listings: Listing[] = LISTI
       return;
     }
     const listing = listings[index];
-    const unitUpside = Math.max(0, getListingEconomics(listing).netUpside);
+    const unitUpside = Math.max(0, getListingEconomics(listing, assumptions).netUpside);
     const maxUnits = Math.min(4, Math.floor(remaining / listing.askingPrice));
     for (let units = 0; units <= maxUnits; units += 1) {
       if (units > 0) allocations[listing.id] = units;

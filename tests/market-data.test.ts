@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { LISTINGS, PROFILES, formatCurrency, getListingEconomics, getProfile, getProfileListings, recommendAllocations } from "../lib/market-data";
+import { DEFAULT_ECONOMICS, LISTINGS, PROFILES, formatCurrency, getListingEconomics, getProfile, getProfileListings, recommendAllocations } from "../lib/market-data";
 
 describe("Top Cherry market data", () => {
   it("ships a broad marketplace-independent default category registry", () => {
@@ -52,5 +52,12 @@ describe("Top Cherry market data", () => {
     expect(economics.grossUpside).toBe(450);
     expect(economics.travelCost).toBeGreaterThan(0);
     expect(economics.netUpside).toBeLessThan(economics.grossUpside);
+  });
+
+  it("changes net upside when the user changes travel assumptions", () => {
+    const listing = LISTINGS.find((item) => item.id === "design-lamp")!;
+    const economical = getListingEconomics(listing, { ...DEFAULT_ECONOMICS, travelCostPerKm: 0 });
+    const expensive = getListingEconomics(listing, { ...DEFAULT_ECONOMICS, travelCostPerKm: 2 });
+    expect(expensive.netUpside).toBeLessThan(economical.netUpside);
   });
 });

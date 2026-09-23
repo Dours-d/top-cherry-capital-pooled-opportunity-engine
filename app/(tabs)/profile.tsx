@@ -7,6 +7,8 @@ import { useColors } from "@/hooks/use-colors";
 import { useAuth } from "@/hooks/use-auth";
 import { trpc } from "@/lib/trpc";
 import { startOAuthLogin } from "@/constants/oauth";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { DEFAULT_ECONOMICS, ECONOMICS_STORAGE_KEY, type EconomicsAssumptions } from "@/lib/market-data";
 
 export default function ProfileScreen() {
   const colors = useColors();
@@ -15,6 +17,7 @@ export default function ProfileScreen() {
   const updatePreferences = trpc.preferences.update.useMutation({ onSuccess: () => void preferencesQuery.refetch() });
   const [alerts, setAlerts] = useState(true);
   const [dailyDigest, setDailyDigest] = useState(false);
+  const [economics, setEconomics] = useState(DEFAULT_ECONOMICS);
 
   useEffect(() => {
     if (preferencesQuery.data) {
@@ -22,6 +25,18 @@ export default function ProfileScreen() {
       setDailyDigest(preferencesQuery.data.dailyDigest);
     }
   }, [preferencesQuery.data]);
+
+  useEffect(() => {
+    void AsyncStorage.getItem(ECONOMICS_STORAGE_KEY).then((raw) => {
+      if (raw) setEconomics({ ...DEFAULT_ECONOMICS, ...(JSON.parse(raw) as Partial<EconomicsAssumptions>) });
+    });
+  }, []);
+
+  const updateEconomics = (patch: Partial<EconomicsAssumptions>) => {
+    const next = { ...economics, ...patch };
+    setEconomics(next);
+    void AsyncStorage.setItem(ECONOMICS_STORAGE_KEY, JSON.stringify(next));
+  };
 
   const toggle = (key: "alertsEnabled" | "dailyDigest", setter: (value: boolean) => void, value: boolean) => {
     if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -48,6 +63,14 @@ export default function ProfileScreen() {
           <ActionRow icon="sync" title="Marketplace sources" detail="Adapters ready · credentials required" onPress={() => Alert.alert("Marketplace sources", "Chrono24, eBay, MPB, and Goldin adapters are ready for provider credentials.")} colors={colors} />
           <View style={[styles.divider, { backgroundColor: colors.border }]} />
           <ActionRow icon="help-outline" title="Help center" detail="Get support" onPress={() => Linking.openURL("https://help.manus.im")} colors={colors} />
+        </View>
+        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Deal assumptions</Text>
+        <View style={[styles.settingsCard, { backgroundColor: colors.surface, borderColor: colors.border }]}> 
+          <ActionRow icon="home" title="Home country" detail={`${economics.homeCountry} · used for pickup context`} onPress={() => Alert.prompt("Home country", "Enter a two-letter country code", (value) => { if (value?.trim()) updateEconomics({ homeCountry: value.trim().toUpperCase().slice(0, 2) }); }, "plain-text", economics.homeCountry)} colors={colors} />
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+          <ActionRow icon="percent" title="Transaction fee" detail={`${Math.round(economics.transactionFeeRate * 100)}% of asking price`} onPress={() => Alert.prompt("Transaction fee", "Enter a percentage", (value) => { const parsed = Number(value); if (Number.isFinite(parsed)) updateEconomics({ transactionFeeRate: Math.max(0, Math.min(20, parsed / 100)) }); }, "plain-text", String(Math.round(economics.transactionFeeRate * 100)))} colors={colors} />
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+          <ActionRow icon="directions-car" title="Travel cost" detail={`$${economics.travelCostPerKm.toFixed(2)} per pickup km`} onPress={() => Alert.prompt("Travel cost", "Enter cost per kilometer", (value) => { const parsed = Number(value); if (Number.isFinite(parsed)) updateEconomics({ travelCostPerKm: Math.max(0, parsed) }); }, "plain-text", economics.travelCostPerKm.toFixed(2))} colors={colors} />
         </View>
         <Text style={[styles.footerText, { color: colors.muted }]}>Top Cherry · Built for better buys</Text>
       </ScrollView>
