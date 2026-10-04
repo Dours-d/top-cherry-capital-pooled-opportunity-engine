@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { LISTINGS } from "../lib/market-data";
-import { MARKETPLACE_SOURCES, getMarketplaceReadiness, previewNormalizedImport, scoreNormalizedListing } from "../server/marketplace";
+import { MARKETPLACE_SOURCES, PHASE_ONE_EBAY_TASKS, getMarketplaceReadiness, previewNormalizedImport, scoreNormalizedListing } from "../server/marketplace";
 
 describe("pooled capital planning", () => {
   it("calculates deployed capital and projected upside from quantities", () => {
@@ -50,5 +50,29 @@ describe("pooled capital planning", () => {
     expect(readiness.configured).toBe(false);
     expect(readiness.nextStep).toBe("configure WALLAPOP_API_TOKEN");
     expect(readiness).not.toHaveProperty("token");
+  });
+
+  it("deduplicates normalized imports by canonical listing URL", () => {
+    const listing = {
+      listingId: "a",
+      profileSlug: "luxury_watches",
+      brand: "Omega",
+      model: "Speedmaster",
+      askingPrice: 1000,
+      marketValue: 1400,
+      condition: "Good",
+      platformSource: "eBay",
+      escrowProtected: true,
+      verified: true,
+      url: "https://example.test/item/1/",
+    };
+    const result = previewNormalizedImport("ebay", [listing, { ...listing, listingId: "b", url: "https://example.test/item/1" }]);
+    expect(result.importedCount).toBe(1);
+    expect(result.duplicateCount).toBe(1);
+  });
+
+  it("keeps Phase 1 eBay rollout explicitly blocked until production access is approved", () => {
+    expect(PHASE_ONE_EBAY_TASKS.find((task) => task.id === "buy-api-access")?.state).toBe("blocked");
+    expect(PHASE_ONE_EBAY_TASKS.filter((task) => task.state === "done")).toHaveLength(0);
   });
 });

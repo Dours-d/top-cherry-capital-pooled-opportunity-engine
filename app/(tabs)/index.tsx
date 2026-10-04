@@ -236,7 +236,7 @@ export default function HomeScreen() {
               </View>
               <View style={[styles.livePill, { backgroundColor: colors.surface }]}>
                 <View style={[styles.liveDot, { backgroundColor: colors.success }]} />
-                <Text style={[styles.liveText, { color: colors.foreground }]}>LIVE</Text>
+                <Text style={[styles.liveText, { color: colors.foreground }]}>SAMPLE</Text>
               </View>
             </View>
 

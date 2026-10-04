@@ -9,6 +9,7 @@ import { trpc } from "@/lib/trpc";
 import { startOAuthLogin } from "@/constants/oauth";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { DEFAULT_ECONOMICS, ECONOMICS_STORAGE_KEY, type EconomicsAssumptions } from "@/lib/market-data";
+import { MARKETPLACE_SOURCES, PHASE_ONE_EBAY_TASKS, SOURCE_SYNC_SNAPSHOT } from "@/server/marketplace";
 
 export default function ProfileScreen() {
   const colors = useColors();
@@ -72,6 +73,35 @@ export default function ProfileScreen() {
           <View style={[styles.divider, { backgroundColor: colors.border }]} />
           <ActionRow icon="directions-car" title="Travel cost" detail={`$${economics.travelCostPerKm.toFixed(2)} per pickup km`} onPress={() => Alert.prompt("Travel cost", "Enter cost per kilometer", (value) => { const parsed = Number(value); if (Number.isFinite(parsed)) updateEconomics({ travelCostPerKm: Math.max(0, parsed) }); }, "plain-text", economics.travelCostPerKm.toFixed(2))} colors={colors} />
         </View>
+        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Data control</Text>
+        <View style={[styles.dataCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={styles.dataHeader}>
+            <View style={[styles.dataIcon, { backgroundColor: colors.background }]}><MaterialIcons name="dataset" size={19} color={colors.primary} /></View>
+            <View style={styles.settingCopy}>
+              <Text style={[styles.settingTitle, { color: colors.foreground }]}>Sample data mode</Text>
+              <Text style={[styles.settingDescription, { color: colors.muted }]}>No live marketplace connector is active yet.</Text>
+            </View>
+            <View style={[styles.statusBadge, { backgroundColor: colors.warning }]}><Text style={[styles.statusBadgeText, { color: colors.foreground }]}>SAMPLE</Text></View>
+          </View>
+          <Text style={[styles.dataNote, { color: colors.muted }]}>Counts and opportunities remain clearly separated from future live imports until a source has completed its first verified sync.</Text>
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+          <Text style={[styles.rolloutTitle, { color: colors.foreground }]}>Phase 1 · eBay Browse API</Text>
+          <Text style={[styles.rolloutSubtitle, { color: colors.muted }]}>Production access and first live import</Text>
+          {PHASE_ONE_EBAY_TASKS.map((task) => (
+            <View key={task.id} style={styles.taskRow}>
+              <MaterialIcons name={task.state === "done" ? "check-circle" : task.state === "blocked" ? "lock" : task.state === "in-progress" ? "radio-button-checked" : "radio-button-unchecked"} size={17} color={task.state === "blocked" ? colors.warning : task.state === "done" ? colors.success : task.state === "in-progress" ? colors.primary : colors.muted} />
+              <Text style={[styles.taskLabel, { color: colors.foreground }]}>{task.label}</Text>
+              <Text style={[styles.taskState, { color: task.state === "blocked" ? colors.warning : colors.muted }]}>{task.state === "in-progress" ? "ACTIVE" : task.state.toUpperCase()}</Text>
+            </View>
+          ))}
+        </View>
+        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Connector registry</Text>
+        <View style={[styles.settingsCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          {MARKETPLACE_SOURCES.map((source, index) => {
+            const snapshot = SOURCE_SYNC_SNAPSHOT.find((item) => item.sourceSlug === source.slug);
+            return <View key={source.slug} style={styles.connectorRow}><View style={[styles.connectorDot, { backgroundColor: snapshot?.state === "synced" ? colors.success : colors.warning }]} /><View style={styles.settingCopy}><Text style={[styles.settingTitle, { color: colors.foreground }]}>{source.name}</Text><Text style={[styles.settingDescription, { color: colors.muted }]}>{snapshot?.message ?? "Awaiting connector configuration"}</Text></View><Text style={[styles.taskState, { color: colors.muted }]}>{snapshot?.recordCount ?? 0}</Text>{index < MARKETPLACE_SOURCES.length - 1 ? <View style={[styles.connectorDivider, { backgroundColor: colors.border }]} /> : null}</View>;
+          })}
+        </View>
         <Text style={[styles.footerText, { color: colors.muted }]}>Top Cherry · Built for better buys</Text>
       </ScrollView>
     </ScreenContainer>
@@ -111,6 +141,20 @@ const styles = StyleSheet.create({
   settingTitle: { fontSize: 14, fontWeight: "700" },
   settingDescription: { fontSize: 11, marginTop: 3 },
   divider: { height: 1, marginLeft: 46 },
+  dataCard: { borderRadius: 19, borderWidth: 1, padding: 14, marginBottom: 27 },
+  dataHeader: { flexDirection: "row", alignItems: "center", gap: 11 },
+  dataIcon: { width: 35, height: 35, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  statusBadge: { borderRadius: 8, paddingHorizontal: 7, paddingVertical: 5 },
+  statusBadgeText: { fontSize: 9, fontWeight: "900", letterSpacing: 0.6 },
+  dataNote: { fontSize: 11, lineHeight: 16, marginTop: 13 },
+  rolloutTitle: { fontSize: 14, fontWeight: "800", marginTop: 15 },
+  rolloutSubtitle: { fontSize: 11, marginTop: 3, marginBottom: 9 },
+  taskRow: { minHeight: 31, flexDirection: "row", alignItems: "center", gap: 8 },
+  taskLabel: { flex: 1, fontSize: 11 },
+  taskState: { fontSize: 8, fontWeight: "900", letterSpacing: 0.4 },
+  connectorRow: { minHeight: 53, flexDirection: "row", alignItems: "center", gap: 9, position: "relative" },
+  connectorDot: { width: 8, height: 8, borderRadius: 4 },
+  connectorDivider: { position: "absolute", left: 17, right: 0, bottom: 0, height: 1 },
   footerText: { textAlign: "center", fontSize: 11, marginTop: 2 },
   pressed: { opacity: 0.65 },
 });

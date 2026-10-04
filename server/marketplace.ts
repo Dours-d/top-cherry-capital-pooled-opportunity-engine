@@ -19,10 +19,37 @@ export type NormalizedMarketplaceListing = {
   condition: string;
   platformSource: string;
   location?: string;
+  countryCode?: string;
+  currency?: string;
   escrowProtected: boolean;
   verified: boolean;
   url?: string;
+  fetchedAt?: string;
 };
+
+export type SyncState = "sample" | "ready" | "syncing" | "synced" | "error" | "blocked";
+
+export type SourceSyncSnapshot = {
+  sourceSlug: string;
+  state: SyncState;
+  lastSyncedAt: string | null;
+  recordCount: number;
+  message: string;
+};
+
+export type PhaseTask = {
+  id: string;
+  label: string;
+  state: "done" | "in-progress" | "blocked" | "next";
+};
+
+export const PHASE_ONE_EBAY_TASKS: PhaseTask[] = [
+  { id: "developer-app", label: "Create eBay developer application", state: "in-progress" },
+  { id: "buy-api-access", label: "Request production Buy API access", state: "blocked" },
+  { id: "server-secrets", label: "Store client credentials server-side", state: "next" },
+  { id: "browse-adapter", label: "Import Browse API search results", state: "next" },
+  { id: "first-sync", label: "Verify first live sync and counts", state: "next" },
+];
 
 export const MARKETPLACE_SOURCES: MarketplaceSource[] = [
   { slug: "chrono24", name: "Chrono24", mode: "normalized-import", status: "credentials-required", coverage: "specialist", regions: ["EU", "global"], capabilities: ["watches", "escrow", "listing-links"], credentialEnvKey: "CHRONO24_API_KEY" },
@@ -34,6 +61,14 @@ export const MARKETPLACE_SOURCES: MarketplaceSource[] = [
   { slug: "kleinanzeigen", name: "Kleinanzeigen", mode: "normalized-import", status: "credentials-required", coverage: "regional-general", regions: ["DE"], capabilities: ["home-and-living", "local-pickup", "general-goods"], credentialEnvKey: "KLEINANZEIGEN_API_KEY" },
   { slug: "marktplaats", name: "Marktplaats", mode: "normalized-import", status: "credentials-required", coverage: "regional-general", regions: ["NL"], capabilities: ["home-and-living", "local-pickup", "general-goods"], credentialEnvKey: "MARKTPLAATS_API_KEY" },
 ];
+
+export const SOURCE_SYNC_SNAPSHOT: SourceSyncSnapshot[] = MARKETPLACE_SOURCES.map((source) => ({
+  sourceSlug: source.slug,
+  state: "sample",
+  lastSyncedAt: null,
+  recordCount: 0,
+  message: "No live connector configured; showing sample opportunities only.",
+}));
 
 export const getMarketplaceReadiness = (sourceSlug: string, env: NodeJS.ProcessEnv = process.env) => {
   const source = MARKETPLACE_SOURCES.find((candidate) => candidate.slug === sourceSlug);
@@ -47,8 +82,25 @@ export const scoreNormalizedListing = (listing: NormalizedMarketplaceListing) =>
   return { ...listing, marginPercentage: Number(margin.toFixed(2)), cherryScore: score };
 };
 
+export const canonicalListingKey = (listing: Pick<NormalizedMarketplaceListing, "listingId" | "platformSource" | "url" | "brand" | "model" | "askingPrice">) => {
+  if (listing.url) return listing.url.trim().toLowerCase().replace(/\/$/, "");
+  if (listing.listingId) return `${listing.platformSource}:${listing.listingId}`.toLowerCase();
+  return `${listing.brand}:${listing.model}:${listing.askingPrice}`.trim().toLowerCase().replace(/\s+/g, " ");
+};
+
+export const dedupeNormalizedListings = (listings: NormalizedMarketplaceListing[]) => {
+  const seen = new Set<string>();
+  return listings.filter((listing) => {
+    const key = canonicalListingKey(listing);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
+
 export const previewNormalizedImport = (sourceSlug: string, listings: NormalizedMarketplaceListing[]) => {
   const source = MARKETPLACE_SOURCES.find((candidate) => candidate.slug === sourceSlug);
   if (!source) throw new Error(`Unknown marketplace source: ${sourceSlug}`);
-  return { source, importedCount: listings.length, listings: listings.map(scoreNormalizedListing) };
+  const uniqueListings = dedupeNormalizedListings(listings);
+  return { source, importedCount: uniqueListings.length, duplicateCount: listings.length - uniqueListings.length, listings: uniqueListings.map(scoreNormalizedListing) };
 };
