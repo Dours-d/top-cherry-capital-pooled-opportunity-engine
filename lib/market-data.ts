@@ -32,6 +32,23 @@ export type Listing = {
   travelCost?: number;
 };
 
+export type MarketSignals = {
+  activeComparables: number;
+  newListings7d: number;
+  removedListings7d: number;
+  medianVisibilityDays: number;
+  sellerConcentration: "Low" | "Medium" | "High";
+  pricePressure: "Falling" | "Stable" | "Rising";
+  inventoryPressure: "Expanding" | "Stable" | "Contracting";
+  noveltyScore: number;
+  propagationScore: number;
+  demandDiversity: "Low" | "Medium" | "High";
+  networkMomentum: "Early" | "Rising" | "Crowded" | "Established";
+  distortionRisk: "Low" | "Medium" | "High";
+  actionWindow: "Act now" | "Monitor" | "Wait" | "Avoid";
+  actionReason: string;
+};
+
 export const PROFILE_STORAGE_KEY = "topCherry.activeProfile";
 export const SAVED_STORAGE_KEY = "topCherry.savedListings";
 export const NOTIFICATIONS_STORAGE_KEY = "topCherry.notifications";
@@ -85,6 +102,32 @@ export const LISTINGS: Listing[] = [
   { id: "usm-sideboard", profileSlug: "home_and_living", brand: "USM Haller", model: "Modular sideboard", askingPrice: 1400, marketValue: 2400, score: 86, margin: 41.7, condition: "Good", platform: "Kleinanzeigen", location: "Berlin, DE", escrowProtected: false, verified: false, age: "1 hr ago", url: "https://www.kleinanzeigen.de/", countryCode: "DE", pickupDistanceKm: 75 },
   { id: "design-lamp", profileSlug: "home_and_living", brand: "Flos", model: "Arco floor lamp", askingPrice: 650, marketValue: 1100, score: 83, margin: 40.9, condition: "Very good", platform: "Marktplaats", location: "Amsterdam, NL", escrowProtected: false, verified: false, age: "2 hrs ago", url: "https://www.marktplaats.nl/", countryCode: "NL", pickupDistanceKm: 12 },
 ];
+
+const SIGNALS_BY_LISTING: Record<string, MarketSignals> = {
+  "rolex-gmt-126710": { activeComparables: 42, newListings7d: 19, removedListings7d: 14, medianVisibilityDays: 8.2, sellerConcentration: "Medium", pricePressure: "Stable", inventoryPressure: "Stable", noveltyScore: 32, propagationScore: 39, demandDiversity: "High", networkMomentum: "Established", distortionRisk: "Low", actionWindow: "Monitor", actionReason: "Strong reference market, but the visible price is close to the established range." },
+  "omega-speedmaster-3861": { activeComparables: 31, newListings7d: 14, removedListings7d: 22, medianVisibilityDays: 4.1, sellerConcentration: "Medium", pricePressure: "Rising", inventoryPressure: "Contracting", noveltyScore: 58, propagationScore: 66, demandDiversity: "High", networkMomentum: "Rising", distortionRisk: "Low", actionWindow: "Act now", actionReason: "Independent attention is rising while inventory contracts; validate condition before the next repricing wave." },
+  "leica-q3": { activeComparables: 18, newListings7d: 11, removedListings7d: 15, medianVisibilityDays: 3.6, sellerConcentration: "Low", pricePressure: "Rising", inventoryPressure: "Contracting", noveltyScore: 71, propagationScore: 74, demandDiversity: "High", networkMomentum: "Rising", distortionRisk: "Low", actionWindow: "Act now", actionReason: "Cross-market interest is propagating faster than prices have adjusted; the edge is strongest below the current threshold." },
+  "sony-a7r-v": { activeComparables: 67, newListings7d: 38, removedListings7d: 21, medianVisibilityDays: 12.4, sellerConcentration: "Low", pricePressure: "Falling", inventoryPressure: "Expanding", noveltyScore: 24, propagationScore: 31, demandDiversity: "High", networkMomentum: "Established", distortionRisk: "Low", actionWindow: "Wait", actionReason: "Supply is expanding and prices are softening; a better entry window may appear after the next inventory wave." },
+  "vitra-eames-chair": { activeComparables: 12, newListings7d: 6, removedListings7d: 9, medianVisibilityDays: 5.8, sellerConcentration: "High", pricePressure: "Rising", inventoryPressure: "Contracting", noveltyScore: 63, propagationScore: 52, demandDiversity: "Medium", networkMomentum: "Rising", distortionRisk: "Medium", actionWindow: "Monitor", actionReason: "Local supply is thin, but seller concentration is high; verify provenance and compare outside the visible marketplace." },
+  "design-lamp": { activeComparables: 26, newListings7d: 17, removedListings7d: 12, medianVisibilityDays: 9.7, sellerConcentration: "Low", pricePressure: "Stable", inventoryPressure: "Stable", noveltyScore: 46, propagationScore: 44, demandDiversity: "Medium", networkMomentum: "Early", distortionRisk: "Low", actionWindow: "Monitor", actionReason: "An early design-led signal is visible, but the network has not yet converted attention into stronger clearing evidence." },
+};
+
+export const getListingSignals = (listing: Listing): MarketSignals => SIGNALS_BY_LISTING[listing.id] ?? {
+  activeComparables: 20,
+  newListings7d: 10,
+  removedListings7d: 10,
+  medianVisibilityDays: 7,
+  sellerConcentration: "Medium",
+  pricePressure: "Stable",
+  inventoryPressure: "Stable",
+  noveltyScore: 40,
+  propagationScore: 40,
+  demandDiversity: "Medium",
+  networkMomentum: "Established",
+  distortionRisk: "Medium",
+  actionWindow: "Monitor",
+  actionReason: "The prototype has insufficient event history to make a stronger timing claim.",
+};
 
 export const getProfile = (slug: string) => PROFILES.find((profile) => profile.slug === slug) ?? PROFILES[0];
 export const getProfileListings = (slug: string) => LISTINGS.filter((listing) => listing.profileSlug === slug);

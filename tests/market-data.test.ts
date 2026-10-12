@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_ECONOMICS, LISTINGS, PROFILES, formatCurrency, getListingEconomics, getProfile, getProfileListings, recommendAllocations } from "../lib/market-data";
+import { DEFAULT_ECONOMICS, LISTINGS, PROFILES, formatCurrency, getListingEconomics, getListingSignals, getProfile, getProfileListings, recommendAllocations } from "../lib/market-data";
 
 describe("Top Cherry market data", () => {
   it("ships a broad marketplace-independent default category registry", () => {
@@ -59,5 +59,23 @@ describe("Top Cherry market data", () => {
     const economical = getListingEconomics(listing, { ...DEFAULT_ECONOMICS, travelCostPerKm: 0 });
     const expensive = getListingEconomics(listing, { ...DEFAULT_ECONOMICS, travelCostPerKm: 2 });
     expect(expensive.netUpside).toBeLessThan(economical.netUpside);
+  });
+
+  it("exposes three-layer signals with bounded novelty and propagation scores", () => {
+    const signals = getListingSignals(LISTINGS.find((listing) => listing.id === "leica-q3")!);
+    expect(signals.noveltyScore).toBeGreaterThanOrEqual(0);
+    expect(signals.noveltyScore).toBeLessThanOrEqual(100);
+    expect(signals.propagationScore).toBeGreaterThanOrEqual(0);
+    expect(signals.propagationScore).toBeLessThanOrEqual(100);
+    expect(signals.networkMomentum).toBe("Rising");
+    expect(signals.actionWindow).toBe("Act now");
+    expect(signals.distortionRisk).toBe("Low");
+  });
+
+  it("keeps distortion risk visible when seller concentration is high", () => {
+    const signals = getListingSignals(LISTINGS.find((listing) => listing.id === "vitra-eames-chair")!);
+    expect(signals.sellerConcentration).toBe("High");
+    expect(signals.distortionRisk).toBe("Medium");
+    expect(signals.actionWindow).toBe("Monitor");
   });
 });

@@ -26,6 +26,7 @@ import {
   formatCurrency,
   getProfile,
   getListingCountry,
+  getListingSignals,
   type Listing,
 } from "@/lib/market-data";
 
@@ -114,6 +115,7 @@ export default function HomeScreen() {
   const averageMargin = profileListings.length
     ? profileListings.reduce((sum, listing) => sum + listing.margin, 0) / profileListings.length
     : 0;
+  const leadListing = profileListings[0];
 
   const changeProfile = (slug: string) => {
     triggerHaptic();
@@ -245,6 +247,7 @@ export default function HomeScreen() {
               <MetricCard label="Top cherries" value={String(topCherries)} colors={colors} accent />
               <MetricCard label="Avg. margin" value={`${averageMargin.toFixed(1)}%`} colors={colors} />
             </View>
+            {leadListing ? <PrototypeLens listing={leadListing} colors={colors} /> : null}
 
             <View style={styles.filterRow}>
               <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Latest opportunities</Text>
@@ -345,6 +348,7 @@ export default function HomeScreen() {
                 <DetailCell label="Margin" value={`${selectedListing.margin.toFixed(1)}%`} colors={colors} />
                 <DetailCell label="Condition" value={selectedListing.condition} colors={colors} />
               </View>
+              <LayerLens listing={selectedListing} colors={colors} />
               <View style={styles.trustRow}>
                 <MaterialIcons name={selectedListing.escrowProtected ? "verified-user" : "shield"} size={18} color={selectedListing.escrowProtected ? colors.success : colors.muted} />
                 <Text style={[styles.trustText, { color: colors.foreground }]}>{selectedListing.escrowProtected ? "Escrow protected listing" : "Review seller protection before buying"}</Text>
@@ -376,7 +380,25 @@ function MetricCard({ label, value, colors, accent = false }: { label: string; v
   );
 }
 
+function PrototypeLens({ listing, colors }: { listing: Listing; colors: ReturnType<typeof useColors> }) {
+  const signals = getListingSignals(listing);
+  return (
+    <View style={[styles.prototypeLens, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      <View style={styles.prototypeLensTop}><View><Text style={[styles.prototypeEyebrow, { color: colors.primary }]}>THREE-LAYER PROTOTYPE</Text><Text style={[styles.prototypeTitle, { color: colors.foreground }]}>Market lens</Text></View><Text style={[styles.prototypeHint, { color: colors.muted }]}>sample signals</Text></View>
+      <View style={styles.prototypeColumns}>
+        <View style={styles.prototypeColumn}><Text style={[styles.prototypeNumber, { color: colors.foreground }]}>1</Text><Text style={[styles.prototypeLabel, { color: colors.muted }]}>Visible</Text><Text style={[styles.prototypeValue, { color: colors.foreground }]}>{formatCurrency(listing.askingPrice)}</Text></View>
+        <View style={[styles.prototypeDivider, { backgroundColor: colors.border }]} />
+        <View style={styles.prototypeColumn}><Text style={[styles.prototypeNumber, { color: colors.foreground }]}>2</Text><Text style={[styles.prototypeLabel, { color: colors.muted }]}>Behavior</Text><Text style={[styles.prototypeValue, { color: colors.foreground }]}>{signals.inventoryPressure}</Text></View>
+        <View style={[styles.prototypeDivider, { backgroundColor: colors.border }]} />
+        <View style={styles.prototypeColumn}><Text style={[styles.prototypeNumber, { color: colors.foreground }]}>3</Text><Text style={[styles.prototypeLabel, { color: colors.muted }]}>Network</Text><Text style={[styles.prototypeValue, { color: colors.foreground }]}>{signals.networkMomentum}</Text></View>
+      </View>
+      <Text style={[styles.prototypeAction, { color: colors.foreground }]}>{signals.actionWindow}: <Text style={{ color: colors.muted }}>{signals.actionReason}</Text></Text>
+    </View>
+  );
+}
+
 function ListingCard({ listing, isSaved, colors, onPress, onSave }: { listing: Listing; isSaved: boolean; colors: ReturnType<typeof useColors>; onPress: () => void; onSave: () => void }) {
+  const signals = getListingSignals(listing);
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [styles.listingCard, { backgroundColor: colors.surface, borderColor: colors.border }, pressed && styles.cardPressed]}>
       <View style={styles.listingTopRow}>
@@ -409,6 +431,7 @@ function ListingCard({ listing, isSaved, colors, onPress, onSave }: { listing: L
       <View style={styles.badgeRow}>
         <View style={[styles.badge, { backgroundColor: colors.background }]}><MaterialIcons name="verified" size={13} color={colors.success} /><Text style={[styles.badgeText, { color: colors.muted }]}>{listing.verified ? "Verified" : "Seller check"}</Text></View>
         {listing.escrowProtected ? <View style={[styles.badge, { backgroundColor: colors.background }]}><MaterialIcons name="lock" size={12} color={colors.muted} /><Text style={[styles.badgeText, { color: colors.muted }]}>Escrow</Text></View> : null}
+        <View style={[styles.badge, { backgroundColor: colors.background }]}><MaterialIcons name="trending-up" size={13} color={colors.primary} /><Text style={[styles.badgeText, { color: colors.primary }]}>{signals.actionWindow}</Text></View>
         <Text style={[styles.detailHint, { color: colors.primary }]}>View details <MaterialIcons name="arrow-forward" size={13} color={colors.primary} /></Text>
       </View>
     </Pressable>
@@ -417,6 +440,39 @@ function ListingCard({ listing, isSaved, colors, onPress, onSave }: { listing: L
 
 function DetailCell({ label, value, colors }: { label: string; value: string; colors: ReturnType<typeof useColors> }) {
   return <View style={styles.detailCell}><Text style={[styles.detailLabel, { color: colors.muted }]}>{label}</Text><Text style={[styles.detailValue, { color: colors.foreground }]} numberOfLines={1}>{value}</Text></View>;
+}
+
+function LayerLens({ listing, colors }: { listing: Listing; colors: ReturnType<typeof useColors> }) {
+  const signals = getListingSignals(listing);
+  const riskColor = signals.distortionRisk === "Low" ? colors.success : signals.distortionRisk === "Medium" ? colors.warning : colors.error;
+  return (
+    <View style={[styles.layerLens, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      <View style={styles.layerLensHeader}>
+        <View>
+          <Text style={[styles.layerLensEyebrow, { color: colors.primary }]}>THREE-LAYER LENS</Text>
+          <Text style={[styles.layerLensTitle, { color: colors.foreground }]}>Why this may be actionable</Text>
+        </View>
+        <View style={[styles.actionBadge, { backgroundColor: colors.primary }]}><Text style={[styles.actionBadgeText, { color: colors.foreground }]}>{signals.actionWindow.toUpperCase()}</Text></View>
+      </View>
+      <View style={styles.layerRow}>
+        <View style={[styles.layerNumber, { backgroundColor: colors.background }]}><Text style={[styles.layerNumberText, { color: colors.primary }]}>1</Text></View>
+        <View style={styles.layerCopy}><Text style={[styles.layerName, { color: colors.foreground }]}>Visible market</Text><Text style={[styles.layerText, { color: colors.muted }]}>{formatCurrency(listing.askingPrice)} asking · {listing.platform} · {listing.location}</Text></View>
+      </View>
+      <View style={styles.layerRow}>
+        <View style={[styles.layerNumber, { backgroundColor: colors.background }]}><Text style={[styles.layerNumberText, { color: colors.primary }]}>2</Text></View>
+        <View style={styles.layerCopy}><Text style={[styles.layerName, { color: colors.foreground }]}>Market behavior</Text><Text style={[styles.layerText, { color: colors.muted }]}>{signals.inventoryPressure} inventory · {signals.pricePressure.toLowerCase()} price pressure · {signals.activeComparables} comparables</Text></View>
+      </View>
+      <View style={styles.layerRow}>
+        <View style={[styles.layerNumber, { backgroundColor: colors.background }]}><Text style={[styles.layerNumberText, { color: colors.primary }]}>3</Text></View>
+        <View style={styles.layerCopy}><Text style={[styles.layerName, { color: colors.foreground }]}>Network & novelty</Text><Text style={[styles.layerText, { color: colors.muted }]}>{signals.networkMomentum} momentum · {signals.noveltyScore}/100 novelty · {signals.propagationScore}/100 propagation</Text></View>
+      </View>
+      <View style={[styles.signalStrip, { borderTopColor: colors.border }]}>
+        <Text style={[styles.signalText, { color: colors.foreground }]}>Distortion risk: <Text style={{ color: riskColor }}>{signals.distortionRisk}</Text></Text>
+        <Text style={[styles.signalText, { color: colors.muted }]}>{signals.demandDiversity} demand diversity</Text>
+      </View>
+      <Text style={[styles.actionReason, { color: colors.foreground }]}>{signals.actionReason}</Text>
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -455,6 +511,18 @@ const styles = StyleSheet.create({
   metricCard: { flex: 1, minHeight: 78, borderRadius: 16, borderWidth: 1, padding: 12, justifyContent: "space-between" },
   metricValue: { fontSize: 23, fontWeight: "800", letterSpacing: -0.8 },
   metricLabel: { fontSize: 10, fontWeight: "600" },
+  prototypeLens: { borderRadius: 18, borderWidth: 1, padding: 14, marginTop: 12 },
+  prototypeLensTop: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" },
+  prototypeEyebrow: { fontSize: 9, fontWeight: "900", letterSpacing: 1 },
+  prototypeTitle: { fontSize: 16, fontWeight: "800", marginTop: 3 },
+  prototypeHint: { fontSize: 10, marginTop: 2 },
+  prototypeColumns: { flexDirection: "row", alignItems: "stretch", marginTop: 13 },
+  prototypeColumn: { flex: 1 },
+  prototypeDivider: { width: 1, marginHorizontal: 10 },
+  prototypeNumber: { fontSize: 11, fontWeight: "900" },
+  prototypeLabel: { fontSize: 10, marginTop: 2 },
+  prototypeValue: { fontSize: 12, fontWeight: "800", marginTop: 4 },
+  prototypeAction: { fontSize: 10, lineHeight: 15, marginTop: 13 },
   filterRow: { marginTop: 29, marginBottom: 13, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
   filterButtons: { flexDirection: "row", gap: 5 },
   filterButton: { borderRadius: 99, borderWidth: 1, paddingHorizontal: 9, paddingVertical: 7 },
@@ -481,6 +549,21 @@ const styles = StyleSheet.create({
   badge: { flexDirection: "row", alignItems: "center", gap: 4, borderRadius: 7, paddingHorizontal: 7, paddingVertical: 5 },
   badgeText: { fontSize: 9, fontWeight: "600" },
   detailHint: { marginLeft: "auto", fontSize: 10, fontWeight: "700" },
+  layerLens: { borderRadius: 18, borderWidth: 1, padding: 14, marginTop: 20 },
+  layerLensHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 10, marginBottom: 10 },
+  layerLensEyebrow: { fontSize: 9, fontWeight: "900", letterSpacing: 1 },
+  layerLensTitle: { fontSize: 15, fontWeight: "800", marginTop: 4 },
+  actionBadge: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 6 },
+  actionBadgeText: { fontSize: 8, fontWeight: "900", letterSpacing: 0.5 },
+  layerRow: { flexDirection: "row", alignItems: "center", gap: 9, marginTop: 9 },
+  layerNumber: { width: 25, height: 25, borderRadius: 9, alignItems: "center", justifyContent: "center" },
+  layerNumberText: { fontSize: 12, fontWeight: "900" },
+  layerCopy: { flex: 1 },
+  layerName: { fontSize: 11, fontWeight: "800" },
+  layerText: { fontSize: 10, lineHeight: 15, marginTop: 2 },
+  signalStrip: { borderTopWidth: 1, marginTop: 13, paddingTop: 11, flexDirection: "row", justifyContent: "space-between", gap: 8 },
+  signalText: { fontSize: 10, fontWeight: "700" },
+  actionReason: { fontSize: 11, lineHeight: 16, marginTop: 11 },
   emptyState: { borderRadius: 18, borderWidth: 1, alignItems: "center", paddingVertical: 28, gap: 6 },
   emptyTitle: { fontSize: 15, fontWeight: "800" },
   emptyText: { fontSize: 12 },
