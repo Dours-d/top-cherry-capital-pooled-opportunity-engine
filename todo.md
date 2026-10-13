@@ -8,9 +8,13 @@
 - [x] Unit tests for signal ranges and actionability.
 - [x] eBay HTTPS notification callback with GET challenge verification and POST acknowledgement.
 - [x] Verified public callback on backend port 3000 with a live challenge hash match.
+- [x] eBay notification signature decoding and ECC/SHA-256 public-key verification path.
+- [x] One-hour public-key cache and application-token cache.
+- [x] Durable eBay notification event table with unique notification IDs for idempotency.
+- [x] Test coverage for valid signatures, tampered payloads, malformed headers, and token format.
 
 ## Next
-- [ ] Replace seeded signal values with timestamped marketplace observations.
+- [ ] Connect eBay public-key lookup and verified notification processing to a production eBay subscription.
 - [ ] Add listing-event storage for first-seen, repriced, removed, and relisted events.
 - [ ] Add cross-platform product identity clustering.
 - [ ] Add user outcome feedback to calibrate predictions.
@@ -20,5 +24,5 @@
 ## Known limitations
 - Current market signals are a transparent prototype dataset, not live measurements.
 - The verified sandbox callback is temporary and may stop when the development server is stopped.
-- The current notification route acknowledges POST payloads; signature validation and durable event storage are the next hardening steps.
+- The current notification route requires valid eBay application credentials to fetch the signing public key for each new key ID.
 - Network momentum is an analytical indicator, not a mechanism to manufacture demand or influence prices.

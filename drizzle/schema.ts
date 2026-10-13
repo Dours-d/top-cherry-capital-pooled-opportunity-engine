@@ -74,3 +74,25 @@ export const ingestionRuns = mysqlTable("ingestion_runs", {
 });
 
 export type IngestionRun = typeof ingestionRuns.$inferSelect;
+
+export const ebayNotificationEvents = mysqlTable(
+  "ebay_notification_events",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    notificationId: varchar("notificationId", { length: 255 }).notNull(),
+    topic: varchar("topic", { length: 128 }).notNull(),
+    signatureKid: varchar("signatureKid", { length: 255 }).notNull(),
+    publishAttemptCount: int("publishAttemptCount").default(1).notNull(),
+    eventDate: timestamp("eventDate"),
+    publishDate: timestamp("publishDate"),
+    rawPayload: text("rawPayload").notNull(),
+    receivedAt: timestamp("receivedAt").defaultNow().notNull(),
+  },
+  (table) => ({
+    notificationIdIdx: uniqueIndex("ebay_notification_events_notification_id_idx").on(table.notificationId),
+    receivedAtIdx: index("ebay_notification_events_received_at_idx").on(table.receivedAt),
+  }),
+);
+
+export type EbayNotificationEvent = typeof ebayNotificationEvents.$inferSelect;
+export type InsertEbayNotificationEvent = typeof ebayNotificationEvents.$inferInsert;
