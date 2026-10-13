@@ -123,7 +123,10 @@ async function verifyIncomingNotification(message: unknown, signatureHeader: str
 }
 
 function getVerificationToken() {
-  const token = (process.env.EBAY_NOTIFICATION_VERIFICATION_TOKEN ?? process.env.EBAY_DEV_ID)?.trim();
+  // Keep the callback deterministic across sandbox and production: the configured
+  // eBay DevID is the single token registered for this destination. The separate
+  // notification-token variable remains a compatibility fallback only.
+  const token = (process.env.EBAY_DEV_ID ?? process.env.EBAY_NOTIFICATION_VERIFICATION_TOKEN)?.trim();
   if (!token) throw new Error("EBAY_NOTIFICATION_VERIFICATION_TOKEN is not configured");
   return token;
 }
