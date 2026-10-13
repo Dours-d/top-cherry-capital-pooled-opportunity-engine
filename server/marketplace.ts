@@ -37,6 +37,8 @@ export type SourceSyncSnapshot = {
   message: string;
 };
 
+export { classifyEbayListingTopic, deriveEbayMarketSignal, EBAY_MARKET_SIGNAL_TOPICS } from "../shared/ebay-signals";
+
 export type PhaseTask = {
   id: string;
   label: string;
@@ -44,16 +46,16 @@ export type PhaseTask = {
 };
 
 export const PHASE_ONE_EBAY_TASKS: PhaseTask[] = [
-  { id: "developer-app", label: "Create eBay developer application", state: "in-progress" },
+  { id: "developer-app", label: "Create eBay developer application", state: "done" },
   { id: "buy-api-access", label: "Request production Buy API access", state: "blocked" },
-  { id: "server-secrets", label: "Store client credentials server-side", state: "next" },
+  { id: "server-secrets", label: "Store client credentials server-side", state: "done" },
   { id: "browse-adapter", label: "Import Browse API search results", state: "next" },
   { id: "first-sync", label: "Verify first live sync and counts", state: "next" },
 ];
 
 export const MARKETPLACE_SOURCES: MarketplaceSource[] = [
   { slug: "chrono24", name: "Chrono24", mode: "normalized-import", status: "credentials-required", coverage: "specialist", regions: ["EU", "global"], capabilities: ["watches", "escrow", "listing-links"], credentialEnvKey: "CHRONO24_API_KEY" },
-  { slug: "ebay", name: "eBay", mode: "normalized-import", status: "credentials-required", coverage: "specialist", regions: ["global"], capabilities: ["watches", "camera-gear", "collectibles", "listing-links"], credentialEnvKey: "EBAY_CLIENT_ID" },
+  { slug: "ebay", name: "eBay", mode: "normalized-import", status: "credentials-required", coverage: "specialist", regions: ["global"], capabilities: ["watches", "camera-gear", "collectibles", "listing-links"], credentialEnvKey: "EBAY_APP_ID" },
   { slug: "mpb", name: "MPB", mode: "normalized-import", status: "credentials-required", coverage: "specialist", regions: ["EU", "UK", "US"], capabilities: ["camera-gear", "listing-links"], credentialEnvKey: "MPB_API_KEY" },
   { slug: "goldin", name: "Goldin", mode: "normalized-import", status: "credentials-required", coverage: "specialist", regions: ["US", "global"], capabilities: ["collectibles", "listing-links"], credentialEnvKey: "GOLDIN_API_KEY" },
   { slug: "wallapop", name: "Wallapop", mode: "normalized-import", status: "credentials-required", coverage: "regional-general", regions: ["ES", "IT"], capabilities: ["home-and-living", "local-pickup", "general-goods"], credentialEnvKey: "WALLAPOP_API_TOKEN" },
@@ -73,7 +75,8 @@ export const SOURCE_SYNC_SNAPSHOT: SourceSyncSnapshot[] = MARKETPLACE_SOURCES.ma
 export const getMarketplaceReadiness = (sourceSlug: string, env: NodeJS.ProcessEnv = process.env) => {
   const source = MARKETPLACE_SOURCES.find((candidate) => candidate.slug === sourceSlug);
   if (!source) throw new Error(`Unknown marketplace source: ${sourceSlug}`);
-  return { source, configured: Boolean(env[source.credentialEnvKey]), nextStep: env[source.credentialEnvKey] ? "ready-for-sync" : `configure ${source.credentialEnvKey}` };
+  const configured = Boolean(env[source.credentialEnvKey]) && (sourceSlug !== "ebay" || Boolean(env.EBAY_CLIENT_SECRET));
+  return { source, configured, nextStep: configured ? "verify-provider-access" : `configure ${source.credentialEnvKey}` };
 };
 
 export const scoreNormalizedListing = (listing: NormalizedMarketplaceListing) => {

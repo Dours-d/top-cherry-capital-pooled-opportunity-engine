@@ -5,6 +5,8 @@ import * as db from "./db";
 import { MARKETPLACE_SOURCES, previewNormalizedImport } from "./marketplace";
 import { systemRouter } from "./_core/systemRouter";
 import { z } from "zod";
+import { getEbaySubscriptionState } from "./ebay-monitoring";
+import { summarizeEbayMarketSignals } from "../shared/ebay-signals";
 
 const savedDealInput = z.object({
   listingId: z.string().min(1).max(128),
@@ -67,6 +69,13 @@ export const appRouter = router({
   marketplace: router({
     sources: publicProcedure.query(() => MARKETPLACE_SOURCES),
     previewImport: protectedProcedure.input(z.object({ sourceSlug: z.string(), listings: z.array(normalizedListingInput).max(500) })).mutation(({ input }) => previewNormalizedImport(input.sourceSlug, input.listings)),
+  }),
+  monitoring: router({
+    ebay: publicProcedure.query(async () => {
+      const [summary, signals, subscriptions] = await Promise.all([db.getEbayNotificationSummary(), db.getEbayMarketSignals(), getEbaySubscriptionState()]);
+      return { summary, market: summarizeEbayMarketSignals(signals), subscriptions, observationWindow: "Latest 200 verified listing events; not a marketplace-wide estimate", checkedAt: new Date() };
+    }),
+    listingSignals: protectedProcedure.query(async () => (await db.getEbayMarketSignals()).slice(0, 8)),
   }),
 });
 

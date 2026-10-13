@@ -73,6 +73,15 @@ describe("pooled capital planning", () => {
 
   it("keeps Phase 1 eBay rollout explicitly blocked until production access is approved", () => {
     expect(PHASE_ONE_EBAY_TASKS.find((task) => task.id === "buy-api-access")?.state).toBe("blocked");
-    expect(PHASE_ONE_EBAY_TASKS.filter((task) => task.state === "done")).toHaveLength(0);
+    expect(PHASE_ONE_EBAY_TASKS.filter((task) => task.state === "done")).toHaveLength(2);
+    expect(PHASE_ONE_EBAY_TASKS.find((task) => task.id === "first-sync")?.state).toBe("next");
+  });
+
+  it("requires both configured eBay application credentials without claiming live authorization", () => {
+    expect(getMarketplaceReadiness("ebay", { NODE_ENV: "test", EBAY_APP_ID: "present" }).configured).toBe(false);
+    const ready = getMarketplaceReadiness("ebay", { NODE_ENV: "test", EBAY_APP_ID: "present", EBAY_CLIENT_SECRET: "secret" });
+    expect(ready.configured).toBe(true);
+    expect(ready.nextStep).toBe("verify-provider-access");
+    expect(JSON.stringify(ready)).not.toContain('"secret"');
   });
 });

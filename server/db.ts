@@ -1,7 +1,8 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, count, desc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { ebayListingEvents, ebayNotificationEvents, InsertEbayListingEvent, InsertEbayNotificationEvent, InsertSavedDeal, InsertUser, savedDeals, userPreferences, users } from "../drizzle/schema";
 import { ENV } from "./_core/env";
+import { buildEbayMarketSignals } from "../shared/ebay-signals";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -113,4 +114,36 @@ export async function insertEbayListingEvent(event: InsertEbayListingEvent) {
   await db.insert(ebayListingEvents).values(event).onDuplicateKeyUpdate({ set: { eventKey: event.eventKey } });
   const result = await db.select().from(ebayListingEvents).where(eq(ebayListingEvents.eventKey, event.eventKey)).limit(1);
   return result[0];
+}
+
+export async function getEbayNotificationSummary() {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const [notifications, listingEvents, latest] = await Promise.all([
+    db.select({ value: count() }).from(ebayNotificationEvents),
+    db.select({ value: count() }).from(ebayListingEvents),
+    db.select({ topic: ebayNotificationEvents.topic, receivedAt: ebayNotificationEvents.receivedAt }).from(ebayNotificationEvents).orderBy(desc(ebayNotificationEvents.receivedAt)).limit(1),
+  ]);
+  return { notifications: Number(notifications[0]?.value ?? 0), listingEvents: Number(listingEvents[0]?.value ?? 0), lastReceivedAt: latest[0]?.receivedAt ?? null, latestTopic: latest[0]?.topic ?? null };
+}
+
+export async function listRecentEbayListingEvents(limit = 8) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.select({ eventType: ebayListingEvents.eventType, itemId: ebayListingEvents.itemId, price: ebayListingEvents.price, availability: ebayListingEvents.availability, eventDate: ebayListingEvents.eventDate, receivedAt: ebayListingEvents.receivedAt }).from(ebayListingEvents).orderBy(desc(ebayListingEvents.receivedAt)).limit(limit);
+}
+
+export async function getEbayMarketSignals() {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const rows = await db.select().from(ebayListingEvents).orderBy(desc(ebayListingEvents.receivedAt)).limit(200);
+  return buildEbayMarketSignals(rows.map((row) => {
+    let currency: string | null = null;
+    try {
+      const data = JSON.parse(row.rawPayload)?.notification?.data;
+      const candidate = data?.price?.currency ?? data?.currentPrice?.currency ?? data?.currency;
+      if (typeof candidate === "string" && /^[A-Z]{3}$/.test(candidate)) currency = candidate;
+    } catch { /* A legacy payload has no reliable currency; comparisons remain unknown. */ }
+    return { eventKey: row.eventKey, eventType: row.eventType, itemId: row.itemId, marketplaceId: row.marketplaceId, price: row.price, availability: row.availability, currency, eventDate: row.eventDate, receivedAt: row.receivedAt };
+  }));
 }

@@ -1,6 +1,7 @@
 import { createHash, createVerify } from "node:crypto";
 import type { Express, Request, Response } from "express";
 import { insertEbayListingEvent, insertEbayNotificationEvent } from "./db";
+import { classifyEbayListingTopic } from "./marketplace";
 
 export const EBAY_NOTIFICATION_PATH = "/api/ebay/notifications";
 const EBAY_API_BASE = "https://api.ebay.com";
@@ -59,12 +60,15 @@ export function verifyEbaySignature(message: unknown, signatureHeader: string, p
 
 export function extractListingEvent(message: any, signatureKid: string) {
   const topic = typeof message?.metadata?.topic === "string" ? message.metadata.topic : "";
+  if (classifyEbayListingTopic(topic) === "other") return null;
   const notification = message?.notification;
   const data = notification?.data ?? {};
   const itemId = data.itemId ?? data.listingId ?? data.item?.itemId ?? data.item?.listingId;
   if (!notification?.notificationId || !itemId || !topic) return null;
   const rawPrice = data.price?.value ?? data.price ?? data.currentPrice?.value ?? data.currentPrice;
-  const price = typeof rawPrice === "number" ? rawPrice : typeof rawPrice === "string" && Number.isFinite(Number(rawPrice)) ? Number(rawPrice) : null;
+  const parsedPrice = typeof rawPrice === "number" ? rawPrice : typeof rawPrice === "string" && rawPrice.trim() ? Number(rawPrice) : NaN;
+  const price = Number.isFinite(parsedPrice) && parsedPrice >= 0 ? parsedPrice : null;
+  const parsedDate = notification.eventDate ? new Date(notification.eventDate) : null;
   return {
     eventKey: `${notification.notificationId}:${itemId}`,
     notificationId: notification.notificationId,
@@ -72,8 +76,8 @@ export function extractListingEvent(message: any, signatureKid: string) {
     itemId: String(itemId),
     marketplaceId: data.listingMarketplaceId ?? data.marketplaceId ?? null,
     price,
-    availability: data.availability ?? null,
-    eventDate: notification.eventDate ? new Date(notification.eventDate) : null,
+    availability: typeof data.availability === "string" ? data.availability : null,
+    eventDate: parsedDate && Number.isFinite(parsedDate.getTime()) ? parsedDate : null,
     rawPayload: JSON.stringify(message),
     signatureKid,
   };
@@ -93,7 +97,7 @@ export function buildPersistedNotificationPayload(message: any) {
   });
 }
 
-async function getEbayApplicationToken() {
+export async function getEbayApplicationToken() {
   if (applicationTokenCache && applicationTokenCache.expiresAt > Date.now()) return applicationTokenCache.token;
   const appId = process.env.EBAY_APP_ID;
   const clientSecret = process.env.EBAY_CLIENT_SECRET;

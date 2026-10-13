@@ -1,9 +1,15 @@
 {
-  "name": "app-template",
+  "name": "top-cherry-capital-pooled-opportunity-engine",
+  "description": "Budget-aware marketplace opportunities with a three-layer market lens and verified eBay notifications.",
   "version": "1.0.0",
   "private": true,
   "main": "expo-router/entry",
   "scripts": {
+    "setup": "pnpm install --frozen-lockfile && pnpm validate && pnpm setup:check",
+    "setup:check": "tsx scripts/setup-check.ts",
+    "validate": "pnpm check && pnpm test && pnpm build",
+    "test:live": "cross-env RUN_LIVE_EBAY_TESTS=1 vitest run tests/ebay.production-endpoint.test.ts",
+    "ebay:access": "node scripts/check-ebay-stream-access.mjs",
     "dev": "concurrently -k \"pnpm dev:server\" \"pnpm dev:metro\"",
     "dev:server": "cross-env NODE_ENV=development tsx watch server/_core/index.ts",
     "dev:metro": "cross-env EXPO_USE_METRO_WORKSPACE_ROOT=1 npx expo start --web --port ${EXPO_PORT:-8081}",
