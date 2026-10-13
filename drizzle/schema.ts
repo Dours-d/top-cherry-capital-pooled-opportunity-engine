@@ -96,3 +96,27 @@ export const ebayNotificationEvents = mysqlTable(
 
 export type EbayNotificationEvent = typeof ebayNotificationEvents.$inferSelect;
 export type InsertEbayNotificationEvent = typeof ebayNotificationEvents.$inferInsert;
+
+export const ebayListingEvents = mysqlTable(
+  "ebay_listing_events",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    eventKey: varchar("eventKey", { length: 255 }).notNull(),
+    notificationId: varchar("notificationId", { length: 255 }).notNull(),
+    eventType: varchar("eventType", { length: 64 }).notNull(),
+    itemId: varchar("itemId", { length: 255 }).notNull(),
+    marketplaceId: varchar("marketplaceId", { length: 64 }),
+    price: double("price"),
+    availability: varchar("availability", { length: 64 }),
+    eventDate: timestamp("eventDate"),
+    rawPayload: text("rawPayload").notNull(),
+    receivedAt: timestamp("receivedAt").defaultNow().notNull(),
+  },
+  (table) => ({
+    eventKeyIdx: uniqueIndex("ebay_listing_events_event_key_idx").on(table.eventKey),
+    itemDateIdx: index("ebay_listing_events_item_date_idx").on(table.itemId, table.eventDate),
+  }),
+);
+
+export type EbayListingEvent = typeof ebayListingEvents.$inferSelect;
+export type InsertEbayListingEvent = typeof ebayListingEvents.$inferInsert;

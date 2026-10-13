@@ -1,6 +1,6 @@
 import { createHash, createVerify } from "node:crypto";
 import type { Express, Request, Response } from "express";
-import { insertEbayNotificationEvent } from "./db";
+import { insertEbayListingEvent, insertEbayNotificationEvent } from "./db";
 
 export const EBAY_NOTIFICATION_PATH = "/api/ebay/notifications";
 const EBAY_API_BASE = "https://api.ebay.com";
@@ -33,11 +33,11 @@ export function decodeEbaySignatureHeader(header: string): EbaySignatureHeader {
 }
 
 export function formatEbayPublicKey(key: string) {
-  const normalized = key.trim();
-  if (normalized.includes("BEGIN PUBLIC KEY")) return normalized;
-  return normalized
-    .replace(/-----BEGIN PUBLIC KEY-----/g, "-----BEGIN PUBLIC KEY-----\n")
-    .replace(/-----END PUBLIC KEY-----/g, "\n-----END PUBLIC KEY-----");
+  const normalized = key.trim().replace(/\s+/g, "");
+  const body = normalized
+    .replace(/^-----BEGINPUBLICKEY-----/, "")
+    .replace(/-----ENDPUBLICKEY-----$/, "");
+  return `-----BEGIN PUBLIC KEY-----\n${body}\n-----END PUBLIC KEY-----`;
 }
 
 export function verifyEbaySignature(message: unknown, signatureHeader: string, publicKey: string) {
@@ -46,6 +46,42 @@ export function verifyEbaySignature(message: unknown, signatureHeader: string, p
   verifier.update(JSON.stringify(message), "utf8");
   verifier.end();
   return verifier.verify(formatEbayPublicKey(publicKey), signature.signature, "base64");
+}
+
+export function extractListingEvent(message: any, signatureKid: string) {
+  const topic = typeof message?.metadata?.topic === "string" ? message.metadata.topic : "";
+  const notification = message?.notification;
+  const data = notification?.data ?? {};
+  const itemId = data.itemId ?? data.listingId ?? data.item?.itemId ?? data.item?.listingId;
+  if (!notification?.notificationId || !itemId || !topic) return null;
+  const rawPrice = data.price?.value ?? data.price ?? data.currentPrice?.value ?? data.currentPrice;
+  const price = typeof rawPrice === "number" ? rawPrice : typeof rawPrice === "string" && Number.isFinite(Number(rawPrice)) ? Number(rawPrice) : null;
+  return {
+    eventKey: `${notification.notificationId}:${itemId}`,
+    notificationId: notification.notificationId,
+    eventType: topic,
+    itemId: String(itemId),
+    marketplaceId: data.listingMarketplaceId ?? data.marketplaceId ?? null,
+    price,
+    availability: data.availability ?? null,
+    eventDate: notification.eventDate ? new Date(notification.eventDate) : null,
+    rawPayload: JSON.stringify(message),
+    signatureKid,
+  };
+}
+
+export function buildPersistedNotificationPayload(message: any) {
+  if (message?.metadata?.topic !== "MARKETPLACE_ACCOUNT_DELETION") return JSON.stringify(message);
+  const notification = message?.notification ?? {};
+  return JSON.stringify({
+    metadata: message.metadata,
+    notification: {
+      notificationId: notification.notificationId,
+      eventDate: notification.eventDate,
+      publishDate: notification.publishDate,
+      publishAttemptCount: notification.publishAttemptCount,
+    },
+  });
 }
 
 async function getEbayApplicationToken() {
@@ -130,8 +166,10 @@ async function acknowledgeNotification(req: Request, res: Response) {
       publishAttemptCount: notification.publishAttemptCount ?? 1,
       eventDate: notification.eventDate ? new Date(notification.eventDate) : null,
       publishDate: notification.publishDate ? new Date(notification.publishDate) : null,
-      rawPayload: JSON.stringify(req.body),
+      rawPayload: buildPersistedNotificationPayload(req.body),
     });
+    const listingEvent = extractListingEvent(req.body, signature.kid);
+    if (listingEvent) await insertEbayListingEvent(listingEvent);
     res.status(200).json({ ok: true, received: true, verified: true });
   } catch (error) {
     console.error("[eBay notifications] signature or persistence error", error);

@@ -1,6 +1,6 @@
 import { and, desc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { ebayNotificationEvents, InsertEbayNotificationEvent, InsertSavedDeal, InsertUser, savedDeals, userPreferences, users } from "../drizzle/schema";
+import { ebayListingEvents, ebayNotificationEvents, InsertEbayListingEvent, InsertEbayNotificationEvent, InsertSavedDeal, InsertUser, savedDeals, userPreferences, users } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -104,5 +104,13 @@ export async function insertEbayNotificationEvent(event: InsertEbayNotificationE
   if (!db) throw new Error("Database not available");
   await db.insert(ebayNotificationEvents).values(event).onDuplicateKeyUpdate({ set: { notificationId: event.notificationId } });
   const result = await db.select().from(ebayNotificationEvents).where(eq(ebayNotificationEvents.notificationId, event.notificationId)).limit(1);
+  return result[0];
+}
+
+export async function insertEbayListingEvent(event: InsertEbayListingEvent) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.insert(ebayListingEvents).values(event).onDuplicateKeyUpdate({ set: { eventKey: event.eventKey } });
+  const result = await db.select().from(ebayListingEvents).where(eq(ebayListingEvents.eventKey, event.eventKey)).limit(1);
   return result[0];
 }
