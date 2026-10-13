@@ -25,6 +25,15 @@ describe("eBay notification verification", () => {
     expect(verifyEbaySignature({ ...message, changed: true }, header, publicKeyPem)).toBe(false);
   });
 
+  it("accepts the SHA-1 compatibility signature used by the published eBay SDK", () => {
+    const { privateKey, publicKey } = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
+    const message = { metadata: { topic: "MARKETPLACE_ACCOUNT_DELETION" }, notification: { notificationId: "evt-sha1" } };
+    const signature = sign("sha1", Buffer.from(JSON.stringify(message)), privateKey).toString("base64");
+    const header = Buffer.from(JSON.stringify({ kid: "test-sha1", signature })).toString("base64");
+    const publicKeyPem = publicKey.export({ type: "spki", format: "pem" }).toString();
+    expect(verifyEbaySignature(message, header, publicKeyPem)).toBe(true);
+  });
+
   it("rejects malformed signature headers", () => {
     expect(() => decodeEbaySignatureHeader("not-base64-json")).toThrow();
     expect(() => decodeEbaySignatureHeader(Buffer.from(JSON.stringify({ kid: "missing-signature" })).toString("base64"))).toThrow();

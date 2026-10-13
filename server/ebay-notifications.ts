@@ -42,10 +42,19 @@ export function formatEbayPublicKey(key: string) {
 
 export function verifyEbaySignature(message: unknown, signatureHeader: string, publicKey: string) {
   const signature = decodeEbaySignatureHeader(signatureHeader);
-  const verifier = createVerify("SHA256");
-  verifier.update(JSON.stringify(message), "utf8");
-  verifier.end();
-  return verifier.verify(formatEbayPublicKey(publicKey), signature.signature, "base64");
+  const pem = formatEbayPublicKey(publicKey);
+  const serialized = JSON.stringify(message);
+  for (const algorithm of ["SHA256", "SHA1"]) {
+    try {
+      const verifier = createVerify(algorithm);
+      verifier.update(serialized, "utf8");
+      verifier.end();
+      if (verifier.verify(pem, signature.signature, "base64")) return true;
+    } catch {
+      // Continue to the next compatible eBay SDK algorithm.
+    }
+  }
+  return false;
 }
 
 export function extractListingEvent(message: any, signatureKid: string) {
