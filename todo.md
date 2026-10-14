@@ -1,29 +1,29 @@
 # Top Cherry — Transmission-first roadmap
 
-Direction accepted on 14 October 2026. The [core specification v2.0](docs/core-specification.md) controls future work. This roadmap supersedes the earlier listing-first feature sequence; it does not retroactively mark the redesigned engine implemented.
+Direction accepted on 14 October 2026, clarified as a multi-mechanism architecture in v2.1. The [core specification](docs/core-specification.md) controls future work. This roadmap supersedes the earlier listing-first feature sequence; it does not retroactively mark the redesigned engine implemented.
 
 ## R0 — Architectural reset
 - [x] Record the economic-transmission premise and distinguish target product from implemented prototype.
 - [x] Define the transmission thesis as the primary analytical object; make search/listings sensors and candidate channels.
 - [x] Specify nodes, relationships, populations, observations, theses, candidates, capital decisions and outcomes.
-- [x] Make equity-wealth/luxury and oil-income/cost relationships foundational; keep conditional effects and unknown coefficients explicit.
+- [x] Make the reusable system of relationships, exposed populations, market responses and feedback the foundation; no single driver, sector or pair of relationships defines the core. Equity/oil paths are non-exclusive reference cases. Keep conditional effects and unknown coefficients explicit for every mechanism.
 - [x] Rewrite repository purpose and development priorities without changing working app behavior or secrets.
-- [x] Publish the superseding architectural decision to the existing Notion page; all 79 specification segments persisted after reload and all 254 earlier blocks were preserved.
+- [x] Publish the architectural decision in Notion and correct the narrow foundation wording in place for v2.1: all eight revised blocks persisted after reload; 325 unrelated blocks were preserved.
 
 Release procedure: validate, save the documentation checkpoint, synchronize by approved SSH push, and verify the remote commit identity. Hosted CI remains a separate R5 verification gate.
 
 ## R1 — Relationship contracts and allocation correctness
 - [ ] Implement shared, validated schemas for the domain records defined in the core specification.
-- [ ] Encode the two reference transmission paths with exposure conditions, evidence status, time horizons and competing channels; no invented elasticities.
-- [ ] Test conflicting oil channels, differently exposed buyer populations, missing data, revisions and lag handling with separate fixtures.
+- [ ] Implement an extensible relationship registry covering wealth/demand, funding/liquidity, supply/replacement/substitution, institutional/platform structure, and adoption/network mechanisms. These are open families, not a closed taxonomy or mandatory predictors for every market. Store exposure conditions, evidence status, horizons and competing channels without invented elasticities.
+- [ ] Test relationships across distinct driver families and both macro- and market-local changes: differently exposed populations, conflicting channels, substitution, platform visibility and adoption, missing data, revisions and lag handling. Equity/oil fixtures must not define the schema or be required for every thesis.
 - [ ] Correct planner affordability to all-in acquisition cash, confirmed available stock, integer quantity and explicit reserve.
 - [ ] Rename the current capital-share label; define actual opportunity cost through feasible alternatives and holding time.
 - [ ] Keep general-mechanism evidence, estimated market response and executable-deal feasibility separate.
 
-Exit gate: inspectable theses and evidence without fabricated inputs; allocations cannot exceed cash or stock.
+Exit gate: inspectable theses and evidence without fabricated inputs; allocations cannot exceed cash or stock; a relationship from another driver family can be represented without redesigning the core, and a thesis can work without equity or oil inputs.
 
 ## R2 — First live transmission slice
-- [ ] Select one bounded product family and buyer market according to available evidence and usable provider access.
+- [ ] Select a bounded pilot by economic relevance and usable evidence, not because it fits the equity/oil examples. A pilot limits implementation scope, not the conceptual foundation or category coverage.
 - [ ] Verify eBay Browse authorization separately from the previously denied item-stream scope.
 - [ ] Implement real listing ingestion with exact item URLs, coverage, provenance, normalization and deduplication.
 - [ ] Collect the relevant upstream economic observations with correct units, currencies, time definitions and vintages.

@@ -1,6 +1,6 @@
 # Top Cherry — Core specification: economic transmission to actionable opportunities
 
-**Version:** 2.0 — accepted direction, 14 October 2026  
+**Version:** 2.1 — multi-mechanism foundation clarified, 14 October 2026
 **Implementation status:** This is the controlling product specification. The existing application is a listing-and-allocation prototype; the transmission engine specified here is not yet implemented.
 
 ## The decision that changes the project
@@ -11,7 +11,7 @@ Top Cherry is an economic-transmission and opportunity-allocation system. It mod
 
 This specification supersedes the earlier listing-first premise and the interpretation of wider context as a supplementary panel. Earlier progress assessments remain historical records; their implementation-status findings still apply. The economic-context framework remains supporting material, not the controlling architecture.
 
-Stock-market wealth and oil-market changes are first-class upstream inputs, not merely examples of news to monitor. Their effects travel through identifiable buyer populations, producer incomes, costs, expectations and funding conditions. The engine must represent those relationships before assigning a listing an opportunity label.
+The foundation is a reusable, evolving system of economic relationships: drivers, exposed populations, market structures, responses and feedback. No driver, sector, market or pair of relationships is the universal starting point. Stock-market wealth and oil-market changes are meaningful reference cases within that system, not a fixed backbone or mandatory inputs for every opportunity. Local supply, substitution, funding, institutions, platform behavior and network adoption can generate other valid paths.
 
 ## The unit of reasoning
 
@@ -25,11 +25,17 @@ The system must work in both directions. Upstream changes generate questions abo
 
 Different economic channels can act simultaneously, with opposite signs and different delays. The model is a time-indexed relationship graph, not a universal chain that always ends in a price increase. Economic feedback loops are permitted; any implementation must bound evaluation and prevent repeated propagation from counting the same evidence multiple times.
 
-## Two foundational relationship paths
+## Extensible relationship families
+
+The engine must accommodate wealth and demand, funding and liquidity, production and replacement supply, substitution and obsolescence, institutions and platform structure, and adoption and network effects. These are open families of mechanisms, not an exhaustive taxonomy. A new relationship should fit the shared contracts without rewriting the engine.
+
+Select relevant mechanisms from the actual market and population under examination. Multiple families may interact; some may be irrelevant. A local-market opportunity must not require an equity or oil signal to become intelligible. Keep conditional effects, evidence status and unknown coefficients explicit across all relationship families.
+
+## Illustrative relationship paths — not the foundation
 
 ### Equity markets, wealth and luxury demand
 
-The starting relationship is the transmission from financial-asset wealth and expectations to purchasing behavior among exposed luxury buyers. Equity prices, relevant market drawdowns and volatility enter the model through the buyer population they affect—not as decorative charts beside a watch listing.
+One reference relationship is the transmission from financial-asset wealth and expectations to purchasing behavior among exposed luxury buyers. Equity prices, relevant market drawdowns and volatility enter the model through the buyer population they affect—not as decorative charts beside a watch listing. This case illustrates the reasoning architecture; it does not define its scope.
 
 The thesis should distinguish asset-owning buyer segments, geographic exposure, discretionary purchasing capacity, seller behavior and category liquidity. A luxury company's share price is not interchangeable with the wealth of that company's customers. A broad index is a proxy only when the exposure rationale is recorded.
 
@@ -41,7 +47,7 @@ Oil-price changes have multiple routes into luxury and secondhand markets. The m
 
 A change can support one buyer population while constraining another. It can alter replacement costs without improving resale liquidity. The reason for the oil-price movement also matters: a supply interruption and stronger global demand are not interchangeable events simply because the quoted oil price rises.
 
-These are core relationships in the system model. Their application to a specific product, buyer market and holding period is what must be measured. Neither “oil up means all luxury up” nor “oil up means all consumption down” is an acceptable rule.
+These are reference relationships alongside other mechanisms. Their application to a specific product, buyer market and holding period is what must be measured. Neither “oil up means all luxury up” nor “oil up means all consumption down” is an acceptable rule; neither equity nor oil data is a prerequisite for every thesis.
 
 ## The economic system to represent
 
@@ -121,13 +127,13 @@ Adopt this specification, revise the repository purpose and tracker, and publish
 
 ### Phase R1 — Relationship contracts and allocation correctness
 
-Define shared schemas for observations, nodes, edges, population exposures, theses and decisions. Encode the equity-wealth-to-luxury and oil-income/cost paths as reference relationships with explicit exposure conditions and unknown coefficients. Test contrasting populations, conflicting channels, missing data and time lags using clearly separated fixtures.
+Define shared schemas for observations, nodes, edges, population exposures, theses and decisions, plus an extensible registry of relationship families. Represent diverse macroeconomic and market-local mechanisms through the same contracts. Equity/oil paths can be reference cases but must not define the schema or default priorities. Test contrasting populations, competing channels, substitution, platform structure and adoption, missing data and time lags using clearly separated fixtures.
 
-Correct all-in cash, available stock, integer quantities, reserves and the opportunity-cost label in the planner. Exit gate: a thesis and its evidence can be represented and inspected without fabricated inputs, and no allocation exceeds cash or stock.
+Correct all-in cash, available stock, integer quantities, reserves and the opportunity-cost label in the planner. Exit gate: a thesis and its evidence can be represented and inspected without fabricated inputs, no allocation exceeds cash or stock, and a new mechanism can be represented without redesigning the core or requiring equity/oil inputs.
 
 ### Phase R2 — First live transmission slice
 
-Choose one bounded product family and buyer market based on accessible, usable data. Independently verify eBay Browse access; a denied item-stream scope is not proof that Browse search is unavailable. Collect real listing observations together with the relevant upstream series, timestamps, coverage and exposure evidence. Start a defensible history rather than replacing absent history with sample signals.
+Choose a bounded pilot by economic relevance and accessible, usable evidence—not by whether it fits the equity/oil examples. A pilot limits implementation scope, not the system's foundation. Independently verify eBay Browse access; a denied item-stream scope is not proof that Browse search is unavailable. Collect real listing observations together with the relevant economic and market-local observations, timestamps, coverage and exposure evidence. Start a defensible history rather than replacing absent history with sample signals.
 
 Exit gate: real upstream observations and real candidate links are connected through an inspectable thesis; missing transaction evidence or insufficient history is clearly marked. No predictive-success claim is required or justified yet.
 

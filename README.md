@@ -2,7 +2,7 @@
 
 Top Cherry's target product is an **economic-transmission and opportunity-allocation system**: understand how connected markets change the populations buying and selling goods, observe the resulting demand/supply/price responses, and identify feasible uses of pooled capital. Marketplace search is a sensor; listings are observations and possible transaction points, not the starting intelligence.
 
-The [controlling core specification, version 2.0](docs/core-specification.md) replaces the earlier listing-first premise. Equity-wealth and oil-income/cost transmission are foundational relationships, not optional context panels. The visible, behavioral and novelty/network layers serve one reasoning process rather than three independent scores.
+The [controlling core specification, version 2.1](docs/core-specification.md) replaces the earlier listing-first premise. Its foundation is an extensible system of relationships, exposed populations, market responses and feedback—not equity, oil or any fixed set of drivers. Equity-wealth and oil-income/cost paths are non-exclusive reference cases; mechanisms are selected for the actual market. The visible, behavioral and novelty/network layers serve one reasoning process rather than three independent scores.
 
 **The redesigned engine is not implemented yet.** The existing Expo/React Native app, Node/Express/tRPC backend and MySQL/Drizzle persistence provide a listing-and-allocation prototype and notification infrastructure. See [the revised roadmap](todo.md) for implementation gates; the setup commands below remain unchanged.
 
