@@ -1,6 +1,10 @@
 # Top Cherry Capital — Pooled Opportunity Engine
 
-A mobile-first tool for comparing secondhand marketplace opportunities and allocating a pooled budget across quantities. Top Cherry combines a visible listing layer, an observed market-behavior layer, and a network/novelty prototype. It is an Expo/React Native app with a Node/Express/tRPC backend and MySQL/Drizzle persistence.
+Top Cherry's target product is an **economic-transmission and opportunity-allocation system**: understand how connected markets change the populations buying and selling goods, observe the resulting demand/supply/price responses, and identify feasible uses of pooled capital. Marketplace search is a sensor; listings are observations and possible transaction points, not the starting intelligence.
+
+The [controlling core specification, version 2.0](docs/core-specification.md) replaces the earlier listing-first premise. Equity-wealth and oil-income/cost transmission are foundational relationships, not optional context panels. The visible, behavioral and novelty/network layers serve one reasoning process rather than three independent scores.
+
+**The redesigned engine is not implemented yet.** The existing Expo/React Native app, Node/Express/tRPC backend and MySQL/Drizzle persistence provide a listing-and-allocation prototype and notification infrastructure. See [the revised roadmap](todo.md) for implementation gates; the setup commands below remain unchanged.
 
 ## What works, and what is still pending
 
@@ -93,4 +97,4 @@ After an iteration: run validation, save the WebDev checkpoint, push the same co
 
 `app/(tabs)/` contains Discover, Plan, Saved, and Workspace. `lib/market-data.ts` holds the explicitly labelled sample dataset and capital-planning model. `shared/ebay-signals.ts` derives currency-safe price movements and availability signals from observations, without treating an unavailable item as a proven sale. `server/ebay-notifications.ts` handles the callback. `server/ebay-monitoring.ts` reads subscription status without exposing credentials. `server/db.ts`, `drizzle/`, and `tests/` contain persistence, migrations, and regression coverage.
 
-See [the project tracker](todo.md) and [eBay topic rollout](docs/ebay-topic-rollout.md) for remaining work and API references.
+See [the controlling core specification](docs/core-specification.md), [the project tracker](todo.md) and [eBay topic rollout](docs/ebay-topic-rollout.md) for product direction, remaining work and API references.
