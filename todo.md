@@ -10,27 +10,39 @@ Direction accepted on 14 October 2026, clarified as a multi-mechanism architectu
 - [x] Rewrite repository purpose and development priorities without changing working app behavior or secrets.
 - [x] Publish the architectural decision in Notion and correct the narrow foundation wording in place for v2.1: all eight revised blocks persisted after reload; 325 unrelated blocks were preserved.
 
-Release procedure: validate, save the documentation checkpoint, synchronize by approved SSH push, and verify the remote commit identity. Hosted CI remains a separate R5 verification gate.
+Release procedure: validate, save the documentation checkpoint, synchronize by approved SSH push, and verify the remote commit. Hosted CI remains a separate R5 verification gate.
 
 ## R1 — Relationship contracts and allocation correctness
-- [ ] Implement shared, validated schemas for the domain records defined in the core specification.
-- [ ] Implement an extensible relationship registry covering wealth/demand, funding/liquidity, supply/replacement/substitution, institutional/platform structure, and adoption/network mechanisms. These are open families, not a closed taxonomy or mandatory predictors for every market. Store exposure conditions, evidence status, horizons and competing channels without invented elasticities.
-- [ ] Test relationships across distinct driver families and both macro- and market-local changes: differently exposed populations, conflicting channels, substitution, platform visibility and adoption, missing data, revisions and lag handling. Equity/oil fixtures must not define the schema or be required for every thesis.
-- [ ] Correct planner affordability to all-in acquisition cash, confirmed available stock, integer quantity and explicit reserve.
-- [ ] Rename the current capital-share label; define actual opportunity cost through feasible alternatives and holding time.
-- [ ] Keep general-mechanism evidence, estimated market response and executable-deal feasibility separate.
+- [/] **R1.1 Shared domain contracts:** implement `shared/transmission.ts` with validated nodes, edges, exposures, observations, theses, candidates, decisions and outcomes.
+- [/] **R1.2 Extensible mechanism registry:** implement `shared/mechanism-registry.ts` with diverse mechanism families and explicit applicability, evidence and horizons.
+- [/] **R1.3 Thesis evaluation:** implement `shared/evaluate-thesis.ts` with temporal integrity, missing evidence, contradictory channels, unknowns and deterministic readiness states.
+- [ ] **R1.4 Versioned thesis/decision drafts:** local persistence first; cloud sync only with explicit owner-scoped API work.
+- [ ] **R1.5 Embedded reasoning screens:** thesis-led Discover flow, evidence path and candidate linking.
+- [ ] **R1.6 Correct planner affordability:** all-in acquisition cash, confirmed stock, integer quantity and explicit reserve.
+- [ ] **R1.7 Outcomes and revision loop:** preserve decision snapshots and record later evidence without rewriting history.
+- [ ] **R1.8 End-to-end acceptance:** one complete thesis-to-candidate-to-allocation-to-outcome journey.
 
-Exit gate: inspectable theses and evidence without fabricated inputs; allocations cannot exceed cash or stock; a relationship from another driver family can be represented without redesigning the core, and a thesis can work without equity or oil inputs.
+### Current R1 slice files
+- `shared/transmission.ts`
+- `shared/mechanism-registry.ts`
+- `shared/evaluate-thesis.ts`
+- `tests/transmission.test.ts`
+- `docs/r1-implementation-steps.md`
+
+### R1.1–R1.3 exit checks
+- [ ] TypeScript passes.
+- [ ] Deterministic tests pass.
+- [ ] A relationship from a non-equity/non-oil family can be represented and evaluated.
+- [ ] Missing, future, contradictory and duplicate evidence never becomes a fabricated ready state.
+- [ ] Mechanism additions do not require changing the central evaluator.
 
 ## R2 — First live transmission slice
-- [ ] Select a bounded pilot by economic relevance and usable evidence, not because it fits the equity/oil examples. A pilot limits implementation scope, not the conceptual foundation or category coverage.
+- [ ] Select a bounded pilot by economic relevance and usable evidence, not because it fits the equity/oil examples.
 - [ ] Verify eBay Browse authorization separately from the previously denied item-stream scope.
 - [ ] Implement real listing ingestion with exact item URLs, coverage, provenance, normalization and deduplication.
-- [ ] Collect the relevant upstream economic observations with correct units, currencies, time definitions and vintages.
+- [ ] Collect relevant upstream observations with correct units, currencies, time definitions and vintages.
 - [ ] Link observations and candidates through a documented population exposure and transmission thesis.
 - [ ] Accumulate history; show absent sale evidence, insufficient history and unknown response estimates honestly.
-
-Exit gate: a real driver-to-population-to-market-to-candidate path is inspectable. This is not yet a claim of predictive success.
 
 ## R3 — Response estimation and validation
 - [ ] Estimate supported relationships and delays; retain limited scenarios where evidence is insufficient.
@@ -38,8 +50,6 @@ Exit gate: a real driver-to-population-to-market-to-candidate path is inspectabl
 - [ ] Include costs, unsold/withdrawn inventory, holding time, abstentions, missing outcomes and sample coverage.
 - [ ] Prevent future observations, revised data and duplicated evidence from leaking into historical decisions.
 - [ ] Version models and record thesis invalidation and outcomes rather than explaining every result after the fact.
-
-Exit gate: documented response evidence and outcome tracking; usefulness must be demonstrated against a simpler baseline.
 
 ## R4 — Broader system and network feedback
 - [ ] Extend economic paths, regions and product families without treating national averages as individual behavior.
@@ -57,21 +67,16 @@ Exit gate: documented response evidence and outcome tracking; usefulness must be
 - [ ] Define contributor commitments, ownership and auditable accounting if actual multi-contributor pooling is intended; no money collection is currently implemented.
 
 ## Retained foundation — implemented prototype, not the new engine
-- [x] Budget-sensitive pooled-capital prototype, shared categories, source/country/pickup filters and configurable cost assumptions. Known cash/stock/opportunity-cost corrections are tracked in R1.
+- [x] Budget-sensitive pooled-capital prototype, shared categories, source/country/pickup filters and configurable cost assumptions. Known cash/stock/opportunity-cost corrections are tracked in R1.6.
 - [x] Three-layer sample market lens and action windows, explicitly separated from live evidence.
 - [x] Signed-in saves and preferences; complete cross-device/native validation remains pending.
 - [x] Persistent eBay callback challenge, signed POST verification, public-key caching, durable idempotent storage and account-deletion payload redaction.
 - [x] Verified-event normalization with event-time ordering and currency-matched price history; unavailable listings are not treated as proven sales.
 - [x] Workspace monitor with actual delivery counts, receipt/subscription states, signal aggregates, refresh and unavailable/loading states.
-- [x] Item history requires sign-in; public monitoring exposes no raw payloads or personal identifiers.
 - [x] Top Cherry-specific setup, secret-safe configuration checks, credentials-free deterministic validation, backend build and opt-in live challenge check.
 - [x] Read-only GitHub validation workflow without production secrets or deployment permissions; prior source release SSH-synchronized.
 
 ## External gates and boundaries
-On 13 October 2026, eBay rejected `buy.item.stream` with HTTP 400 / `invalid_scope`; no listing subscription was created. `ITEM_AVAILABILITY` and `ITEM_PRICE_REVISION` activation remains blocked pending authorization. This does not establish whether Browse search is authorized; check it independently.
-
-The active eBay subscription is account deletion, not a marketplace-wide inventory feed. Successful compliance notifications do not establish inventory coverage, market predictions or complete personal-data erasure.
-
-GitHub source synchronization, hosted CI, database migration, checkpoints, UI deployment and provider access are separate gates. Existing GitHub API/app access remains unavailable; approved SSH pushes work. This redesign does not depend on resolving that connector first.
-
-No credentials, eBay destinations, subscriptions, recurring jobs, migrations or money-handling features are changed by the documentation release.
+- eBay account-deletion delivery does not establish Browse search or listing-stream permissions.
+- GitHub source synchronization, hosted CI, database migration, checkpoints, UI deployment and provider access are separate gates.
+- No credentials, eBay destinations, subscriptions, recurring jobs, migrations or money-handling features are changed by the R1.1–R1.3 slice.
