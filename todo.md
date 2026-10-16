@@ -26,7 +26,7 @@ Direction accepted on 14 October 2026, clarified as a multi-mechanism architectu
 - [x] R1.1 Shared domain contracts implemented and tested.
 - [x] R1.2 Extensible mechanism registry implemented and tested.
 - [x] R1.3 Deterministic thesis evaluator implemented and tested.
-- [ ] R1.4 Versioned thesis/decision drafts.
+- [x] R1.4 Versioned thesis/decision drafts: immutable revisions, parent lineage, and explicit status transitions implemented in `shared/versioned-drafts.ts` with regression coverage.
 - [ ] R1.5 Embedded reasoning screens.
 - [ ] R1.6 Correct planner affordability: all-in acquisition cash, confirmed stock, integer quantity and explicit reserve.
 - [ ] R1.7 Outcomes and revision loop.

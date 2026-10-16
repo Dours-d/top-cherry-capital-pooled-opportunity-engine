@@ -1,0 +1,27 @@
+flowchart TD
+    A([START: Define the product action]) --> B{Does Top Cherry accept, hold, route, convert, or return user money?}
+    B -- Yes --> X[STOP AND ESCALATE<br/>Pooled-capital, client-money/custody,<br/>AML/KYC and authorization review]
+    B -- No --> C{Does it execute, arrange,<br/>match, or negotiate a transaction?}
+    C -- Yes --> Y[STOP AND ESCALATE<br/>Arranging, execution, agency,<br/>payments and promotion review]
+    C -- No --> D{Does it give a personal<br/>buy/hold/sell recommendation<br/>on a financial instrument?}
+    D -- Yes --> Z[STOP AND ESCALATE<br/>Advice, suitability and<br/>financial-promotion review]
+    D -- No --> R[RESEARCH-ONLY TEST<br/>Source-linked evidence<br/>Transmission theses<br/>Candidate links<br/>Simulated allocations]
+    R --> M[MARKET-FIT GATE]
+    M --> M1[1. One user segment<br/>One repeated problem]
+    M1 --> M2[2. Measure willingness to pay<br/>for one narrow outcome]
+    M2 --> M3[3. Map funds, assets,<br/>ownership and loss]
+    M3 --> M4[4. Identify trigger and<br/>responsible authorised entity]
+    M4 --> M5{Does the research-only<br/>product remain valuable<br/>without custody or execution?}
+    M5 -- No --> Q[PAUSE: rethink the business model<br/>before adding controls]
+    M5 -- Yes --> G[PROCEED WITH AML-0<br/>Research-only discovery<br/>No money movement]
+
+    classDef start fill:#173b42,stroke:#c8f24a,color:#f4fbff,stroke-width:2px;
+    classDef research fill:#213b2a,stroke:#8fe388,color:#f4fbff,stroke-width:2px;
+    classDef stop fill:#4a2527,stroke:#ff817a,color:#fff,stroke-width:2px;
+    classDef gate fill:#3e351d,stroke:#f6c453,color:#fff,stroke-width:2px;
+    classDef neutral fill:#1c2936,stroke:#85c9ff,color:#f4fbff,stroke-width:1.5px;
+    class A start;
+    class R,G research;
+    class X,Y,Z,Q stop;
+    class M,M1,M2,M3,M4,M5 gate;
+    class B,C,D neutral;

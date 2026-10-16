@@ -1,0 +1,23 @@
+flowchart LR
+    A([START]) --> B{Money accepted,<br/>held, routed,<br/>converted or returned?}
+    B -- YES --> X[STOP<br/>Pooled capital<br/>Client money / custody<br/>AML / KYC / authorization]
+    B -- NO --> C{Transaction<br/>executed, arranged,<br/>matched or negotiated?}
+    C -- YES --> Y[STOP<br/>Arranging / execution<br/>Agency / payments<br/>Promotion review]
+    C -- NO --> D{Personal recommendation<br/>on a financial instrument?}
+    D -- YES --> Z[STOP<br/>Advice / suitability<br/>Financial promotion<br/>Perimeter review]
+    D -- NO --> R[RESEARCH-ONLY TEST<br/>Evidence + theses<br/>Candidate links<br/>Simulated allocations]
+    R --> M[MARKET-FIT GATE<br/>1. Segment + repeated problem<br/>2. Willingness to pay<br/>3. Funds / asset flow<br/>4. Trigger + responsible entity]
+    M --> G{Valuable without<br/>custody or execution?}
+    G -- NO --> Q[PAUSE<br/>Rethink operating model]
+    G -- YES --> P[PROCEED WITH AML-0<br/>Research only<br/>No money movement]
+
+    classDef start fill:#173b42,stroke:#c8f24a,color:#f4fbff,stroke-width:2px;
+    classDef stop fill:#4a2527,stroke:#ff817a,color:#fff,stroke-width:2px;
+    classDef research fill:#213b2a,stroke:#8fe388,color:#f4fbff,stroke-width:2px;
+    classDef gate fill:#3e351d,stroke:#f6c453,color:#fff,stroke-width:2px;
+    classDef question fill:#1c2936,stroke:#85c9ff,color:#f4fbff,stroke-width:1.5px;
+    class A start;
+    class X,Y,Z,Q stop;
+    class R,P research;
+    class M,G gate;
+    class B,C,D question;
