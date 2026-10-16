@@ -43,3 +43,6 @@ R2 real-data ingestion, R3 response estimation, R4 network feedback and R5 opera
 
 ## Next artifact
 See `top-cherry-market-fit-aml-phase-assessment-2026-10-15.md` for the market-fit questions, operating-model options, AML risk register and go/no-go criteria.
+
+## Research artifact completed
+- [x] `docs/economic-context-source-inventory.md`: 12-domain source baseline covering drivers, populations, market structure, responses, eligibility constraints, vintages, proxies, and coverage gaps.
