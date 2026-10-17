@@ -7,6 +7,7 @@ import { useColors } from "@/hooks/use-colors";
 import { LISTINGS } from "@/lib/market-data";
 import { buildDemoThesis } from "@/lib/demo-thesis";
 import { createThesisDraft, reviseThesisDraft, transitionDraftStatus, type ThesisDraft } from "@/shared/versioned-drafts";
+import { evaluateThesis } from "@/shared/evaluate-thesis";
 import { ThesisEvidence } from "@/components/thesis-evidence";
 import { TransmissionPath } from "@/components/transmission-path";
 
@@ -21,6 +22,7 @@ export function ThesisDraftEditor() {
   const [store, setStore] = useState<DraftStore | null>(null);
   const [claim, setClaim] = useState("");
   const [changeSummary, setChangeSummary] = useState("");
+  const [selectedEvidenceIds, setSelectedEvidenceIds] = useState<string[]>([]);
   const listing = LISTINGS[0];
   const demo = useMemo(() => buildDemoThesis(listing), [listing]);
 
@@ -31,6 +33,7 @@ export function ThesisDraftEditor() {
           const parsed = JSON.parse(raw) as DraftStore;
           setStore(parsed);
           setClaim(parsed.current.thesis.claim);
+          setSelectedEvidenceIds(parsed.current.thesis.observationIds);
           return;
         } catch {
           // Reset invalid local state to the transparent demonstration draft.
@@ -40,6 +43,7 @@ export function ThesisDraftEditor() {
       const next = { revisions: [initial], current: initial };
       setStore(next);
       setClaim(initial.thesis.claim);
+      setSelectedEvidenceIds(initial.thesis.observationIds);
       void AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
     });
   }, [demo.thesis]);
@@ -47,13 +51,14 @@ export function ThesisDraftEditor() {
   const persist = (next: DraftStore) => {
     setStore(next);
     setClaim(next.current.thesis.claim);
+    setSelectedEvidenceIds(next.current.thesis.observationIds);
     void AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
   };
 
   const saveRevision = () => {
     if (!store || store.current.status !== "draft" || !claim.trim() || !changeSummary.trim()) return;
     tap();
-    const nextThesis = { ...store.current.thesis, claim: claim.trim() };
+    const nextThesis = { ...store.current.thesis, claim: claim.trim(), observationIds: selectedEvidenceIds };
     const revision = reviseThesisDraft(store.current, { thesis: nextThesis, createdAt: nowIso(), createdBy: "local analyst", changeSummary: changeSummary.trim() });
     persist({ revisions: [...store.revisions, revision], current: revision });
     setChangeSummary("");
@@ -69,6 +74,7 @@ export function ThesisDraftEditor() {
   if (!store) return <Text style={[styles.loading, { color: colors.muted }]}>Loading local thesis draft…</Text>;
   const current = store.current;
   const editable = current.status === "draft";
+  const currentEvaluation = evaluateThesis({ nodes: demo.nodes, edges: demo.edges, exposures: [], observations: demo.observations, thesis: { ...current.thesis, observationIds: selectedEvidenceIds } });
   return (
     <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}> 
       <View style={styles.header}>
@@ -79,13 +85,19 @@ export function ThesisDraftEditor() {
       <Text style={[styles.fieldLabel, { color: colors.foreground }]}>Claim</Text>
       <TextInput multiline editable={editable} value={claim} onChangeText={setClaim} style={[styles.input, { color: colors.foreground, backgroundColor: colors.background, borderColor: colors.border }]} placeholder="State the thesis carefully" placeholderTextColor={colors.muted} />
       {editable ? <><Text style={[styles.fieldLabel, { color: colors.foreground }]}>Change summary</Text><TextInput value={changeSummary} onChangeText={setChangeSummary} style={[styles.input, styles.singleLine, { color: colors.foreground, backgroundColor: colors.background, borderColor: colors.border }]} placeholder="What changed?" placeholderTextColor={colors.muted} /></> : <View style={[styles.locked, { backgroundColor: colors.background }]}><MaterialIcons name="lock" size={15} color={colors.warning} /><Text style={[styles.lockedText, { color: colors.muted }]}>This revision is {current.status}; create a new draft before editing.</Text></View>}
+      <Text style={[styles.fieldLabel, { color: colors.foreground }]}>Evidence actions</Text>
+      {demo.observations.map((observation) => {
+        const attached = selectedEvidenceIds.includes(observation.id);
+        return <View key={observation.id} style={[styles.evidenceRow, { backgroundColor: colors.background, borderColor: colors.border }]}><View style={styles.evidenceCopy}><Text style={[styles.evidenceMetric, { color: colors.foreground }]}>{observation.metric.replaceAll("-", " ")}</Text><Text style={[styles.evidenceMeta, { color: colors.muted }]}>{observation.value} {observation.unit} · {observation.vintage}</Text></View><Pressable onPress={() => { if (!editable) return; tap(); setSelectedEvidenceIds((ids) => attached ? ids.filter((id) => id !== observation.id) : [...ids, observation.id]); }} style={({ pressed }) => [styles.evidenceAction, { borderColor: attached ? colors.success : colors.border }, pressed && styles.pressed]}><Text style={[styles.evidenceActionText, { color: attached ? colors.success : colors.foreground }]}>{attached ? "Attached" : "Attach"}</Text></Pressable><Pressable onPress={() => Alert.alert("Source inspection", `${observation.provenance.sourceName}\n\n${observation.provenance.reference ?? "No additional source reference."}\n\nEvent: ${observation.eventTime}\nVintage: ${observation.vintage}`)} accessibilityLabel="Inspect evidence source" style={({ pressed }) => [styles.sourceButton, pressed && styles.pressed]}><MaterialIcons name="info-outline" size={18} color={colors.primary} /></Pressable></View>;
+      })}
+      <Text style={[styles.readiness, { color: currentEvaluation.status === "ready" ? colors.success : colors.warning }]}>Evaluator readiness: {currentEvaluation.status.toUpperCase()} · {currentEvaluation.readinessReasons[0] ?? "Evidence set is complete for this draft."}</Text>
       <View style={styles.actions}>
         {editable ? <Pressable onPress={saveRevision} disabled={!claim.trim() || !changeSummary.trim()} style={({ pressed }) => [styles.primaryAction, { backgroundColor: colors.primary, opacity: !claim.trim() || !changeSummary.trim() ? 0.45 : 1 }, pressed && styles.pressed]}><MaterialIcons name="save" size={17} color={colors.foreground} /><Text style={[styles.actionText, { color: colors.foreground }]}>Save revision</Text></Pressable> : null}
         {editable ? <Pressable onPress={() => Alert.alert("Submit thesis", "This marks the current research draft as submitted for review. It does not authorize a trade, pooling or execution.", [{ text: "Cancel", style: "cancel" }, { text: "Submit", onPress: () => transition("submitted") }])} style={({ pressed }) => [styles.secondaryAction, { borderColor: colors.border }, pressed && styles.pressed]}><Text style={[styles.secondaryText, { color: colors.foreground }]}>Submit for review</Text></Pressable> : <Pressable onPress={() => transition("archived")} style={({ pressed }) => [styles.secondaryAction, { borderColor: colors.border }, pressed && styles.pressed]}><Text style={[styles.secondaryText, { color: colors.foreground }]}>Archive</Text></Pressable>}
       </View>
       <Text style={[styles.historyTitle, { color: colors.foreground }]}>Evidence snapshot</Text>
-      <TransmissionPath evaluation={demo.evaluation} colors={colors} />
-      <ThesisEvidence evaluation={demo.evaluation} sourceLabel="Sample signals" colors={colors} />
+      <TransmissionPath evaluation={currentEvaluation} colors={colors} />
+      <ThesisEvidence evaluation={currentEvaluation} sourceLabel="Sample signals" colors={colors} />
     </View>
   );
 }
@@ -104,6 +116,14 @@ const styles = StyleSheet.create({
   fieldLabel: { fontSize: 11, fontWeight: "800", marginTop: 14, marginBottom: 6 },
   input: { minHeight: 76, borderWidth: 1, borderRadius: 12, paddingHorizontal: 11, paddingVertical: 10, fontSize: 12, lineHeight: 18, textAlignVertical: "top" },
   singleLine: { minHeight: 43, textAlignVertical: "center" },
+  evidenceRow: { minHeight: 52, borderWidth: 1, borderRadius: 12, paddingHorizontal: 9, flexDirection: "row", alignItems: "center", gap: 7, marginBottom: 7 },
+  evidenceCopy: { flex: 1 },
+  evidenceMetric: { fontSize: 11, fontWeight: "800", textTransform: "capitalize" },
+  evidenceMeta: { fontSize: 9, marginTop: 3 },
+  evidenceAction: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 6 },
+  evidenceActionText: { fontSize: 9, fontWeight: "900" },
+  sourceButton: { padding: 4 },
+  readiness: { fontSize: 10, lineHeight: 15, marginTop: 6 },
   locked: { flexDirection: "row", alignItems: "center", gap: 7, padding: 10, borderRadius: 10, marginTop: 12 },
   lockedText: { flex: 1, fontSize: 10, lineHeight: 14 },
   actions: { flexDirection: "row", gap: 8, marginTop: 13 },
