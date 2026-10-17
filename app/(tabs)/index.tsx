@@ -9,12 +9,15 @@ import {
   Modal,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
 import { ScreenContainer } from "@/components/screen-container";
+import { TransmissionPath } from "@/components/transmission-path";
+import { ThesisEvidence } from "@/components/thesis-evidence";
 import { useColors } from "@/hooks/use-colors";
 import { useAuth } from "@/hooks/use-auth";
 import { trpc } from "@/lib/trpc";
@@ -29,6 +32,7 @@ import {
   getListingSignals,
   type Listing,
 } from "@/lib/market-data";
+import { buildDemoThesis } from "@/lib/demo-thesis";
 
 const triggerHaptic = () => {
   if (Platform.OS !== "web") {
@@ -330,6 +334,7 @@ export default function HomeScreen() {
           <View style={styles.modalBackdrop}>
             <View style={[styles.modalCard, { backgroundColor: colors.background }]}>
               <View style={styles.modalHandle} />
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.modalScroll}>
               <View style={styles.modalTopRow}>
                 <View style={[styles.scoreLarge, { backgroundColor: colors.primary }]}>
                   <Text style={[styles.scoreLargeText, { color: colors.foreground }]}>{selectedListing.score}</Text>
@@ -349,6 +354,7 @@ export default function HomeScreen() {
                 <DetailCell label="Condition" value={selectedListing.condition} colors={colors} />
               </View>
               <LayerLens listing={selectedListing} colors={colors} />
+              <ReasoningDetail listing={selectedListing} colors={colors} />
               <View style={styles.trustRow}>
                 <MaterialIcons name={selectedListing.escrowProtected ? "verified-user" : "shield"} size={18} color={selectedListing.escrowProtected ? colors.success : colors.muted} />
                 <Text style={[styles.trustText, { color: colors.foreground }]}>{selectedListing.escrowProtected ? "Escrow protected listing" : "Review seller protection before buying"}</Text>
@@ -363,6 +369,7 @@ export default function HomeScreen() {
                   <MaterialIcons name="north-east" size={18} color={colors.foreground} />
                 </Pressable>
               </View>
+              </ScrollView>
             </View>
           </View>
         ) : null}
@@ -435,6 +442,20 @@ function ListingCard({ listing, isSaved, colors, onPress, onSave }: { listing: L
         <Text style={[styles.detailHint, { color: colors.primary }]}>View details <MaterialIcons name="arrow-forward" size={13} color={colors.primary} /></Text>
       </View>
     </Pressable>
+  );
+}
+
+function ReasoningDetail({ listing, colors }: { listing: Listing; colors: ReturnType<typeof useColors> }) {
+  const demo = buildDemoThesis(listing);
+  return (
+    <View>
+      <View style={styles.reasoningBanner}>
+        <MaterialIcons name="science" size={16} color={colors.primary} />
+        <Text style={[styles.reasoningBannerText, { color: colors.muted }]}>Demonstration thesis · sample signals only · not a live forecast</Text>
+      </View>
+      <TransmissionPath evaluation={demo.evaluation} colors={colors} />
+      <ThesisEvidence evaluation={demo.evaluation} sourceLabel="Top Cherry sample signals" colors={colors} />
+    </View>
   );
 }
 
@@ -571,6 +592,9 @@ const styles = StyleSheet.create({
   modalBackdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(14, 18, 15, 0.54)" },
   modalCard: { borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 22, paddingTop: 12, paddingBottom: 32 },
   modalHandle: { alignSelf: "center", width: 38, height: 4, borderRadius: 2, backgroundColor: "#C6CBC1", marginBottom: 21 },
+  modalScroll: { paddingBottom: 2 },
+  reasoningBanner: { flexDirection: "row", alignItems: "center", gap: 7, marginTop: 14 },
+  reasoningBannerText: { flex: 1, fontSize: 10, lineHeight: 14 },
   modalTopRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
   scoreLarge: { width: 67, height: 67, borderRadius: 20, alignItems: "center", justifyContent: "center" },
   scoreLargeText: { fontSize: 28, fontWeight: "900", lineHeight: 29 },
