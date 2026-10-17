@@ -31,7 +31,7 @@ Direction accepted on 14 October 2026, clarified as a multi-mechanism architectu
   - [x] R1.5a Read-only thesis path and evidence detail integrated into Discover listing details; sample-only status is explicit.
   - [x] R1.5b Local thesis draft editor with immutable revisions, explicit draft/submitted/archived transitions, and local persistence.
   - [x] R1.5c Evidence attach/remove and source inspection actions; readiness is re-evaluated from the current draft evidence set.
-  - [ ] R1.5d Candidate-to-Plan linkage with separate thesis and feasibility states.
+  - [x] R1.5d Candidate-to-Plan linkage with separate thesis-readiness and purchase-feasibility states; linked candidates are highlighted without bypassing Plan budget rules.
 - [ ] R1.6 Correct planner affordability: all-in acquisition cash, confirmed stock, integer quantity and explicit reserve.
 - [ ] R1.7 Outcomes and revision loop.
 - [ ] R1.8 End-to-end acceptance.

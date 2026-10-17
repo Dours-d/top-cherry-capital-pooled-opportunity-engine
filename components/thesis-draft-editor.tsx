@@ -3,8 +3,9 @@ import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useEffect, useMemo, useState } from "react";
 import { Alert, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import * as Haptics from "expo-haptics";
+import { router } from "expo-router";
 import { useColors } from "@/hooks/use-colors";
-import { LISTINGS } from "@/lib/market-data";
+import { DEFAULT_ECONOMICS, LISTINGS, getListingEconomics } from "@/lib/market-data";
 import { buildDemoThesis } from "@/lib/demo-thesis";
 import { createThesisDraft, reviseThesisDraft, transitionDraftStatus, type ThesisDraft } from "@/shared/versioned-drafts";
 import { evaluateThesis } from "@/shared/evaluate-thesis";
@@ -75,6 +76,8 @@ export function ThesisDraftEditor() {
   const current = store.current;
   const editable = current.status === "draft";
   const currentEvaluation = evaluateThesis({ nodes: demo.nodes, edges: demo.edges, exposures: [], observations: demo.observations, thesis: { ...current.thesis, observationIds: selectedEvidenceIds } });
+  const candidateEconomics = getListingEconomics(listing, DEFAULT_ECONOMICS);
+  const candidateFeasible = listing.verified && listing.escrowProtected && candidateEconomics.netUpside > 0;
   return (
     <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}> 
       <View style={styles.header}>
@@ -91,6 +94,12 @@ export function ThesisDraftEditor() {
         return <View key={observation.id} style={[styles.evidenceRow, { backgroundColor: colors.background, borderColor: colors.border }]}><View style={styles.evidenceCopy}><Text style={[styles.evidenceMetric, { color: colors.foreground }]}>{observation.metric.replaceAll("-", " ")}</Text><Text style={[styles.evidenceMeta, { color: colors.muted }]}>{observation.value} {observation.unit} · {observation.vintage}</Text></View><Pressable onPress={() => { if (!editable) return; tap(); setSelectedEvidenceIds((ids) => attached ? ids.filter((id) => id !== observation.id) : [...ids, observation.id]); }} style={({ pressed }) => [styles.evidenceAction, { borderColor: attached ? colors.success : colors.border }, pressed && styles.pressed]}><Text style={[styles.evidenceActionText, { color: attached ? colors.success : colors.foreground }]}>{attached ? "Attached" : "Attach"}</Text></Pressable><Pressable onPress={() => Alert.alert("Source inspection", `${observation.provenance.sourceName}\n\n${observation.provenance.reference ?? "No additional source reference."}\n\nEvent: ${observation.eventTime}\nVintage: ${observation.vintage}`)} accessibilityLabel="Inspect evidence source" style={({ pressed }) => [styles.sourceButton, pressed && styles.pressed]}><MaterialIcons name="info-outline" size={18} color={colors.primary} /></Pressable></View>;
       })}
       <Text style={[styles.readiness, { color: currentEvaluation.status === "ready" ? colors.success : colors.warning }]}>Evaluator readiness: {currentEvaluation.status.toUpperCase()} · {currentEvaluation.readinessReasons[0] ?? "Evidence set is complete for this draft."}</Text>
+      <Text style={[styles.fieldLabel, { color: colors.foreground }]}>Candidate linkage</Text>
+      <View style={[styles.candidateCard, { backgroundColor: colors.background, borderColor: colors.border }]}>
+        <View style={styles.candidateCopy}><Text style={[styles.candidateTitle, { color: colors.foreground }]}>{listing.brand} {listing.model}</Text><Text style={[styles.candidateMeta, { color: colors.muted }]}>{listing.platform} · {listing.location} · {listing.verified ? "verified" : "verification needed"}</Text><Text style={[styles.candidateStatus, { color: candidateFeasible ? colors.success : colors.warning }]}>{candidateFeasible ? "Purchase feasible at current sample assumptions" : "Blocked: verify protection, price or net economics"}</Text></View>
+        <Pressable disabled={!candidateFeasible} onPress={() => { tap(); router.push({ pathname: "/plan", params: { candidate: listing.id } }); }} style={({ pressed }) => [styles.planAction, { backgroundColor: candidateFeasible ? colors.primary : colors.border, opacity: candidateFeasible ? 1 : 0.55 }, pressed && styles.pressed]}><MaterialIcons name="arrow-forward" size={17} color={colors.foreground} /><Text style={[styles.planActionText, { color: colors.foreground }]}>Plan</Text></Pressable>
+      </View>
+      <Text style={[styles.disclaimer, { color: colors.muted }]}>Thesis readiness and purchase feasibility are separate. Plan still applies its own budget, quantity and reserve constraints.</Text>
       <View style={styles.actions}>
         {editable ? <Pressable onPress={saveRevision} disabled={!claim.trim() || !changeSummary.trim()} style={({ pressed }) => [styles.primaryAction, { backgroundColor: colors.primary, opacity: !claim.trim() || !changeSummary.trim() ? 0.45 : 1 }, pressed && styles.pressed]}><MaterialIcons name="save" size={17} color={colors.foreground} /><Text style={[styles.actionText, { color: colors.foreground }]}>Save revision</Text></Pressable> : null}
         {editable ? <Pressable onPress={() => Alert.alert("Submit thesis", "This marks the current research draft as submitted for review. It does not authorize a trade, pooling or execution.", [{ text: "Cancel", style: "cancel" }, { text: "Submit", onPress: () => transition("submitted") }])} style={({ pressed }) => [styles.secondaryAction, { borderColor: colors.border }, pressed && styles.pressed]}><Text style={[styles.secondaryText, { color: colors.foreground }]}>Submit for review</Text></Pressable> : <Pressable onPress={() => transition("archived")} style={({ pressed }) => [styles.secondaryAction, { borderColor: colors.border }, pressed && styles.pressed]}><Text style={[styles.secondaryText, { color: colors.foreground }]}>Archive</Text></Pressable>}
@@ -124,6 +133,14 @@ const styles = StyleSheet.create({
   evidenceActionText: { fontSize: 9, fontWeight: "900" },
   sourceButton: { padding: 4 },
   readiness: { fontSize: 10, lineHeight: 15, marginTop: 6 },
+  candidateCard: { borderWidth: 1, borderRadius: 12, padding: 10, flexDirection: "row", alignItems: "center", gap: 8 },
+  candidateCopy: { flex: 1 },
+  candidateTitle: { fontSize: 11, fontWeight: "800" },
+  candidateMeta: { fontSize: 9, marginTop: 3 },
+  candidateStatus: { fontSize: 9, lineHeight: 13, marginTop: 4 },
+  planAction: { borderRadius: 9, minWidth: 58, minHeight: 38, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4 },
+  planActionText: { fontSize: 10, fontWeight: "900" },
+  disclaimer: { fontSize: 9, lineHeight: 14, marginTop: 7 },
   locked: { flexDirection: "row", alignItems: "center", gap: 7, padding: 10, borderRadius: 10, marginTop: 12 },
   lockedText: { flex: 1, fontSize: 10, lineHeight: 14 },
   actions: { flexDirection: "row", gap: 8, marginTop: 13 },
