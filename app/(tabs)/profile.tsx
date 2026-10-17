@@ -11,6 +11,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { DEFAULT_ECONOMICS, ECONOMICS_STORAGE_KEY, type EconomicsAssumptions } from "@/lib/market-data";
 import { MARKETPLACE_SOURCES, PHASE_ONE_EBAY_TASKS, SOURCE_SYNC_SNAPSHOT } from "@/server/marketplace";
 import { EbayMonitor } from "@/components/ebay-monitor";
+import { ThesisDraftEditor } from "@/components/thesis-draft-editor";
 
 export default function ProfileScreen() {
   const colors = useColors();
@@ -52,6 +53,8 @@ export default function ProfileScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
         <View style={styles.header}><Text style={[styles.eyebrow, { color: colors.muted }]}>ACCOUNT & PREFERENCES</Text><Text style={[styles.title, { color: colors.foreground }]}>Your workspace</Text><Text style={[styles.subtitle, { color: colors.muted }]}>Tune Top Cherry around the markets you actually trade.</Text></View>
         {isAuthenticated ? <View style={[styles.profileCard, { backgroundColor: colors.surface, borderColor: colors.border }]}><View style={[styles.avatar, { backgroundColor: colors.primary }]}><Text style={[styles.avatarText, { color: colors.foreground }]}>{(user?.name ?? "AR").slice(0, 2).toUpperCase()}</Text></View><View style={styles.profileCopy}><Text style={[styles.profileName, { color: colors.foreground }]}>{user?.name ?? "Top Cherry member"}</Text><Text style={[styles.profileEmail, { color: colors.muted }]}>{user?.email ?? "Synced account"}</Text></View><Pressable onPress={() => void logout()}><Text style={[styles.logoutText, { color: colors.primary }]}>Log out</Text></Pressable></View> : <Pressable onPress={() => void startOAuthLogin()} style={({ pressed }) => [styles.loginCard, { backgroundColor: colors.primary }, pressed && styles.pressed]}><View style={styles.loginCopy}><Text style={[styles.loginTitle, { color: colors.foreground }]}>Sync your workspace</Text><Text style={[styles.loginText, { color: colors.foreground }]}>Sign in to keep saves and allocation preferences across devices.</Text></View><MaterialIcons name="arrow-forward" size={21} color={colors.foreground} /></Pressable>}
+        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Research thesis</Text>
+        <ThesisDraftEditor />
         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Notification monitor</Text>
         <EbayMonitor />
         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Alerts</Text>

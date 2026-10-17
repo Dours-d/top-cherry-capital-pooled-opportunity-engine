@@ -29,7 +29,7 @@ Direction accepted on 14 October 2026, clarified as a multi-mechanism architectu
 - [x] R1.4 Versioned thesis/decision drafts: immutable revisions, parent lineage, and explicit status transitions implemented in `shared/versioned-drafts.ts` with regression coverage.
 - [ ] R1.5 Embedded reasoning screens.
   - [x] R1.5a Read-only thesis path and evidence detail integrated into Discover listing details; sample-only status is explicit.
-  - [ ] R1.5b Draft creation and revision UI.
+  - [x] R1.5b Local thesis draft editor with immutable revisions, explicit draft/submitted/archived transitions, and local persistence.
   - [ ] R1.5c Evidence attach/remove and source inspection actions.
   - [ ] R1.5d Candidate-to-Plan linkage with separate thesis and feasibility states.
 - [ ] R1.6 Correct planner affordability: all-in acquisition cash, confirmed stock, integer quantity and explicit reserve.
