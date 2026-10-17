@@ -72,6 +72,17 @@ export function ThesisDraftEditor() {
     persist({ ...store, current: next });
   };
 
+  const restoreRevision = (revision: ThesisDraft) => {
+    if (!store || !editable || revision.revision === current.revision) return;
+    Alert.alert("Restore as a new revision", `Use revision ${revision.revision} as the next draft without deleting newer history?`, [
+      { text: "Cancel", style: "cancel" },
+      { text: "Restore", onPress: () => {
+        const restored = reviseThesisDraft(current, { thesis: revision.thesis, createdAt: nowIso(), createdBy: "local analyst", changeSummary: `Restored from revision ${revision.revision}` });
+        persist({ revisions: [...store.revisions, restored], current: restored });
+      } },
+    ]);
+  };
+
   if (!store) return <Text style={[styles.loading, { color: colors.muted }]}>Loading local thesis draft…</Text>;
   const current = store.current;
   const editable = current.status === "draft";
@@ -100,6 +111,8 @@ export function ThesisDraftEditor() {
         <Pressable disabled={!candidateFeasible} onPress={() => { tap(); router.push({ pathname: "/plan", params: { candidate: listing.id } }); }} style={({ pressed }) => [styles.planAction, { backgroundColor: candidateFeasible ? colors.primary : colors.border, opacity: candidateFeasible ? 1 : 0.55 }, pressed && styles.pressed]}><MaterialIcons name="arrow-forward" size={17} color={colors.foreground} /><Text style={[styles.planActionText, { color: colors.foreground }]}>Plan</Text></Pressable>
       </View>
       <Text style={[styles.disclaimer, { color: colors.muted }]}>Thesis readiness and purchase feasibility are separate. Plan still applies its own budget, quantity and reserve constraints.</Text>
+      <Text style={[styles.historyTitle, { color: colors.foreground }]}>Revision history</Text>
+      {store.revisions.slice().reverse().map((revision) => <View key={`${revision.draftId}-${revision.revision}`} style={[styles.revisionRow, { backgroundColor: colors.background, borderColor: revision.revision === current.revision ? colors.primary : colors.border }]}><View style={styles.revisionCopy}><Text style={[styles.revisionTitle, { color: colors.foreground }]}>Revision {revision.revision} · {revision.status}</Text><Text style={[styles.revisionSummary, { color: colors.muted }]} numberOfLines={2}>{revision.changeSummary}</Text></View>{revision.revision !== current.revision ? <Pressable disabled={!editable} onPress={() => restoreRevision(revision)} style={({ pressed }) => [styles.restoreButton, { borderColor: editable ? colors.border : colors.background, opacity: editable ? 1 : 0.45 }, pressed && styles.pressed]}><Text style={[styles.restoreText, { color: colors.foreground }]}>Restore</Text></Pressable> : <Text style={[styles.currentText, { color: colors.success }]}>Current</Text>}</View>)}
       <View style={styles.actions}>
         {editable ? <Pressable onPress={saveRevision} disabled={!claim.trim() || !changeSummary.trim()} style={({ pressed }) => [styles.primaryAction, { backgroundColor: colors.primary, opacity: !claim.trim() || !changeSummary.trim() ? 0.45 : 1 }, pressed && styles.pressed]}><MaterialIcons name="save" size={17} color={colors.foreground} /><Text style={[styles.actionText, { color: colors.foreground }]}>Save revision</Text></Pressable> : null}
         {editable ? <Pressable onPress={() => Alert.alert("Submit thesis", "This marks the current research draft as submitted for review. It does not authorize a trade, pooling or execution.", [{ text: "Cancel", style: "cancel" }, { text: "Submit", onPress: () => transition("submitted") }])} style={({ pressed }) => [styles.secondaryAction, { borderColor: colors.border }, pressed && styles.pressed]}><Text style={[styles.secondaryText, { color: colors.foreground }]}>Submit for review</Text></Pressable> : <Pressable onPress={() => transition("archived")} style={({ pressed }) => [styles.secondaryAction, { borderColor: colors.border }, pressed && styles.pressed]}><Text style={[styles.secondaryText, { color: colors.foreground }]}>Archive</Text></Pressable>}
@@ -149,6 +162,13 @@ const styles = StyleSheet.create({
   actionText: { fontSize: 11, fontWeight: "900" },
   secondaryText: { fontSize: 11, fontWeight: "800" },
   historyTitle: { fontSize: 13, fontWeight: "900", marginTop: 20 },
+  revisionRow: { borderWidth: 1, borderRadius: 11, padding: 9, flexDirection: "row", alignItems: "center", gap: 8, marginTop: 7 },
+  revisionCopy: { flex: 1 },
+  revisionTitle: { fontSize: 10, fontWeight: "800", textTransform: "capitalize" },
+  revisionSummary: { fontSize: 9, lineHeight: 13, marginTop: 3 },
+  restoreButton: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 6 },
+  restoreText: { fontSize: 9, fontWeight: "900" },
+  currentText: { fontSize: 9, fontWeight: "900" },
   loading: { fontSize: 11, marginBottom: 20 },
   pressed: { opacity: 0.7 },
 });
