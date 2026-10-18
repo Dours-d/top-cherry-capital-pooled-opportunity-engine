@@ -24,6 +24,8 @@ export function ThesisDraftEditor() {
   const [claim, setClaim] = useState("");
   const [changeSummary, setChangeSummary] = useState("");
   const [selectedEvidenceIds, setSelectedEvidenceIds] = useState<string[]>([]);
+  const [unknownsText, setUnknownsText] = useState("");
+  const [invalidationText, setInvalidationText] = useState("");
   const listing = LISTINGS[0];
   const demo = useMemo(() => buildDemoThesis(listing), [listing]);
 
@@ -35,6 +37,8 @@ export function ThesisDraftEditor() {
           setStore(parsed);
           setClaim(parsed.current.thesis.claim);
           setSelectedEvidenceIds(parsed.current.thesis.observationIds);
+          setUnknownsText(parsed.current.thesis.unknowns.join("\n"));
+          setInvalidationText(parsed.current.thesis.invalidationConditions.join("\n"));
           return;
         } catch {
           // Reset invalid local state to the transparent demonstration draft.
@@ -45,6 +49,8 @@ export function ThesisDraftEditor() {
       setStore(next);
       setClaim(initial.thesis.claim);
       setSelectedEvidenceIds(initial.thesis.observationIds);
+      setUnknownsText(initial.thesis.unknowns.join("\n"));
+      setInvalidationText(initial.thesis.invalidationConditions.join("\n"));
       void AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
     });
   }, [demo.thesis]);
@@ -53,13 +59,21 @@ export function ThesisDraftEditor() {
     setStore(next);
     setClaim(next.current.thesis.claim);
     setSelectedEvidenceIds(next.current.thesis.observationIds);
+    setUnknownsText(next.current.thesis.unknowns.join("\n"));
+    setInvalidationText(next.current.thesis.invalidationConditions.join("\n"));
     void AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
   };
 
   const saveRevision = () => {
     if (!store || store.current.status !== "draft" || !claim.trim() || !changeSummary.trim()) return;
     tap();
-    const nextThesis = { ...store.current.thesis, claim: claim.trim(), observationIds: selectedEvidenceIds };
+    const nextThesis = {
+      ...store.current.thesis,
+      claim: claim.trim(),
+      observationIds: selectedEvidenceIds,
+      unknowns: unknownsText.split("\n").map((value) => value.trim()).filter(Boolean),
+      invalidationConditions: invalidationText.split("\n").map((value) => value.trim()).filter(Boolean),
+    };
     const revision = reviseThesisDraft(store.current, { thesis: nextThesis, createdAt: nowIso(), createdBy: "local analyst", changeSummary: changeSummary.trim() });
     persist({ revisions: [...store.revisions, revision], current: revision });
     setChangeSummary("");
@@ -67,6 +81,10 @@ export function ThesisDraftEditor() {
 
   const transition = (status: "submitted" | "archived") => {
     if (!store) return;
+    if (status === "submitted" && (currentEvaluation.status === "invalid" || currentEvaluation.status === "blocked" || !invalidationText.trim())) {
+      Alert.alert("Submission blocked", "Resolve invalid or contradictory evidence and add at least one invalidation condition before submitting for review.");
+      return;
+    }
     tap();
     const next = transitionDraftStatus(store.current, status) as ThesisDraft;
     persist({ ...store, current: next });
@@ -86,7 +104,7 @@ export function ThesisDraftEditor() {
   if (!store) return <Text style={[styles.loading, { color: colors.muted }]}>Loading local thesis draft…</Text>;
   const current = store.current;
   const editable = current.status === "draft";
-  const currentEvaluation = evaluateThesis({ nodes: demo.nodes, edges: demo.edges, exposures: [], observations: demo.observations, thesis: { ...current.thesis, observationIds: selectedEvidenceIds } });
+  const currentEvaluation = evaluateThesis({ nodes: demo.nodes, edges: demo.edges, exposures: [], observations: demo.observations, thesis: { ...current.thesis, observationIds: selectedEvidenceIds, unknowns: unknownsText.split("\n").map((value) => value.trim()).filter(Boolean), invalidationConditions: invalidationText.split("\n").map((value) => value.trim()).filter(Boolean) } });
   const candidateEconomics = getListingEconomics(listing, DEFAULT_ECONOMICS);
   const candidateFeasible = listing.verified && listing.escrowProtected && candidateEconomics.netUpside > 0;
   return (
@@ -99,6 +117,7 @@ export function ThesisDraftEditor() {
       <Text style={[styles.fieldLabel, { color: colors.foreground }]}>Claim</Text>
       <TextInput multiline editable={editable} value={claim} onChangeText={setClaim} style={[styles.input, { color: colors.foreground, backgroundColor: colors.background, borderColor: colors.border }]} placeholder="State the thesis carefully" placeholderTextColor={colors.muted} />
       {editable ? <><Text style={[styles.fieldLabel, { color: colors.foreground }]}>Change summary</Text><TextInput value={changeSummary} onChangeText={setChangeSummary} style={[styles.input, styles.singleLine, { color: colors.foreground, backgroundColor: colors.background, borderColor: colors.border }]} placeholder="What changed?" placeholderTextColor={colors.muted} /></> : <View style={[styles.locked, { backgroundColor: colors.background }]}><MaterialIcons name="lock" size={15} color={colors.warning} /><Text style={[styles.lockedText, { color: colors.muted }]}>This revision is {current.status}; create a new draft before editing.</Text></View>}
+      {editable ? <><Text style={[styles.fieldLabel, { color: colors.foreground }]}>Contradictions and unknowns</Text><TextInput multiline value={unknownsText} onChangeText={setUnknownsText} style={[styles.input, { color: colors.foreground, backgroundColor: colors.background, borderColor: colors.border }]} placeholder="One uncertainty or contradictory signal per line" placeholderTextColor={colors.muted} /><Text style={[styles.fieldLabel, { color: colors.foreground }]}>Invalidation conditions</Text><TextInput multiline value={invalidationText} onChangeText={setInvalidationText} style={[styles.input, { color: colors.foreground, backgroundColor: colors.background, borderColor: colors.border }]} placeholder="What would make this thesis no longer valid?" placeholderTextColor={colors.muted} /></> : null}
       <Text style={[styles.fieldLabel, { color: colors.foreground }]}>Evidence actions</Text>
       {demo.observations.map((observation) => {
         const attached = selectedEvidenceIds.includes(observation.id);

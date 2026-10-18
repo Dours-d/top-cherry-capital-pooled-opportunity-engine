@@ -33,6 +33,7 @@ Direction accepted on 14 October 2026, clarified as a multi-mechanism architectu
   - [x] R1.5c Evidence attach/remove and source inspection actions; readiness is re-evaluated from the current draft evidence set.
   - [x] R1.5d Candidate-to-Plan linkage with separate thesis-readiness and purchase-feasibility states; linked candidates are highlighted without bypassing Plan budget rules.
   - [x] R1.5e Revision history inspection and restore-as-new-revision; prior history is never overwritten.
+  - [x] R1.5f Explicit contradiction/unknown and invalidation-condition editing; submission is blocked when review safeguards are not satisfied.
 - [ ] R1.6 Correct planner affordability: all-in acquisition cash, confirmed stock, integer quantity and explicit reserve.
 - [ ] R1.7 Outcomes and revision loop.
 - [ ] R1.8 End-to-end acceptance.
