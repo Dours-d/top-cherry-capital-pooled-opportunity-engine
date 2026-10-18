@@ -38,6 +38,9 @@ Direction accepted on 14 October 2026, clarified as a multi-mechanism architectu
   - [x] R1.5h Contradiction resolution controls; open/resolved state is parsed by the evaluator and resolved evidence remains visible without blocking readiness.
   - [x] R1.5i Authenticated thesis revision sync contract, user-scoped database storage, migration, and protected tRPC list/upsert procedures; anonymous users retain local storage.
   - [x] R1.5j Acceptance regression for open versus resolved contradiction evidence.
+  - [x] R1.5k Server-to-device reconciliation with merge-on-newer behavior and explicit same-revision conflict state.
+  - [x] R1.5l Reviewer identity and resolution timestamp metadata are retained in structured contradiction markers.
+  - [x] R1.5m End-to-end acceptance gate now covers thesis readiness, candidate verification/protection, net upside, reserve, budget, and Plan handoff.
 - [ ] R1.6 Correct planner affordability: all-in acquisition cash, confirmed stock, integer quantity and explicit reserve.
 - [ ] R1.7 Outcomes and revision loop.
 - [ ] R1.8 End-to-end acceptance.

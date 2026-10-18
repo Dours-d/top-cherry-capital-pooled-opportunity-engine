@@ -56,7 +56,7 @@ const baseThesis: Thesis = {
 
 describe("transmission contracts", () => {
   it("parses and resolves structured contradictions without hiding their provenance", () => {
-    expect(parseContradiction("[contradiction|high|ECB][status:resolved] Rates moved differently")).toEqual({ severity: "high", source: "ECB", status: "resolved", description: "Rates moved differently" });
+    expect(parseContradiction("[contradiction|high|ECB][status:resolved] Rates moved differently")).toMatchObject({ severity: "high", source: "ECB", status: "resolved", description: "Rates moved differently" });
     const open = evaluateThesis({ nodes, edges, exposures: [], observations: [observation], thesis: { ...baseThesis, unknowns: ["[contradiction|medium|survey] Demand conflicts with the claim"] } });
     const resolved = evaluateThesis({ nodes, edges, exposures: [], observations: [observation], thesis: { ...baseThesis, unknowns: ["[contradiction|medium|survey][status:resolved] Demand conflicts with the claim"] } });
     expect(open.status).toBe("blocked");

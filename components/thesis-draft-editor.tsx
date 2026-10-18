@@ -13,6 +13,7 @@ import { createThesisDraft, reviseThesisDraft, transitionDraftStatus, type Thesi
 import { evaluateThesis, parseContradiction } from "@/shared/evaluate-thesis";
 import { ThesisEvidence } from "@/components/thesis-evidence";
 import { TransmissionPath } from "@/components/transmission-path";
+import { canAllocateCandidate, reconcileThesisDrafts } from "@/shared/reconcile-drafts";
 
 const STORAGE_KEY = "topCherry.thesisDraft.workspace";
 type DraftStore = { revisions: ThesisDraft[]; current: ThesisDraft };
@@ -24,6 +25,7 @@ export function ThesisDraftEditor() {
   const colors = useColors();
   const { isAuthenticated } = useAuth();
   const syncRevision = trpc.thesisDrafts.upsert.useMutation();
+  const remoteDrafts = trpc.thesisDrafts.list.useQuery({ draftId: "workspace-thesis-1" }, { enabled: isAuthenticated });
   const [store, setStore] = useState<DraftStore | null>(null);
   const [claim, setClaim] = useState("");
   const [changeSummary, setChangeSummary] = useState("");
@@ -33,6 +35,7 @@ export function ThesisDraftEditor() {
   const [contradictionSource, setContradictionSource] = useState("");
   const [contradictionSeverity, setContradictionSeverity] = useState<"low" | "medium" | "high">("medium");
   const [contradictionText, setContradictionText] = useState("");
+  const [syncConflict, setSyncConflict] = useState(false);
   const listing = LISTINGS[0];
   const demo = useMemo(() => buildDemoThesis(listing), [listing]);
 
@@ -61,6 +64,24 @@ export function ThesisDraftEditor() {
       void AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
     });
   }, [demo.thesis]);
+
+  useEffect(() => {
+    if (!store || !remoteDrafts.data?.length) return;
+    const remote = remoteDrafts.data.map((row) => row.payload as ThesisDraft);
+    const result = reconcileThesisDrafts(store.revisions, remote);
+    if (result.status === "conflict") {
+      setSyncConflict(true);
+      return;
+    }
+    if (result.status === "merged" && result.store.current.revision > store.current.revision) {
+      setStore(result.store);
+      setClaim(result.store.current.thesis.claim);
+      setSelectedEvidenceIds(result.store.current.thesis.observationIds);
+      setUnknownsText(result.store.current.thesis.unknowns.join("\n"));
+      setInvalidationText(result.store.current.thesis.invalidationConditions.join("\n"));
+      void AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(result.store));
+    }
+  }, [remoteDrafts.data, store]);
 
   const persist = (next: DraftStore) => {
     setStore(next);
@@ -124,7 +145,7 @@ export function ThesisDraftEditor() {
   const currentEvaluation = evaluateThesis({ nodes: demo.nodes, edges: demo.edges, exposures: [], observations: demo.observations, thesis: { ...current.thesis, observationIds: selectedEvidenceIds, unknowns: unknownsText.split("\n").map((value) => value.trim()).filter(Boolean), invalidationConditions: invalidationText.split("\n").map((value) => value.trim()).filter(Boolean) } });
   const structuredContradictions = unknownsText.split("\n").map((value) => value.trim()).filter(Boolean).map((value, index) => ({ value, index, parsed: parseContradiction(value) })).filter((entry) => entry.parsed);
   const candidateEconomics = getListingEconomics(listing, DEFAULT_ECONOMICS);
-  const candidateFeasible = listing.verified && listing.escrowProtected && candidateEconomics.netUpside > 0;
+  const candidateFeasible = canAllocateCandidate({ thesisStatus: currentEvaluation.status, candidateVerified: listing.verified, escrowProtected: listing.escrowProtected, netUpside: candidateEconomics.netUpside, budget: 30000, askingPrice: listing.askingPrice, reserve: 1000 });
   return (
     <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}> 
       <View style={styles.header}>
@@ -132,6 +153,7 @@ export function ThesisDraftEditor() {
         <View style={[styles.status, { backgroundColor: current.status === "draft" ? colors.primary : colors.warning }]}><Text style={[styles.statusText, { color: colors.foreground }]}>{current.status.toUpperCase()}</Text></View>
       </View>
       <View style={styles.metaRow}><Text style={[styles.meta, { color: colors.muted }]}>Revision {current.revision} · {store.revisions.length} saved version{store.revisions.length === 1 ? "" : "s"}</Text><Text style={[styles.meta, { color: colors.muted }]}>{current.createdBy}</Text></View>
+      {isAuthenticated ? <Text style={[styles.syncStatus, { color: syncConflict ? colors.error : colors.success }]}>{syncConflict ? "Sync conflict detected — local and remote revisions need review." : remoteDrafts.isFetching ? "Syncing revisions…" : "Authenticated revision sync active"}</Text> : null}
       <Text style={[styles.fieldLabel, { color: colors.foreground }]}>Claim</Text>
       <TextInput multiline editable={editable} value={claim} onChangeText={setClaim} style={[styles.input, { color: colors.foreground, backgroundColor: colors.background, borderColor: colors.border }]} placeholder="State the thesis carefully" placeholderTextColor={colors.muted} />
       {editable ? <><Text style={[styles.fieldLabel, { color: colors.foreground }]}>Change summary</Text><TextInput value={changeSummary} onChangeText={setChangeSummary} style={[styles.input, styles.singleLine, { color: colors.foreground, backgroundColor: colors.background, borderColor: colors.border }]} placeholder="What changed?" placeholderTextColor={colors.muted} /></> : <View style={[styles.locked, { backgroundColor: colors.background }]}><MaterialIcons name="lock" size={15} color={colors.warning} /><Text style={[styles.lockedText, { color: colors.muted }]}>This revision is {current.status}; create a new draft before editing.</Text></View>}
@@ -172,6 +194,7 @@ const styles = StyleSheet.create({
   statusText: { fontSize: 8, fontWeight: "900" },
   metaRow: { flexDirection: "row", justifyContent: "space-between", gap: 8, marginTop: 12 },
   meta: { fontSize: 9 },
+  syncStatus: { fontSize: 9, lineHeight: 13, marginTop: 5 },
   fieldLabel: { fontSize: 11, fontWeight: "800", marginTop: 14, marginBottom: 6 },
   input: { minHeight: 76, borderWidth: 1, borderRadius: 12, paddingHorizontal: 11, paddingVertical: 10, fontSize: 12, lineHeight: 18, textAlignVertical: "top" },
   singleLine: { minHeight: 43, textAlignVertical: "center" },
