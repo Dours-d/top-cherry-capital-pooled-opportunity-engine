@@ -26,6 +26,9 @@ export function ThesisDraftEditor() {
   const [selectedEvidenceIds, setSelectedEvidenceIds] = useState<string[]>([]);
   const [unknownsText, setUnknownsText] = useState("");
   const [invalidationText, setInvalidationText] = useState("");
+  const [contradictionSource, setContradictionSource] = useState("");
+  const [contradictionSeverity, setContradictionSeverity] = useState<"low" | "medium" | "high">("medium");
+  const [contradictionText, setContradictionText] = useState("");
   const listing = LISTINGS[0];
   const demo = useMemo(() => buildDemoThesis(listing), [listing]);
 
@@ -67,16 +70,23 @@ export function ThesisDraftEditor() {
   const saveRevision = () => {
     if (!store || store.current.status !== "draft" || !claim.trim() || !changeSummary.trim()) return;
     tap();
+    const structuredContradiction = contradictionText.trim()
+      ? `[contradiction|${contradictionSeverity}|${contradictionSource.trim() || "unspecified source"}] ${contradictionText.trim()}`
+      : null;
+    const unknowns = unknownsText.split("\n").map((value) => value.trim()).filter(Boolean).filter((value) => !value.startsWith("[contradiction|"));
+    if (structuredContradiction) unknowns.push(structuredContradiction);
     const nextThesis = {
       ...store.current.thesis,
       claim: claim.trim(),
       observationIds: selectedEvidenceIds,
-      unknowns: unknownsText.split("\n").map((value) => value.trim()).filter(Boolean),
+      unknowns,
       invalidationConditions: invalidationText.split("\n").map((value) => value.trim()).filter(Boolean),
     };
     const revision = reviseThesisDraft(store.current, { thesis: nextThesis, createdAt: nowIso(), createdBy: "local analyst", changeSummary: changeSummary.trim() });
     persist({ revisions: [...store.revisions, revision], current: revision });
     setChangeSummary("");
+    setContradictionText("");
+    setContradictionSource("");
   };
 
   const transition = (status: "submitted" | "archived") => {
@@ -117,7 +127,7 @@ export function ThesisDraftEditor() {
       <Text style={[styles.fieldLabel, { color: colors.foreground }]}>Claim</Text>
       <TextInput multiline editable={editable} value={claim} onChangeText={setClaim} style={[styles.input, { color: colors.foreground, backgroundColor: colors.background, borderColor: colors.border }]} placeholder="State the thesis carefully" placeholderTextColor={colors.muted} />
       {editable ? <><Text style={[styles.fieldLabel, { color: colors.foreground }]}>Change summary</Text><TextInput value={changeSummary} onChangeText={setChangeSummary} style={[styles.input, styles.singleLine, { color: colors.foreground, backgroundColor: colors.background, borderColor: colors.border }]} placeholder="What changed?" placeholderTextColor={colors.muted} /></> : <View style={[styles.locked, { backgroundColor: colors.background }]}><MaterialIcons name="lock" size={15} color={colors.warning} /><Text style={[styles.lockedText, { color: colors.muted }]}>This revision is {current.status}; create a new draft before editing.</Text></View>}
-      {editable ? <><Text style={[styles.fieldLabel, { color: colors.foreground }]}>Contradictions and unknowns</Text><TextInput multiline value={unknownsText} onChangeText={setUnknownsText} style={[styles.input, { color: colors.foreground, backgroundColor: colors.background, borderColor: colors.border }]} placeholder="One uncertainty or contradictory signal per line" placeholderTextColor={colors.muted} /><Text style={[styles.fieldLabel, { color: colors.foreground }]}>Invalidation conditions</Text><TextInput multiline value={invalidationText} onChangeText={setInvalidationText} style={[styles.input, { color: colors.foreground, backgroundColor: colors.background, borderColor: colors.border }]} placeholder="What would make this thesis no longer valid?" placeholderTextColor={colors.muted} /></> : null}
+      {editable ? <><Text style={[styles.fieldLabel, { color: colors.foreground }]}>Contradictions and unknowns</Text><TextInput multiline value={unknownsText} onChangeText={setUnknownsText} style={[styles.input, { color: colors.foreground, backgroundColor: colors.background, borderColor: colors.border }]} placeholder="One uncertainty per line" placeholderTextColor={colors.muted} /><View style={[styles.contradictionCard, { backgroundColor: colors.background, borderColor: colors.border }]}><Text style={[styles.contradictionTitle, { color: colors.foreground }]}>Add contradictory evidence</Text><TextInput value={contradictionText} onChangeText={setContradictionText} style={[styles.input, styles.contradictionInput, { color: colors.foreground, backgroundColor: colors.surface, borderColor: colors.border }]} placeholder="What conflicts with the thesis?" placeholderTextColor={colors.muted} /><View style={styles.contradictionRow}><TextInput value={contradictionSource} onChangeText={setContradictionSource} style={[styles.compactInput, { color: colors.foreground, backgroundColor: colors.surface, borderColor: colors.border }]} placeholder="Source" placeholderTextColor={colors.muted} /><View style={styles.severityRow}>{(["low", "medium", "high"] as const).map((level) => <Pressable key={level} onPress={() => setContradictionSeverity(level)} style={[styles.severityChip, { backgroundColor: contradictionSeverity === level ? colors.warning : colors.surface, borderColor: colors.border }]}><Text style={[styles.severityText, { color: colors.foreground }]}>{level}</Text></Pressable>)}</View></View><Text style={[styles.helperText, { color: colors.muted }]}>Saved with the next revision and treated as a review blocker until resolved.</Text></View><Text style={[styles.fieldLabel, { color: colors.foreground }]}>Invalidation conditions</Text><TextInput multiline value={invalidationText} onChangeText={setInvalidationText} style={[styles.input, { color: colors.foreground, backgroundColor: colors.background, borderColor: colors.border }]} placeholder="What would make this thesis no longer valid?" placeholderTextColor={colors.muted} /></> : null}
       <Text style={[styles.fieldLabel, { color: colors.foreground }]}>Evidence actions</Text>
       {demo.observations.map((observation) => {
         const attached = selectedEvidenceIds.includes(observation.id);
@@ -157,6 +167,15 @@ const styles = StyleSheet.create({
   fieldLabel: { fontSize: 11, fontWeight: "800", marginTop: 14, marginBottom: 6 },
   input: { minHeight: 76, borderWidth: 1, borderRadius: 12, paddingHorizontal: 11, paddingVertical: 10, fontSize: 12, lineHeight: 18, textAlignVertical: "top" },
   singleLine: { minHeight: 43, textAlignVertical: "center" },
+  contradictionCard: { borderWidth: 1, borderRadius: 12, padding: 9, marginTop: 8 },
+  contradictionTitle: { fontSize: 10, fontWeight: "900", marginBottom: 7 },
+  contradictionInput: { minHeight: 48, marginBottom: 7 },
+  contradictionRow: { flexDirection: "row", gap: 7, alignItems: "center" },
+  compactInput: { flex: 1, minHeight: 38, borderWidth: 1, borderRadius: 9, paddingHorizontal: 9, fontSize: 10 },
+  severityRow: { flexDirection: "row", gap: 4 },
+  severityChip: { borderWidth: 1, borderRadius: 7, paddingHorizontal: 6, paddingVertical: 6 },
+  severityText: { fontSize: 8, fontWeight: "800", textTransform: "capitalize" },
+  helperText: { fontSize: 8, lineHeight: 12, marginTop: 6 },
   evidenceRow: { minHeight: 52, borderWidth: 1, borderRadius: 12, paddingHorizontal: 9, flexDirection: "row", alignItems: "center", gap: 7, marginBottom: 7 },
   evidenceCopy: { flex: 1 },
   evidenceMetric: { fontSize: 11, fontWeight: "800", textTransform: "capitalize" },
