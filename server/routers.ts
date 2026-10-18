@@ -7,6 +7,7 @@ import { systemRouter } from "./_core/systemRouter";
 import { z } from "zod";
 import { getEbaySubscriptionState } from "./ebay-monitoring";
 import { summarizeEbayMarketSignals } from "../shared/ebay-signals";
+import { thesisDraftSchema } from "../shared/versioned-drafts";
 
 const savedDealInput = z.object({
   listingId: z.string().min(1).max(128),
@@ -27,6 +28,13 @@ const savedDealInput = z.object({
 
 const normalizedListingInput = savedDealInput.omit({ score: true, marginPercentage: true }).extend({
   listingId: z.string().min(1).max(128),
+});
+
+const thesisRevisionInput = z.object({
+  draftId: z.string().min(1).max(128),
+  revision: z.number().int().positive(),
+  status: z.enum(["draft", "submitted", "superseded", "archived"]),
+  payload: thesisDraftSchema,
 });
 
 export const appRouter = router({
@@ -69,6 +77,10 @@ export const appRouter = router({
   marketplace: router({
     sources: publicProcedure.query(() => MARKETPLACE_SOURCES),
     previewImport: protectedProcedure.input(z.object({ sourceSlug: z.string(), listings: z.array(normalizedListingInput).max(500) })).mutation(({ input }) => previewNormalizedImport(input.sourceSlug, input.listings)),
+  }),
+  thesisDrafts: router({
+    list: protectedProcedure.input(z.object({ draftId: z.string().min(1).max(128) })).query(async ({ ctx, input }) => (await db.listThesisDraftRevisions(ctx.user.id, input.draftId)).map((row) => ({ ...row, payload: JSON.parse(row.payload) }))),
+    upsert: protectedProcedure.input(thesisRevisionInput).mutation(({ ctx, input }) => db.upsertThesisDraftRevision({ userId: ctx.user.id, draftId: input.draftId, revision: input.revision, status: input.status, payload: JSON.stringify(input.payload) })),
   }),
   monitoring: router({
     ebay: publicProcedure.query(async () => {

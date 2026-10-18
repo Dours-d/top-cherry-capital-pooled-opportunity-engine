@@ -63,6 +63,26 @@ export const userPreferences = mysqlTable(
 export type UserPreferences = typeof userPreferences.$inferSelect;
 export type InsertUserPreferences = typeof userPreferences.$inferInsert;
 
+export const thesisDraftRevisions = mysqlTable(
+  "thesis_draft_revisions",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    draftId: varchar("draftId", { length: 128 }).notNull(),
+    revision: int("revision").notNull(),
+    status: mysqlEnum("status", ["draft", "submitted", "superseded", "archived"]).notNull(),
+    payload: text("payload").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (table) => ({
+    userDraftRevisionIdx: uniqueIndex("thesis_draft_user_revision_idx").on(table.userId, table.draftId, table.revision),
+    userDraftIdx: index("thesis_draft_user_idx").on(table.userId, table.draftId),
+  }),
+);
+
+export type ThesisDraftRevision = typeof thesisDraftRevisions.$inferSelect;
+export type InsertThesisDraftRevision = typeof thesisDraftRevisions.$inferInsert;
+
 export const ingestionRuns = mysqlTable("ingestion_runs", {
   id: int("id").autoincrement().primaryKey(),
   sourceSlug: varchar("sourceSlug", { length: 64 }).notNull(),

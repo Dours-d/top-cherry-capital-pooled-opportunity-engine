@@ -35,6 +35,9 @@ Direction accepted on 14 October 2026, clarified as a multi-mechanism architectu
   - [x] R1.5e Revision history inspection and restore-as-new-revision; prior history is never overwritten.
   - [x] R1.5f Explicit contradiction/unknown and invalidation-condition editing; submission is blocked when review safeguards are not satisfied.
   - [x] R1.5g Structured contradiction entry with description, source, severity, immutable serialization, and blocking evaluator semantics.
+  - [x] R1.5h Contradiction resolution controls; open/resolved state is parsed by the evaluator and resolved evidence remains visible without blocking readiness.
+  - [x] R1.5i Authenticated thesis revision sync contract, user-scoped database storage, migration, and protected tRPC list/upsert procedures; anonymous users retain local storage.
+  - [x] R1.5j Acceptance regression for open versus resolved contradiction evidence.
 - [ ] R1.6 Correct planner affordability: all-in acquisition cash, confirmed stock, integer quantity and explicit reserve.
 - [ ] R1.7 Outcomes and revision loop.
 - [ ] R1.8 End-to-end acceptance.
@@ -46,7 +49,7 @@ R2 real-data ingestion, R3 response estimation, R4 network feedback and R5 opera
 - eBay account-deletion delivery does not establish Browse search or listing-stream permissions.
 - GitHub source synchronization, hosted CI, database migration, checkpoints, UI deployment and provider access are separate gates.
 - Current three-layer signals are sample evidence views, not live predictive evidence.
-- No credentials, eBay destinations, subscriptions, recurring jobs, migrations or money-handling features are changed by the AML-0 pause.
+- No credentials, eBay destinations, subscriptions, recurring jobs or money-handling features are changed by the AML-0 pause. The authenticated thesis-draft migration is research-workspace infrastructure only and does not collect funds or execute trades.
 
 ## Next artifact
 See `top-cherry-market-fit-aml-phase-assessment-2026-10-15.md` for the market-fit questions, operating-model options, AML risk register and go/no-go criteria.

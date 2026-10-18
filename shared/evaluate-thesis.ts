@@ -19,6 +19,12 @@ function unique(values: string[]) {
   return [...new Set(values)];
 }
 
+export function parseContradiction(value: string) {
+  const match = value.match(/^\[contradiction\|(low|medium|high)\|([^\]]+)\](?:\[status:(open|resolved)\])?\s*(.*)$/i);
+  if (!match) return null;
+  return { severity: match[1].toLowerCase() as "low" | "medium" | "high", source: match[2], status: (match[3] ?? "open").toLowerCase() as "open" | "resolved", description: match[4] };
+}
+
 export function evaluateThesis(input: {
   nodes: Parameters<typeof validateTransmissionSet>[0]["nodes"];
   edges: Parameters<typeof validateTransmissionSet>[0]["edges"];
@@ -40,7 +46,10 @@ export function evaluateThesis(input: {
   const thesisEvidenceIds = new Set(thesis.observationIds);
   const missingObservationIds = expectedEvidenceIds.filter((id) => !thesisEvidenceIds.has(id) || !observationMap.has(id));
   const supportingEvidence = thesis.observationIds.filter((id) => observationMap.has(id) && !futureObservationIds.includes(id));
-  const contradictoryEvidence = thesis.unknowns.filter((unknown) => /contradict|against|conflict/i.test(unknown));
+  const contradictoryEvidence = thesis.unknowns.filter((unknown) => {
+    const parsed = parseContradiction(unknown);
+    return parsed ? parsed.status !== "resolved" : /contradict|against|conflict/i.test(unknown);
+  });
   const competingChannelIds = unique(thesis.edgeIds.flatMap((edgeId) => edgeMap.get(edgeId)?.competingEdgeIds ?? []));
   const readinessReasons: string[] = [];
   if (missingObservationIds.length > 0) readinessReasons.push("Required observations are missing or unavailable.");

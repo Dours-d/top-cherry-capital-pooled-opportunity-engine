@@ -1,6 +1,6 @@
 import { and, count, desc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { ebayListingEvents, ebayNotificationEvents, InsertEbayListingEvent, InsertEbayNotificationEvent, InsertSavedDeal, InsertUser, savedDeals, userPreferences, users } from "../drizzle/schema";
+import { ebayListingEvents, ebayNotificationEvents, InsertEbayListingEvent, InsertEbayNotificationEvent, InsertSavedDeal, InsertThesisDraftRevision, InsertUser, savedDeals, thesisDraftRevisions, userPreferences, users } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import { buildEbayMarketSignals } from "../shared/ebay-signals";
 
@@ -98,6 +98,20 @@ export async function updateUserPreferences(userId: number, values: Partial<type
   await getUserPreferences(userId);
   await db.update(userPreferences).set({ ...values, updatedAt: new Date() }).where(eq(userPreferences.userId, userId));
   return getUserPreferences(userId);
+}
+
+export async function upsertThesisDraftRevision(revision: InsertThesisDraftRevision) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.insert(thesisDraftRevisions).values(revision).onDuplicateKeyUpdate({ set: { status: revision.status, payload: revision.payload } });
+  const result = await db.select().from(thesisDraftRevisions).where(and(eq(thesisDraftRevisions.userId, revision.userId), eq(thesisDraftRevisions.draftId, revision.draftId), eq(thesisDraftRevisions.revision, revision.revision))).limit(1);
+  return result[0];
+}
+
+export async function listThesisDraftRevisions(userId: number, draftId: string) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(thesisDraftRevisions).where(and(eq(thesisDraftRevisions.userId, userId), eq(thesisDraftRevisions.draftId, draftId))).orderBy(thesisDraftRevisions.revision);
 }
 
 export async function insertEbayNotificationEvent(event: InsertEbayNotificationEvent) {

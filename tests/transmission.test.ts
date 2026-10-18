@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { evaluateThesis } from "../shared/evaluate-thesis";
+import { evaluateThesis, parseContradiction } from "../shared/evaluate-thesis";
 import { MECHANISM_REGISTRY, mechanismFamilies, registerMechanism } from "../shared/mechanism-registry";
 import { observationSchema, validateTransmissionSet, type EconomicNode, type Observation, type Thesis, type TransmissionEdge } from "../shared/transmission";
 
@@ -55,6 +55,13 @@ const baseThesis: Thesis = {
 };
 
 describe("transmission contracts", () => {
+  it("parses and resolves structured contradictions without hiding their provenance", () => {
+    expect(parseContradiction("[contradiction|high|ECB][status:resolved] Rates moved differently")).toEqual({ severity: "high", source: "ECB", status: "resolved", description: "Rates moved differently" });
+    const open = evaluateThesis({ nodes, edges, exposures: [], observations: [observation], thesis: { ...baseThesis, unknowns: ["[contradiction|medium|survey] Demand conflicts with the claim"] } });
+    const resolved = evaluateThesis({ nodes, edges, exposures: [], observations: [observation], thesis: { ...baseThesis, unknowns: ["[contradiction|medium|survey][status:resolved] Demand conflicts with the claim"] } });
+    expect(open.status).toBe("blocked");
+    expect(resolved.status).toBe("monitoring");
+  });
   it("accepts a non-equity, non-oil mechanism path", () => {
     const result = validateTransmissionSet({ nodes, edges, exposures: [], observations: [observation], thesis: baseThesis });
     expect(result.thesis.id).toBe("thesis-repair-audio");
