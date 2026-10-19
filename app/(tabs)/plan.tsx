@@ -6,10 +6,11 @@ import { useEffect, useMemo, useState } from "react";
 import { FlatList, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
-import { DEFAULT_ECONOMICS, ECONOMICS_STORAGE_KEY, LISTINGS, PROFILES, formatCurrency, getListingEconomics, recommendAllocations, type EconomicsAssumptions, type Listing } from "@/lib/market-data";
+import { DEFAULT_ECONOMICS, ECONOMICS_STORAGE_KEY, LISTINGS, PROFILES, formatCurrency, getAllInAcquisitionCost, getListingEconomics, recommendAllocations, type EconomicsAssumptions, type Listing } from "@/lib/market-data";
 
 const PLAN_STORAGE_KEY = "topCherry.capitalPlan";
 const DEFAULT_BUDGET = 25000;
+const DEFAULT_RESERVE_PERCENT = 10;
 
 type AllocationMap = Record<string, number>;
 
@@ -22,7 +23,8 @@ export default function PlanScreen() {
   const { candidate } = useLocalSearchParams<{ candidate?: string }>();
   const [budget, setBudget] = useState(DEFAULT_BUDGET);
   const [budgetText, setBudgetText] = useState(String(DEFAULT_BUDGET));
-  const [allocations, setAllocations] = useState<AllocationMap>(() => recommendAllocations(DEFAULT_BUDGET));
+  const [reservePercent, setReservePercent] = useState(DEFAULT_RESERVE_PERCENT);
+  const [allocations, setAllocations] = useState<AllocationMap>(() => recommendAllocations(DEFAULT_BUDGET, LISTINGS, DEFAULT_ECONOMICS, DEFAULT_BUDGET * DEFAULT_RESERVE_PERCENT / 100));
   const [profileFilter, setProfileFilter] = useState("all");
   const [economics, setEconomics] = useState<EconomicsAssumptions>(DEFAULT_ECONOMICS);
 
@@ -32,13 +34,14 @@ export default function PlanScreen() {
     });
     void AsyncStorage.getItem(PLAN_STORAGE_KEY).then((raw) => {
       if (!raw) return;
-      const saved = JSON.parse(raw) as { budget?: number; allocations?: AllocationMap };
+      const saved = JSON.parse(raw) as { budget?: number; reservePercent?: number; allocations?: AllocationMap };
       if (saved.budget) {
         setBudget(saved.budget);
         setBudgetText(String(saved.budget));
       }
+      if (saved.reservePercent !== undefined) setReservePercent(saved.reservePercent);
       if (saved.allocations) setAllocations(saved.allocations);
-      else setAllocations(recommendAllocations(saved.budget ?? DEFAULT_BUDGET, LISTINGS, economics));
+      else setAllocations(recommendAllocations(saved.budget ?? DEFAULT_BUDGET, LISTINGS, economics, (saved.budget ?? DEFAULT_BUDGET) * (saved.reservePercent ?? DEFAULT_RESERVE_PERCENT) / 100));
     });
   }, [economics]);
 
@@ -47,14 +50,15 @@ export default function PlanScreen() {
     [profileFilter],
   );
   const rows = LISTINGS.map((listing) => ({ listing, quantity: allocations[listing.id] ?? 0 }));
-  const deployed = rows.reduce((sum, row) => sum + row.quantity * row.listing.askingPrice, 0);
+  const reserve = budget * reservePercent / 100;
+  const deployed = rows.reduce((sum, row) => sum + row.quantity * getAllInAcquisitionCost(row.listing, economics), 0);
   const upside = rows.reduce((sum, row) => sum + row.quantity * getListingEconomics(row.listing, economics).netUpside, 0);
-  const remaining = budget - deployed;
+  const remaining = budget - reserve - deployed;
   const selectedCount = rows.filter((row) => row.quantity > 0).length;
   const linkedCandidate = candidate ? LISTINGS.find((listing) => listing.id === candidate) : undefined;
 
-  const persist = (nextBudget: number, nextAllocations: AllocationMap) => {
-    void AsyncStorage.setItem(PLAN_STORAGE_KEY, JSON.stringify({ budget: nextBudget, allocations: nextAllocations }));
+  const persist = (nextBudget: number, nextAllocations: AllocationMap, nextReservePercent = reservePercent) => {
+    void AsyncStorage.setItem(PLAN_STORAGE_KEY, JSON.stringify({ budget: nextBudget, reservePercent: nextReservePercent, allocations: nextAllocations }));
   };
 
   const updateBudget = (value: string) => {
@@ -62,7 +66,7 @@ export default function PlanScreen() {
     setBudgetText(sanitized);
     const nextBudget = Math.max(0, Number(sanitized || 0));
     setBudget(nextBudget);
-    const nextAllocations = recommendAllocations(nextBudget, LISTINGS, economics);
+    const nextAllocations = recommendAllocations(nextBudget, LISTINGS, economics, nextBudget * reservePercent / 100);
     setAllocations(nextAllocations);
     persist(nextBudget, nextAllocations);
   };
@@ -70,8 +74,9 @@ export default function PlanScreen() {
   const updateQuantity = (listing: Listing, delta: number) => {
     haptic();
     const current = allocations[listing.id] ?? 0;
-    const otherDeployed = deployed - current * listing.askingPrice;
-    const maxAffordable = Math.floor(Math.max(0, budget - otherDeployed) / listing.askingPrice);
+    const allInCost = getAllInAcquisitionCost(listing, economics);
+    const otherDeployed = deployed - current * allInCost;
+    const maxAffordable = Math.floor(Math.max(0, budget - reserve - otherDeployed) / allInCost);
     const nextQuantity = Math.max(0, Math.min(maxAffordable, current + delta));
     const next = { ...allocations, [listing.id]: nextQuantity };
     setAllocations(next);
@@ -87,13 +92,13 @@ export default function PlanScreen() {
         contentContainerStyle={styles.content}
         ListHeaderComponent={<View>
           <View style={styles.header}><Text style={[styles.eyebrow, { color: colors.muted }]}>CAPITAL ALLOCATION</Text><Text style={[styles.title, { color: colors.foreground }]}>Pool your edge.</Text><Text style={[styles.subtitle, { color: colors.muted }]}>Size each opportunity against one shared budget, not in isolation.</Text></View>
-          <View style={[styles.budgetCard, { backgroundColor: colors.surface, borderColor: colors.border }]}><View style={styles.budgetHeader}><View><Text style={[styles.cardEyebrow, { color: colors.muted }]}>TOTAL INVESTABLE CAPITAL</Text><Text style={[styles.budgetHint, { color: colors.muted }]}>How much are you putting to work?</Text></View><MaterialIcons name="account-balance-wallet" size={22} color={colors.primary} /></View><View style={[styles.budgetInputWrap, { backgroundColor: colors.background }]}><Text style={[styles.currency, { color: colors.muted }]}>$</Text><TextInput value={budgetText} onChangeText={updateBudget} keyboardType="number-pad" style={[styles.budgetInput, { color: colors.foreground }]} /></View></View>
-          <View style={[styles.summaryCard, { backgroundColor: colors.foreground }]}><View style={styles.summaryTop}><Text style={[styles.summaryEyebrow, { color: colors.primary }]}>PLAN SUMMARY</Text><Text style={[styles.summaryCount, { color: colors.background }]}>{selectedCount} opportunities</Text></View><View style={styles.summaryNumbers}><SummaryStat label="Deployed" value={formatCurrency(deployed)} color={colors.background} /><SummaryStat label="Remaining" value={formatCurrency(Math.max(0, remaining))} color={colors.background} /><SummaryStat label="Proj. upside" value={`+${formatCurrency(Math.max(0, upside))}`} color={colors.primary} /></View><View style={styles.progressTrack}><View style={[styles.progressFill, { backgroundColor: colors.primary, width: `${Math.min(100, budget ? (deployed / budget) * 100 : 0)}%` }]} /></View><Text style={[styles.progressText, { color: colors.muted }]}>{budget ? `${((deployed / budget) * 100).toFixed(0)}% of capital allocated` : "Set a budget to begin"}</Text></View>
+          <View style={[styles.budgetCard, { backgroundColor: colors.surface, borderColor: colors.border }]}><View style={styles.budgetHeader}><View><Text style={[styles.cardEyebrow, { color: colors.muted }]}>TOTAL INVESTABLE CAPITAL</Text><Text style={[styles.budgetHint, { color: colors.muted }]}>How much are you putting to work?</Text></View><MaterialIcons name="account-balance-wallet" size={22} color={colors.primary} /></View><View style={[styles.budgetInputWrap, { backgroundColor: colors.background }]}><Text style={[styles.currency, { color: colors.muted }]}>$</Text><TextInput value={budgetText} onChangeText={updateBudget} keyboardType="number-pad" style={[styles.budgetInput, { color: colors.foreground }]} /></View><View style={styles.reserveRow}><Text style={[styles.reserveLabel, { color: colors.muted }]}>CASH RESERVE</Text><TextInput value={String(reservePercent)} onChangeText={(value) => { const next = Math.max(0, Math.min(50, Number(value.replace(/[^0-9]/g, "") || 0))); setReservePercent(next); const nextAllocations = recommendAllocations(budget, LISTINGS, economics, budget * next / 100); setAllocations(nextAllocations); persist(budget, nextAllocations, next); }} keyboardType="number-pad" style={[styles.reserveInput, { color: colors.foreground, backgroundColor: colors.background }]} /><Text style={[styles.reserveLabel, { color: colors.muted }]}>% held back for friction and surprises</Text></View></View>
+          <View style={[styles.summaryCard, { backgroundColor: colors.foreground }]}><View style={styles.summaryTop}><Text style={[styles.summaryEyebrow, { color: colors.primary }]}>PLAN SUMMARY</Text><Text style={[styles.summaryCount, { color: colors.background }]}>{selectedCount} opportunities</Text></View><View style={styles.summaryNumbers}><SummaryStat label="All-in deployed" value={formatCurrency(deployed)} color={colors.background} /><SummaryStat label="Reserve" value={formatCurrency(reserve)} color={colors.background} /><SummaryStat label="Net upside" value={`+${formatCurrency(Math.max(0, upside))}`} color={colors.primary} /></View><View style={styles.progressTrack}><View style={[styles.progressFill, { backgroundColor: colors.primary, width: `${Math.min(100, budget ? ((deployed + reserve) / budget) * 100 : 0)}%` }]} /></View><Text style={[styles.progressText, { color: colors.muted }]}>{budget ? `${(((deployed + reserve) / budget) * 100).toFixed(0)}% committed or reserved` : "Set a budget to begin"}</Text></View>
           {linkedCandidate ? <View style={[styles.linkedBanner, { backgroundColor: colors.surface, borderColor: colors.primary }]}><MaterialIcons name="link" size={17} color={colors.primary} /><View style={styles.linkedCopy}><Text style={[styles.linkedTitle, { color: colors.foreground }]}>Thesis candidate linked</Text><Text style={[styles.linkedText, { color: colors.muted }]}>{linkedCandidate.brand} {linkedCandidate.model} is highlighted below. Plan still checks shared-budget affordability and quantity.</Text></View></View> : null}
-          <View style={styles.sectionHeader}><View><Text style={[styles.sectionTitle, { color: colors.foreground }]}>Allocation opportunities</Text><Text style={[styles.sectionCaption, { color: colors.muted }]}>Quantity × opportunity cost</Text></View><Pressable onPress={() => { const next = recommendAllocations(budget); setAllocations(next); persist(budget, next); }}><Text style={[styles.resetText, { color: colors.primary }]}>Recalculate</Text></Pressable></View>
+          <View style={styles.sectionHeader}><View><Text style={[styles.sectionTitle, { color: colors.foreground }]}>Allocation opportunities</Text><Text style={[styles.sectionCaption, { color: colors.muted }]}>Quantity × all-in acquisition cost</Text></View><Pressable onPress={() => { const next = recommendAllocations(budget, LISTINGS, economics, reserve); setAllocations(next); persist(budget, next, reservePercent); }}><Text style={[styles.resetText, { color: colors.primary }]}>Recalculate</Text></Pressable></View>
           <FlatList horizontal data={[{ slug: "all", name: "All" }, ...PROFILES]} keyExtractor={(item) => item.slug} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips} renderItem={({ item }) => <Pressable onPress={() => setProfileFilter(item.slug)} style={[styles.chip, { backgroundColor: profileFilter === item.slug ? colors.foreground : colors.surface, borderColor: colors.border }]}><Text style={[styles.chipText, { color: profileFilter === item.slug ? colors.background : colors.muted }]}>{item.name}</Text></Pressable>} />
         </View>}
-        renderItem={({ item }) => <AllocationCard listing={item} quantity={allocations[item.id] ?? 0} budget={budget} deployed={deployed} economics={economics} colors={colors} linked={item.id === candidate} onChange={(delta) => updateQuantity(item, delta)} />}
+        renderItem={({ item }) => <AllocationCard listing={item} quantity={allocations[item.id] ?? 0} budget={budget} reserve={reserve} deployed={deployed} economics={economics} colors={colors} linked={item.id === candidate} onChange={(delta) => updateQuantity(item, delta)} />}
         ListFooterComponent={<View style={[styles.formulaCard, { backgroundColor: colors.surface, borderColor: colors.border }]}><MaterialIcons name="calculate" size={19} color={colors.primary} /><View style={styles.formulaCopy}><Text style={[styles.formulaTitle, { color: colors.foreground }]}>How the plan is calculated</Text><Text style={[styles.formulaText, { color: colors.muted }]}>Net upside = market value − asking price − shipping − transaction fees − estimated travel cost. Opportunity cost shows the share of your total pool committed to each deal.</Text></View></View>}
       />
     </ScreenContainer>
@@ -104,12 +109,12 @@ function SummaryStat({ label, value, color }: { label: string; value: string; co
   return <View style={styles.summaryStat}><Text style={[styles.summaryStatValue, { color }]}>{value}</Text><Text style={[styles.summaryStatLabel, { color: "#9AA597" }]}>{label}</Text></View>;
 }
 
-function AllocationCard({ listing, quantity, budget, deployed, economics, colors, linked = false, onChange }: { listing: Listing; quantity: number; budget: number; deployed: number; economics: EconomicsAssumptions; colors: ReturnType<typeof useColors>; linked?: boolean; onChange: (delta: number) => void }) {
-  const capital = quantity * listing.askingPrice;
+function AllocationCard({ listing, quantity, budget, reserve, deployed, economics, colors, linked = false, onChange }: { listing: Listing; quantity: number; budget: number; reserve: number; deployed: number; economics: EconomicsAssumptions; colors: ReturnType<typeof useColors>; linked?: boolean; onChange: (delta: number) => void }) {
+  const capital = quantity * getAllInAcquisitionCost(listing, economics);
   const projectedUpside = quantity * getListingEconomics(listing, economics).netUpside;
   const opportunityCost = budget ? (capital / budget) * 100 : 0;
-  const canAdd = deployed + listing.askingPrice <= budget;
-  return <View style={[styles.allocationCard, { backgroundColor: colors.surface, borderColor: linked ? colors.primary : quantity > 0 ? colors.primary : colors.border }]}><View style={styles.allocationTop}><View style={styles.sourceRow}><View style={[styles.sourceIcon, { backgroundColor: colors.background }]}><Text style={[styles.sourceText, { color: colors.foreground }]}>{listing.platform.slice(0, 1)}</Text></View><View><Text style={[styles.platform, { color: colors.muted }]}>{listing.platform} · {listing.location}</Text><Text style={[styles.brand, { color: colors.foreground }]}>{listing.brand}</Text></View></View><View style={styles.scorePillWrap}>{linked ? <Text style={[styles.linkedLabel, { color: colors.primary }]}>THESIS LINK</Text> : null}<View style={[styles.scorePill, { backgroundColor: colors.primary }]}><Text style={[styles.score, { color: colors.foreground }]}>{listing.score}</Text><Text style={[styles.scoreLabel, { color: colors.foreground }]}>SCORE</Text></View></View></View><Text style={[styles.model, { color: colors.muted }]} numberOfLines={1}>{listing.model}</Text><View style={styles.mathRow}><View><Text style={[styles.mathLabel, { color: colors.muted }]}>UNIT COST</Text><Text style={[styles.mathValue, { color: colors.foreground }]}>{formatCurrency(listing.askingPrice)}</Text></View><View><Text style={[styles.mathLabel, { color: colors.muted }]}>UNIT UPSIDE</Text><Text style={[styles.mathValue, { color: colors.success }]}>+{formatCurrency(listing.marketValue - listing.askingPrice)}</Text></View><View style={styles.quantityControl}><Pressable onPress={() => onChange(-1)} disabled={quantity === 0} style={[styles.quantityButton, { backgroundColor: colors.background, opacity: quantity === 0 ? 0.35 : 1 }]}><Text style={[styles.quantityButtonText, { color: colors.foreground }]}>−</Text></Pressable><Text style={[styles.quantityText, { color: colors.foreground }]}>{quantity}</Text><Pressable onPress={() => onChange(1)} disabled={!canAdd} style={[styles.quantityButton, { backgroundColor: colors.primary, opacity: canAdd ? 1 : 0.35 }]}><Text style={[styles.quantityButtonText, { color: colors.foreground }]}>+</Text></Pressable></View></View><View style={[styles.allocationFooter, { borderTopColor: colors.border }]}><View><Text style={[styles.footerLabel, { color: colors.muted }]}>COMMITTED</Text><Text style={[styles.footerValue, { color: colors.foreground }]}>{formatCurrency(capital)}</Text></View><View><Text style={[styles.footerLabel, { color: colors.muted }]}>OPPORTUNITY COST</Text><Text style={[styles.footerValue, { color: colors.foreground }]}>{opportunityCost.toFixed(1)}%</Text></View><View style={styles.upsideBlock}><Text style={[styles.footerLabel, { color: colors.muted }]}>PLAN UPSIDE</Text><Text style={[styles.footerValue, { color: colors.success }]}>+{formatCurrency(projectedUpside)}</Text></View></View></View>;
+  const canAdd = deployed + reserve + getAllInAcquisitionCost(listing, economics) <= budget;
+  return <View style={[styles.allocationCard, { backgroundColor: colors.surface, borderColor: linked ? colors.primary : quantity > 0 ? colors.primary : colors.border }]}><View style={styles.allocationTop}><View style={styles.sourceRow}><View style={[styles.sourceIcon, { backgroundColor: colors.background }]}><Text style={[styles.sourceText, { color: colors.foreground }]}>{listing.platform.slice(0, 1)}</Text></View><View><Text style={[styles.platform, { color: colors.muted }]}>{listing.platform} · {listing.location}</Text><Text style={[styles.brand, { color: colors.foreground }]}>{listing.brand}</Text></View></View><View style={styles.scorePillWrap}>{linked ? <Text style={[styles.linkedLabel, { color: colors.primary }]}>THESIS LINK</Text> : null}<View style={[styles.scorePill, { backgroundColor: colors.primary }]}><Text style={[styles.score, { color: colors.foreground }]}>{listing.score}</Text><Text style={[styles.scoreLabel, { color: colors.foreground }]}>SCORE</Text></View></View></View><Text style={[styles.model, { color: colors.muted }]} numberOfLines={1}>{listing.model}</Text><View style={styles.mathRow}><View><Text style={[styles.mathLabel, { color: colors.muted }]}>ALL-IN UNIT</Text><Text style={[styles.mathValue, { color: colors.foreground }]}>{formatCurrency(getAllInAcquisitionCost(listing, economics))}</Text></View><View><Text style={[styles.mathLabel, { color: colors.muted }]}>NET UNIT UPSIDE</Text><Text style={[styles.mathValue, { color: colors.success }]}>+{formatCurrency(getListingEconomics(listing, economics).netUpside)}</Text></View><View style={styles.quantityControl}><Pressable onPress={() => onChange(-1)} disabled={quantity === 0} style={[styles.quantityButton, { backgroundColor: colors.background, opacity: quantity === 0 ? 0.35 : 1 }]}><Text style={[styles.quantityButtonText, { color: colors.foreground }]}>−</Text></Pressable><Text style={[styles.quantityText, { color: colors.foreground }]}>{quantity}</Text><Pressable onPress={() => onChange(1)} disabled={!canAdd} style={[styles.quantityButton, { backgroundColor: colors.primary, opacity: canAdd ? 1 : 0.35 }]}><Text style={[styles.quantityButtonText, { color: colors.foreground }]}>+</Text></Pressable></View></View><View style={[styles.allocationFooter, { borderTopColor: colors.border }]}><View><Text style={[styles.footerLabel, { color: colors.muted }]}>ALL-IN COMMITTED</Text><Text style={[styles.footerValue, { color: colors.foreground }]}>{formatCurrency(capital)}</Text></View><View><Text style={[styles.footerLabel, { color: colors.muted }]}>POOL SHARE</Text><Text style={[styles.footerValue, { color: colors.foreground }]}>{opportunityCost.toFixed(1)}%</Text></View><View style={styles.upsideBlock}><Text style={[styles.footerLabel, { color: colors.muted }]}>NET UPSIDE</Text><Text style={[styles.footerValue, { color: colors.success }]}>+{formatCurrency(projectedUpside)}</Text></View></View></View>;
 }
 
 const styles = StyleSheet.create({
@@ -125,6 +130,9 @@ const styles = StyleSheet.create({
   budgetInputWrap: { marginTop: 15, borderRadius: 15, paddingHorizontal: 14, flexDirection: "row", alignItems: "center" },
   currency: { fontSize: 25, fontWeight: "800" },
   budgetInput: { flex: 1, fontSize: 27, fontWeight: "800", paddingVertical: 10, paddingHorizontal: 7 },
+  reserveRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 10 },
+  reserveLabel: { fontSize: 9, fontWeight: "700" },
+  reserveInput: { width: 42, borderRadius: 7, paddingVertical: 5, paddingHorizontal: 6, textAlign: "center", fontSize: 12, fontWeight: "800" },
   summaryCard: { borderRadius: 20, padding: 17, marginTop: 12 },
   summaryTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   summaryEyebrow: { fontSize: 9, fontWeight: "900", letterSpacing: 1.1 },

@@ -143,8 +143,10 @@ export const getListingEconomics = (listing: Listing, assumptions: EconomicsAssu
   return { grossUpside, shipping, transactionFee, travelCost, totalCosts, netUpside: grossUpside - totalCosts };
 };
 
-export const recommendAllocations = (budget: number, listings: Listing[] = LISTINGS, assumptions: EconomicsAssumptions = DEFAULT_ECONOMICS): Record<string, number> => {
-  const safeBudget = Math.max(0, Math.floor(budget));
+export const getAllInAcquisitionCost = (listing: Listing, assumptions: EconomicsAssumptions = DEFAULT_ECONOMICS) => listing.askingPrice + getListingEconomics(listing, assumptions).totalCosts;
+
+export const recommendAllocations = (budget: number, listings: Listing[] = LISTINGS, assumptions: EconomicsAssumptions = DEFAULT_ECONOMICS, reserve = 0): Record<string, number> => {
+  const safeBudget = Math.max(0, Math.floor(budget - Math.max(0, reserve)));
   let best: { allocations: Record<string, number>; upside: number; score: number; count: number } = { allocations: {}, upside: 0, score: 0, count: 0 };
   const visit = (index: number, remaining: number, allocations: Record<string, number>, upside: number, score: number, count: number) => {
     if (index >= listings.length) {
@@ -154,11 +156,11 @@ export const recommendAllocations = (budget: number, listings: Listing[] = LISTI
     }
     const listing = listings[index];
     const unitUpside = Math.max(0, getListingEconomics(listing, assumptions).netUpside);
-    const maxUnits = Math.min(4, Math.floor(remaining / listing.askingPrice));
+    const maxUnits = Math.min(4, Math.floor(remaining / getAllInAcquisitionCost(listing, assumptions)));
     for (let units = 0; units <= maxUnits; units += 1) {
       if (units > 0) allocations[listing.id] = units;
       else delete allocations[listing.id];
-      visit(index + 1, remaining - units * listing.askingPrice, allocations, upside + units * unitUpside, score + units * listing.score, count + units);
+      visit(index + 1, remaining - units * getAllInAcquisitionCost(listing, assumptions), allocations, upside + units * unitUpside, score + units * listing.score, count + units);
     }
     delete allocations[listing.id];
   };

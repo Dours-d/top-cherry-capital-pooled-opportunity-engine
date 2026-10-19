@@ -1,6 +1,6 @@
 import { and, count, desc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { ebayListingEvents, ebayNotificationEvents, InsertEbayListingEvent, InsertEbayNotificationEvent, InsertSavedDeal, InsertThesisDraftRevision, InsertUser, savedDeals, thesisDraftRevisions, userPreferences, users } from "../drizzle/schema";
+import { ebayListingEvents, ebayNotificationEvents, InsertEbayListingEvent, InsertEbayNotificationEvent, InsertSavedDeal, InsertThesisContradictionReview, InsertThesisDraftRevision, InsertUser, savedDeals, thesisContradictionReviews, thesisDraftRevisions, userPreferences, users } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import { buildEbayMarketSignals } from "../shared/ebay-signals";
 
@@ -112,6 +112,20 @@ export async function listThesisDraftRevisions(userId: number, draftId: string) 
   const db = await getDb();
   if (!db) return [];
   return db.select().from(thesisDraftRevisions).where(and(eq(thesisDraftRevisions.userId, userId), eq(thesisDraftRevisions.draftId, draftId))).orderBy(thesisDraftRevisions.revision);
+}
+
+export async function upsertThesisContradictionReview(review: InsertThesisContradictionReview) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.insert(thesisContradictionReviews).values(review).onDuplicateKeyUpdate({ set: { status: review.status, reviewer: review.reviewer, resolvedAt: review.resolvedAt } });
+  const result = await db.select().from(thesisContradictionReviews).where(and(eq(thesisContradictionReviews.userId, review.userId), eq(thesisContradictionReviews.draftId, review.draftId), eq(thesisContradictionReviews.revision, review.revision), eq(thesisContradictionReviews.contradictionKey, review.contradictionKey))).limit(1);
+  return result[0];
+}
+
+export async function listThesisContradictionReviews(userId: number, draftId: string) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(thesisContradictionReviews).where(and(eq(thesisContradictionReviews.userId, userId), eq(thesisContradictionReviews.draftId, draftId))).orderBy(desc(thesisContradictionReviews.createdAt));
 }
 
 export async function insertEbayNotificationEvent(event: InsertEbayNotificationEvent) {

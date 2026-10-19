@@ -83,6 +83,28 @@ export const thesisDraftRevisions = mysqlTable(
 export type ThesisDraftRevision = typeof thesisDraftRevisions.$inferSelect;
 export type InsertThesisDraftRevision = typeof thesisDraftRevisions.$inferInsert;
 
+export const thesisContradictionReviews = mysqlTable(
+  "thesis_contradiction_reviews",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    draftId: varchar("draftId", { length: 128 }).notNull(),
+    revision: int("revision").notNull(),
+    contradictionKey: varchar("contradictionKey", { length: 255 }).notNull(),
+    status: mysqlEnum("status", ["open", "resolved"]).notNull(),
+    reviewer: varchar("reviewer", { length: 160 }),
+    resolvedAt: timestamp("resolvedAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (table) => ({
+    reviewKeyIdx: uniqueIndex("thesis_contradiction_review_key_idx").on(table.userId, table.draftId, table.revision, table.contradictionKey),
+    reviewDraftIdx: index("thesis_contradiction_review_draft_idx").on(table.userId, table.draftId),
+  }),
+);
+
+export type ThesisContradictionReview = typeof thesisContradictionReviews.$inferSelect;
+export type InsertThesisContradictionReview = typeof thesisContradictionReviews.$inferInsert;
+
 export const ingestionRuns = mysqlTable("ingestion_runs", {
   id: int("id").autoincrement().primaryKey(),
   sourceSlug: varchar("sourceSlug", { length: 64 }).notNull(),

@@ -36,6 +36,7 @@ export function ThesisDraftEditor() {
   const [contradictionSeverity, setContradictionSeverity] = useState<"low" | "medium" | "high">("medium");
   const [contradictionText, setContradictionText] = useState("");
   const [syncConflict, setSyncConflict] = useState(false);
+  const [conflictDrafts, setConflictDrafts] = useState<{ local: ThesisDraft; remote: ThesisDraft } | null>(null);
   const listing = LISTINGS[0];
   const demo = useMemo(() => buildDemoThesis(listing), [listing]);
 
@@ -71,6 +72,7 @@ export function ThesisDraftEditor() {
     const result = reconcileThesisDrafts(store.revisions, remote);
     if (result.status === "conflict") {
       setSyncConflict(true);
+      setConflictDrafts({ local: result.local, remote: result.remote });
       return;
     }
     if (result.status === "merged" && result.store.current.revision > store.current.revision) {
@@ -93,6 +95,15 @@ export function ThesisDraftEditor() {
     if (isAuthenticated) {
       syncRevision.mutate({ draftId: next.current.draftId, revision: next.current.revision, status: next.current.status, payload: next.current });
     }
+  };
+
+  const resolveSyncConflict = (choice: "local" | "remote") => {
+    if (!store || !conflictDrafts) return;
+    const selected = choice === "local" ? conflictDrafts.local : conflictDrafts.remote;
+    const next = { revisions: store.revisions.filter((revision) => revision.revision !== selected.revision).concat(selected).sort((a, b) => a.revision - b.revision), current: selected };
+    setSyncConflict(false);
+    setConflictDrafts(null);
+    persist(next);
   };
 
   const saveRevision = () => {
@@ -154,6 +165,7 @@ export function ThesisDraftEditor() {
       </View>
       <View style={styles.metaRow}><Text style={[styles.meta, { color: colors.muted }]}>Revision {current.revision} · {store.revisions.length} saved version{store.revisions.length === 1 ? "" : "s"}</Text><Text style={[styles.meta, { color: colors.muted }]}>{current.createdBy}</Text></View>
       {isAuthenticated ? <Text style={[styles.syncStatus, { color: syncConflict ? colors.error : colors.success }]}>{syncConflict ? "Sync conflict detected — local and remote revisions need review." : remoteDrafts.isFetching ? "Syncing revisions…" : "Authenticated revision sync active"}</Text> : null}
+      {syncConflict && conflictDrafts ? <View style={[styles.conflictCard, { backgroundColor: colors.background, borderColor: colors.error }]}><Text style={[styles.conflictTitle, { color: colors.error }]}>Choose the revision to keep</Text><Text style={[styles.conflictText, { color: colors.muted }]}>Device and server differ at revision {conflictDrafts.local.revision}. Nothing is overwritten until you choose.</Text><View style={styles.conflictActions}><Pressable onPress={() => resolveSyncConflict("local")} style={[styles.conflictButton, { backgroundColor: colors.surface, borderColor: colors.border }]}><Text style={[styles.conflictButtonText, { color: colors.foreground }]}>Keep device</Text></Pressable><Pressable onPress={() => resolveSyncConflict("remote")} style={[styles.conflictButton, { backgroundColor: colors.primary, borderColor: colors.primary }]}><Text style={[styles.conflictButtonText, { color: colors.foreground }]}>Use server</Text></Pressable></View></View> : null}
       <Text style={[styles.fieldLabel, { color: colors.foreground }]}>Claim</Text>
       <TextInput multiline editable={editable} value={claim} onChangeText={setClaim} style={[styles.input, { color: colors.foreground, backgroundColor: colors.background, borderColor: colors.border }]} placeholder="State the thesis carefully" placeholderTextColor={colors.muted} />
       {editable ? <><Text style={[styles.fieldLabel, { color: colors.foreground }]}>Change summary</Text><TextInput value={changeSummary} onChangeText={setChangeSummary} style={[styles.input, styles.singleLine, { color: colors.foreground, backgroundColor: colors.background, borderColor: colors.border }]} placeholder="What changed?" placeholderTextColor={colors.muted} /></> : <View style={[styles.locked, { backgroundColor: colors.background }]}><MaterialIcons name="lock" size={15} color={colors.warning} /><Text style={[styles.lockedText, { color: colors.muted }]}>This revision is {current.status}; create a new draft before editing.</Text></View>}
@@ -195,6 +207,12 @@ const styles = StyleSheet.create({
   metaRow: { flexDirection: "row", justifyContent: "space-between", gap: 8, marginTop: 12 },
   meta: { fontSize: 9 },
   syncStatus: { fontSize: 9, lineHeight: 13, marginTop: 5 },
+  conflictCard: { borderWidth: 1, borderRadius: 12, padding: 10, marginTop: 8 },
+  conflictTitle: { fontSize: 11, fontWeight: "900" },
+  conflictText: { fontSize: 10, lineHeight: 14, marginTop: 4 },
+  conflictActions: { flexDirection: "row", gap: 8, marginTop: 8 },
+  conflictButton: { flex: 1, borderWidth: 1, borderRadius: 9, paddingVertical: 8, alignItems: "center" },
+  conflictButtonText: { fontSize: 10, fontWeight: "800" },
   fieldLabel: { fontSize: 11, fontWeight: "800", marginTop: 14, marginBottom: 6 },
   input: { minHeight: 76, borderWidth: 1, borderRadius: 12, paddingHorizontal: 11, paddingVertical: 10, fontSize: 12, lineHeight: 18, textAlignVertical: "top" },
   singleLine: { minHeight: 43, textAlignVertical: "center" },

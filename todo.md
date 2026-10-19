@@ -1,6 +1,6 @@
 # Top Cherry — Transmission-first roadmap
 
-**Current gate:** AML-0 / market-fit assessment. Feature development is temporarily paused while the operating model, user problem and regulatory perimeter are tested.
+**Current gate:** AML-0 / market-fit assessment still governs operational expansion. Research infrastructure may advance, but no money-handling or automated market operation is enabled.
 
 Direction accepted on 14 October 2026, clarified as a multi-mechanism architecture in v2.1. The [core specification](docs/core-specification.md) controls future work. The product is currently a listing-and-allocation prototype with a transmission-contract slice; it is not a pooled investment service.
 
@@ -41,21 +41,22 @@ Direction accepted on 14 October 2026, clarified as a multi-mechanism architectu
   - [x] R1.5k Server-to-device reconciliation with merge-on-newer behavior and explicit same-revision conflict state.
   - [x] R1.5l Reviewer identity and resolution timestamp metadata are retained in structured contradiction markers.
   - [x] R1.5m End-to-end acceptance gate now covers thesis readiness, candidate verification/protection, net upside, reserve, budget, and Plan handoff.
-- [ ] R1.6 Correct planner affordability: all-in acquisition cash, confirmed stock, integer quantity and explicit reserve.
+- [x] R1.6 Partial: Plan now uses all-in acquisition cash and an explicit user-editable reserve; confirmed-stock and reservation semantics remain pending.
 - [ ] R1.7 Outcomes and revision loop.
 - [ ] R1.8 End-to-end acceptance.
 
 ## Later phases — paused
-R2 real-data ingestion, R3 response estimation, R4 network feedback and R5 operational readiness remain paused. In particular, no eBay listing feed, recurring collector, money-handling feature, investor onboarding or pooled-capital workflow is activated by this assessment.
+R2 full real-data ingestion, R3 response estimation, R4 network feedback and R5 operational readiness remain gated. The eBay Browse application-token path is verified server-side and exposed as a protected read-only search procedure, but it is not yet reconciled into the mobile listing store or a recurring collector.
 
 ## Existing boundaries
 - eBay account-deletion delivery does not establish Browse search or listing-stream permissions.
 - GitHub source synchronization, hosted CI, database migration, checkpoints, UI deployment and provider access are separate gates.
 - Current three-layer signals are sample evidence views, not live predictive evidence.
+- eBay Browse production access was verified read-only on 19 October 2026: application token minted successfully and `EBAY_GB` search returned live item summaries. Browse returns asking price and listing metadata; it does not by itself establish market value, realized resale price or listing-event history.
 - No credentials, eBay destinations, subscriptions, recurring jobs or money-handling features are changed by the AML-0 pause. The authenticated thesis-draft migration is research-workspace infrastructure only and does not collect funds or execute trades.
 
 ## Next artifact
-See `top-cherry-market-fit-aml-phase-assessment-2026-10-15.md` for the market-fit questions, operating-model options, AML risk register and go/no-go criteria.
+See `top-cherry-market-fit-aml-phase-assessment-2026-10-15.md` for the market-fit questions, operating-model options, AML risk register and go/no-go criteria. The next engineering artifact is a bounded eBay Browse reconciliation screen with provenance and no inferred market value.
 
 ## Research artifact completed
 - [x] `docs/economic-context-source-inventory.md`: 12-domain source baseline covering drivers, populations, market structure, responses, eligibility constraints, vintages, proxies, and coverage gaps.

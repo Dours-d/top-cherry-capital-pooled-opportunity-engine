@@ -37,6 +37,51 @@ export type SourceSyncSnapshot = {
   message: string;
 };
 
+type EbayItemSummary = {
+  itemId?: string;
+  title?: string;
+  price?: { value?: string; currency?: string };
+  condition?: string;
+  itemWebUrl?: string;
+  itemLocation?: { country?: string; postalCode?: string };
+};
+
+let ebayApplicationToken: { value: string; expiresAt: number } | null = null;
+
+async function getEbayApplicationToken() {
+  const clientId = process.env.EBAY_APP_ID;
+  const clientSecret = process.env.EBAY_CLIENT_SECRET;
+  if (!clientId || !clientSecret) throw new Error("eBay Browse credentials are not configured on the server");
+  if (ebayApplicationToken && ebayApplicationToken.expiresAt > Date.now() + 60_000) return ebayApplicationToken.value;
+  const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
+  const response = await fetch("https://api.ebay.com/identity/v1/oauth2/token", { method: "POST", headers: { Authorization: `Basic ${credentials}`, "Content-Type": "application/x-www-form-urlencoded" }, body: "grant_type=client_credentials&scope=https%3A%2F%2Fapi.ebay.com%2Foauth%2Fapi_scope" });
+  if (!response.ok) throw new Error(`eBay OAuth failed with HTTP ${response.status}`);
+  const payload = await response.json() as { access_token?: string; expires_in?: number };
+  if (!payload.access_token) throw new Error("eBay OAuth returned no application token");
+  ebayApplicationToken = { value: payload.access_token, expiresAt: Date.now() + Math.max(60, payload.expires_in ?? 7200) * 1000 };
+  return payload.access_token;
+}
+
+export const normalizeEbayItemSummary = (item: EbayItemSummary, marketplaceId: string): NormalizedMarketplaceListing => {
+  const askingPrice = Number(item.price?.value ?? 0);
+  const title = item.title?.trim() || "Untitled eBay listing";
+  const words = title.split(/\s+/);
+  return { listingId: item.itemId || title, profileSlug: "ebay-live", brand: words[0] || "Unknown", model: title, askingPrice, marketValue: 0, condition: item.condition || "Unknown", platformSource: "eBay", location: item.itemLocation?.country || marketplaceId, countryCode: item.itemLocation?.country, currency: item.price?.currency, escrowProtected: false, verified: false, url: item.itemWebUrl, fetchedAt: new Date().toISOString() };
+};
+
+export async function searchEbayBrowse(input: { query: string; marketplaceId?: string; categoryId?: string; limit?: number }) {
+  const marketplaceId = input.marketplaceId ?? "EBAY_GB";
+  const url = new URL("https://api.ebay.com/buy/browse/v1/item_summary/search");
+  url.searchParams.set("q", input.query);
+  url.searchParams.set("limit", String(Math.min(50, Math.max(1, input.limit ?? 20))));
+  if (input.categoryId) url.searchParams.set("category_ids", input.categoryId);
+  const response = await fetch(url, { headers: { Authorization: `Bearer ${await getEbayApplicationToken()}`, "X-EBAY-C-MARKETPLACE-ID": marketplaceId, Accept: "application/json" } });
+  if (!response.ok) throw new Error(`eBay Browse search failed with HTTP ${response.status}`);
+  const payload = await response.json() as { total?: number; itemSummaries?: EbayItemSummary[] };
+  const listings = (payload.itemSummaries ?? []).map((item) => normalizeEbayItemSummary(item, marketplaceId));
+  return { source: "ebay", marketplaceId, query: input.query, total: payload.total ?? listings.length, fetchedAt: new Date().toISOString(), listings };
+}
+
 export { classifyEbayListingTopic, deriveEbayMarketSignal, EBAY_MARKET_SIGNAL_TOPICS } from "../shared/ebay-signals";
 
 export type PhaseTask = {
@@ -47,15 +92,15 @@ export type PhaseTask = {
 
 export const PHASE_ONE_EBAY_TASKS: PhaseTask[] = [
   { id: "developer-app", label: "Create eBay developer application", state: "done" },
-  { id: "buy-api-access", label: "Request production Buy API access", state: "blocked" },
+  { id: "buy-api-access", label: "Verify production Browse API access", state: "done" },
   { id: "server-secrets", label: "Store client credentials server-side", state: "done" },
-  { id: "browse-adapter", label: "Import Browse API search results", state: "next" },
-  { id: "first-sync", label: "Verify first live sync and counts", state: "next" },
+  { id: "browse-adapter", label: "Import Browse API search results", state: "done" },
+  { id: "first-sync", label: "Verify first live sync and counts", state: "in-progress" },
 ];
 
 export const MARKETPLACE_SOURCES: MarketplaceSource[] = [
   { slug: "chrono24", name: "Chrono24", mode: "normalized-import", status: "credentials-required", coverage: "specialist", regions: ["EU", "global"], capabilities: ["watches", "escrow", "listing-links"], credentialEnvKey: "CHRONO24_API_KEY" },
-  { slug: "ebay", name: "eBay", mode: "normalized-import", status: "credentials-required", coverage: "specialist", regions: ["global"], capabilities: ["watches", "camera-gear", "collectibles", "listing-links"], credentialEnvKey: "EBAY_APP_ID" },
+  { slug: "ebay", name: "eBay", mode: "normalized-import", status: "adapter-ready", coverage: "specialist", regions: ["global"], capabilities: ["watches", "camera-gear", "collectibles", "listing-links"], credentialEnvKey: "EBAY_APP_ID" },
   { slug: "mpb", name: "MPB", mode: "normalized-import", status: "credentials-required", coverage: "specialist", regions: ["EU", "UK", "US"], capabilities: ["camera-gear", "listing-links"], credentialEnvKey: "MPB_API_KEY" },
   { slug: "goldin", name: "Goldin", mode: "normalized-import", status: "credentials-required", coverage: "specialist", regions: ["US", "global"], capabilities: ["collectibles", "listing-links"], credentialEnvKey: "GOLDIN_API_KEY" },
   { slug: "wallapop", name: "Wallapop", mode: "normalized-import", status: "credentials-required", coverage: "regional-general", regions: ["ES", "IT"], capabilities: ["home-and-living", "local-pickup", "general-goods"], credentialEnvKey: "WALLAPOP_API_TOKEN" },

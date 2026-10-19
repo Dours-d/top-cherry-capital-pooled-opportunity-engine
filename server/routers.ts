@@ -2,7 +2,7 @@ import { COOKIE_NAME } from "../shared/const.js";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import * as db from "./db";
-import { MARKETPLACE_SOURCES, previewNormalizedImport } from "./marketplace";
+import { MARKETPLACE_SOURCES, previewNormalizedImport, searchEbayBrowse } from "./marketplace";
 import { systemRouter } from "./_core/systemRouter";
 import { z } from "zod";
 import { getEbaySubscriptionState } from "./ebay-monitoring";
@@ -77,10 +77,13 @@ export const appRouter = router({
   marketplace: router({
     sources: publicProcedure.query(() => MARKETPLACE_SOURCES),
     previewImport: protectedProcedure.input(z.object({ sourceSlug: z.string(), listings: z.array(normalizedListingInput).max(500) })).mutation(({ input }) => previewNormalizedImport(input.sourceSlug, input.listings)),
+    searchEbay: protectedProcedure.input(z.object({ query: z.string().min(2).max(120), marketplaceId: z.string().regex(/^EBAY_[A-Z]{2}$/).optional(), categoryId: z.string().regex(/^\d+$/).optional(), limit: z.number().int().min(1).max(50).optional() })).query(({ input }) => searchEbayBrowse(input)),
   }),
   thesisDrafts: router({
     list: protectedProcedure.input(z.object({ draftId: z.string().min(1).max(128) })).query(async ({ ctx, input }) => (await db.listThesisDraftRevisions(ctx.user.id, input.draftId)).map((row) => ({ ...row, payload: JSON.parse(row.payload) }))),
     upsert: protectedProcedure.input(thesisRevisionInput).mutation(({ ctx, input }) => db.upsertThesisDraftRevision({ userId: ctx.user.id, draftId: input.draftId, revision: input.revision, status: input.status, payload: JSON.stringify(input.payload) })),
+    reviews: protectedProcedure.input(z.object({ draftId: z.string().min(1).max(128) })).query(({ ctx, input }) => db.listThesisContradictionReviews(ctx.user.id, input.draftId)),
+    review: protectedProcedure.input(z.object({ draftId: z.string().min(1).max(128), revision: z.number().int().positive(), contradictionKey: z.string().min(1).max(255), status: z.enum(["open", "resolved"]), reviewer: z.string().min(1).max(160).nullable(), resolvedAt: z.string().datetime().nullable() })).mutation(({ ctx, input }) => db.upsertThesisContradictionReview({ userId: ctx.user.id, ...input, resolvedAt: input.resolvedAt ? new Date(input.resolvedAt) : null })),
   }),
   monitoring: router({
     ebay: publicProcedure.query(async () => {

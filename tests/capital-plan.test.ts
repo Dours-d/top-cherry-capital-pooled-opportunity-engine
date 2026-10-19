@@ -35,7 +35,7 @@ describe("pooled capital planning", () => {
 
   it("validates the provider adapter registry before previewing an import", () => {
     const result = previewNormalizedImport("ebay", []);
-    expect(result.source.status).toBe("credentials-required");
+    expect(result.source.status).toBe("adapter-ready");
     expect(result.importedCount).toBe(0);
   });
 
@@ -71,10 +71,10 @@ describe("pooled capital planning", () => {
     expect(result.duplicateCount).toBe(1);
   });
 
-  it("keeps Phase 1 eBay rollout explicitly blocked until production access is approved", () => {
-    expect(PHASE_ONE_EBAY_TASKS.find((task) => task.id === "buy-api-access")?.state).toBe("blocked");
-    expect(PHASE_ONE_EBAY_TASKS.filter((task) => task.state === "done")).toHaveLength(2);
-    expect(PHASE_ONE_EBAY_TASKS.find((task) => task.id === "first-sync")?.state).toBe("next");
+  it("records verified Browse access while keeping first sync in progress", () => {
+    expect(PHASE_ONE_EBAY_TASKS.find((task) => task.id === "buy-api-access")?.state).toBe("done");
+    expect(PHASE_ONE_EBAY_TASKS.find((task) => task.id === "browse-adapter")?.state).toBe("done");
+    expect(PHASE_ONE_EBAY_TASKS.find((task) => task.id === "first-sync")?.state).toBe("in-progress");
   });
 
   it("requires both configured eBay application credentials without claiming live authorization", () => {
