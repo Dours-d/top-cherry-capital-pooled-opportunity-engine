@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_ECONOMICS, LISTINGS, PROFILES, formatCurrency, getAskingPriceDecisionGate, getListingEconomics, getListingRedundancySummary, getListingSignals, getMaxAskingPriceForTarget, getProfile, getProfileListings, mapLiveEbayListings, recommendAllocations } from "../lib/market-data";
+import { DEFAULT_ECONOMICS, LISTINGS, PROFILES, formatCurrency, getAskingPriceDecisionGate, getCandidateIdentityConfidence, getListingEconomics, getListingRedundancySummary, getListingSignals, getMaxAskingPriceForTarget, getProfile, getProfileListings, mapLiveEbayListings, recommendAllocations } from "../lib/market-data";
 
 describe("Top Cherry market data", () => {
   it("ships a broad marketplace-independent default category registry", () => {
@@ -99,6 +99,14 @@ describe("Top Cherry market data", () => {
     expect(summary.sellerIdentity).toBe("known");
     expect(summary.sellerCount).toBe(2);
     expect(summary.largestSellerShare).toBeCloseTo(2 / 3, 5);
+  });
+
+  it("does not merge same-model rows from different sellers into one candidate item", () => {
+    const first = { ...LISTINGS[0], sellerId: "seller-a", location: "London, GB" };
+    const second = { ...first, id: "second-row", sellerId: "seller-b" };
+    const summary = getListingRedundancySummary([first, second]);
+    expect(summary.candidateItemCount).toBe(2);
+    expect(getCandidateIdentityConfidence(first)).toBe("high");
   });
 
   it("changes the recommended mix when the available capital changes", () => {

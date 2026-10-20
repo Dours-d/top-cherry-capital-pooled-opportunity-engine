@@ -53,6 +53,7 @@ Direction accepted on 14 October 2026, clarified as a multi-mechanism architectu
 - [x] R1.7b Redundancy-aware live counts: Discover separates raw asking-price rows from candidate item clusters and flags apparent duplicate/relisted/cross-posted supply; clustering is a heuristic and does not confirm physical stock.
 - [x] R1.7c Seller concentration boundary: live feed reports seller concentration only when explicit seller IDs are present; current eBay summary normalization keeps seller identity unavailable rather than inferring coordination from titles or prices.
 - [x] R1.7d Seller identity propagation: preserve eBay Browse seller usernames when supplied, enabling verified seller concentration analysis without changing the unknown state when the provider omits the field.
+- [x] R1.7e Confidence-aware identity clustering: candidate keys now combine normalized model/condition with seller and location when available; same-model rows from different sellers are not merged, and cluster confidence remains provisional.
 - [ ] R1.8 End-to-end acceptance.
 
 ## Later phases — paused

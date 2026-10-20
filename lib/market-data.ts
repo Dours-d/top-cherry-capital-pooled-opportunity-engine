@@ -97,13 +97,17 @@ export type ListingRedundancySummary = {
   rawListingCount: number;
   candidateItemCount: number;
   redundantRows: number;
-  clusters: { key: string; rowCount: number; askingPrices: number[] }[];
+  clusters: { key: string; rowCount: number; askingPrices: number[]; identityConfidence: "low" | "medium" | "high" }[];
   sellerIdentity: "known" | "unavailable";
   sellerCount: number;
   largestSellerShare: number | null;
 };
 
-export const getCandidateItemKey = (listing: Listing) => `${listing.brand} ${listing.model} ${listing.condition}`.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+const normalizeIdentityText = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+
+export const getCandidateItemKey = (listing: Listing) => [normalizeIdentityText(`${listing.brand} ${listing.model} ${listing.condition}`), listing.sellerId ? `seller:${normalizeIdentityText(listing.sellerId)}` : "seller:unknown", listing.location ? `location:${normalizeIdentityText(listing.location)}` : "location:unknown"].join("|");
+
+export const getCandidateIdentityConfidence = (listing: Listing): "low" | "medium" | "high" => listing.sellerId && listing.location && listing.condition !== "Unknown" ? "high" : listing.location || listing.condition !== "Unknown" ? "medium" : "low";
 
 export const getListingRedundancySummary = (listings: Listing[]): ListingRedundancySummary => {
   const grouped = new Map<string, Listing[]>();
@@ -111,7 +115,7 @@ export const getListingRedundancySummary = (listings: Listing[]): ListingRedunda
     const key = getCandidateItemKey(listing);
     grouped.set(key, [...(grouped.get(key) ?? []), listing]);
   });
-  const clusters = [...grouped.entries()].map(([key, rows]) => ({ key, rowCount: rows.length, askingPrices: rows.map((row) => row.askingPrice) }));
+  const clusters = [...grouped.entries()].map(([key, rows]) => ({ key, rowCount: rows.length, askingPrices: rows.map((row) => row.askingPrice), identityConfidence: rows.every((row) => getCandidateIdentityConfidence(row) === "high") ? "high" as const : rows.some((row) => getCandidateIdentityConfidence(row) === "medium" || getCandidateIdentityConfidence(row) === "high") ? "medium" as const : "low" as const }));
   const sellerCounts = new Map<string, number>();
   listings.forEach((listing) => { if (listing.sellerId) sellerCounts.set(listing.sellerId, (sellerCounts.get(listing.sellerId) ?? 0) + 1); });
   const sellerValues = [...sellerCounts.values()];
