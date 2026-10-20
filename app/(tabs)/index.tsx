@@ -321,7 +321,7 @@ export default function HomeScreen() {
               <MetricCard label={feedMode === "live" ? "Candidate items" : "Top cherries"} value={feedMode === "live" ? String(redundancy.candidateItemCount) : String(topCherries)} colors={colors} accent />
               <MetricCard label={feedMode === "live" ? "Redundant rows" : "Avg. margin"} value={feedMode === "live" ? String(redundancy.redundantRows) : `${averageMargin.toFixed(1)}%`} colors={colors} />
             </View>
-            {feedMode === "live" ? <LiveAskingPriceLens listing={leadListing} redundancy={redundancy} colors={colors} loading={liveSearch.isLoading} error={liveSearch.error ? "Live eBay search unavailable" : null} focusTargetFound={focusTargetFound} onRefresh={() => { setLiveOffset(0); void liveSearch.refetch(); }} /> : leadListing ? <PrototypeLens listing={leadListing} colors={colors} /> : null}
+            {feedMode === "live" ? <LiveAskingPriceLens listing={leadListing} redundancy={redundancy} colors={colors} loading={liveSearch.isLoading} error={liveSearch.error ? "Live eBay search unavailable" : null} focusTargetFound={focusTargetFound} hasMore={Boolean(liveSearch.data?.hasMore)} onNext={() => setLiveOffset((current) => current + 20)} onRefresh={() => { setLiveOffset(0); void liveSearch.refetch(); }} /> : leadListing ? <PrototypeLens listing={leadListing} colors={colors} /> : null}
 
             <View style={styles.filterRow}>
               <Text style={[styles.sectionTitle, { color: colors.foreground }]}>{feedMode === "live" ? "Live asking prices" : "Latest opportunities"}</Text>
@@ -475,7 +475,7 @@ function PrototypeLens({ listing, colors }: { listing: Listing; colors: ReturnTy
   );
 }
 
-function LiveAskingPriceLens({ listing, redundancy, colors, loading, error, focusTargetFound, onRefresh }: { listing?: Listing; redundancy: ReturnType<typeof getListingRedundancySummary>; colors: ReturnType<typeof useColors>; loading: boolean; error: string | null; focusTargetFound: boolean; onRefresh: () => void }) {
+function LiveAskingPriceLens({ listing, redundancy, colors, loading, error, focusTargetFound, hasMore, onNext, onRefresh }: { listing?: Listing; redundancy: ReturnType<typeof getListingRedundancySummary>; colors: ReturnType<typeof useColors>; loading: boolean; error: string | null; focusTargetFound: boolean; hasMore: boolean; onNext: () => void; onRefresh: () => void }) {
   return (
     <View style={[styles.prototypeLens, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       <View style={styles.prototypeLensTop}><View><Text style={[styles.prototypeEyebrow, { color: colors.primary }]}>LIVE ASKING PRICES</Text><Text style={[styles.prototypeTitle, { color: colors.foreground }]}>eBay Browse · EBAY_GB</Text></View><Text style={[styles.prototypeHint, { color: colors.muted }]}>{loading ? "loading" : error ? "error" : "read-only"}</Text></View>
@@ -484,6 +484,7 @@ function LiveAskingPriceLens({ listing, redundancy, colors, loading, error, focu
       <Text style={[styles.liveDisclaimer, { color: colors.muted }]}>{redundancy.rawListingCount} ask rows currently map to {redundancy.candidateItemCount} provisional candidate item cluster{redundancy.candidateItemCount === 1 ? "" : "s"}. Matching uses model, condition, location and seller when available; duplicate, relisted, cross-posted and same-model records can still create apparent supply without proving multiple physical units.</Text>
       <Text style={[styles.liveDisclaimer, { color: colors.muted }]}>{redundancy.sellerIdentity === "known" ? `${redundancy.sellerCount} seller identities observed; largest seller share is ${((redundancy.largestSellerShare ?? 0) * 100).toFixed(0)}%.` : "Seller identity is unavailable in this feed, so seller concentration and coordination risk remain unknown."}</Text>
       {!focusTargetFound && !loading ? <Text style={[styles.liveDisclaimer, { color: colors.warning }]}>The requested follow-up listing is not in this page of current results. Search or load another page to locate it; no replacement listing has been assumed.</Text> : null}
+      {!focusTargetFound && hasMore ? <Pressable onPress={onNext} disabled={loading} style={({ pressed }) => [styles.refreshButton, { backgroundColor: colors.foreground, opacity: loading ? 0.5 : 1 }, pressed && styles.pressed]}><MaterialIcons name="navigate-next" size={15} color={colors.background} /><Text style={[styles.refreshText, { color: colors.background }]}>Load next page</Text></Pressable> : null}
       <Pressable onPress={onRefresh} disabled={loading} style={({ pressed }) => [styles.refreshButton, { backgroundColor: colors.primary, opacity: loading ? 0.5 : 1 }, pressed && styles.pressed]}><MaterialIcons name="refresh" size={15} color={colors.onPrimary} /><Text style={[styles.refreshText, { color: colors.onPrimary }]}>{loading ? "Refreshing" : "Refresh live prices"}</Text></Pressable>
     </View>
   );
@@ -568,15 +569,18 @@ function ListingOutcomeLedger({ listing, colors }: { listing: Listing; colors: R
   useEffect(() => {
     void AsyncStorage.getItem(OBSERVATION_SCHEDULE_STORAGE_KEY).then((raw) => {
       if (!raw) return;
-      try { setNextObserveAt((JSON.parse(raw) as Record<string, string>)[listing.id] ?? null); } catch { setNextObserveAt(null); }
+      try {
+        const entry = (JSON.parse(raw) as Record<string, string | { nextObserveAt: string }>)[listing.id];
+        setNextObserveAt(typeof entry === "string" ? entry : entry?.nextObserveAt ?? null);
+      } catch { setNextObserveAt(null); }
     });
   }, [listing.id]);
 
   const scheduleNextObservation = async (observedAt = new Date().toISOString()) => {
     const next = getNextObservationAt(observedAt, 24);
-    let all: Record<string, string> = {};
-    try { const raw = await AsyncStorage.getItem(OBSERVATION_SCHEDULE_STORAGE_KEY); all = raw ? JSON.parse(raw) as Record<string, string> : {}; } catch { all = {}; }
-    all[listing.id] = next;
+    let all: Record<string, string | { nextObserveAt: string; listingTitle?: string; platform?: string; askingPrice?: number; currency?: string }> = {};
+    try { const raw = await AsyncStorage.getItem(OBSERVATION_SCHEDULE_STORAGE_KEY); all = raw ? JSON.parse(raw) as typeof all : {}; } catch { all = {}; }
+    all[listing.id] = { nextObserveAt: next, listingTitle: `${listing.brand} ${listing.model}`, platform: listing.platform, askingPrice: listing.askingPrice, currency: listing.currency };
     await AsyncStorage.setItem(OBSERVATION_SCHEDULE_STORAGE_KEY, JSON.stringify(all));
     setNextObserveAt(next);
   };

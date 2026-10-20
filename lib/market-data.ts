@@ -119,6 +119,10 @@ export type ListingObservationSchedule = {
   listingId: string;
   nextObserveAt: string;
   cadenceHours: number;
+  listingTitle?: string;
+  platform?: string;
+  askingPrice?: number;
+  currency?: string;
 };
 
 export const getNextObservationAt = (observedAt: string, cadenceHours = 24) => new Date(new Date(observedAt).getTime() + Math.max(1, cadenceHours) * 60 * 60 * 1000).toISOString();

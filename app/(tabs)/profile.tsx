@@ -9,7 +9,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { trpc } from "@/lib/trpc";
 import { startOAuthLogin } from "@/constants/oauth";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { DEFAULT_ECONOMICS, ECONOMICS_STORAGE_KEY, getObservationScheduleState, OBSERVATION_SCHEDULE_STORAGE_KEY, OUTCOME_STORAGE_KEY, type EconomicsAssumptions, type ListingOutcome } from "@/lib/market-data";
+import { DEFAULT_ECONOMICS, ECONOMICS_STORAGE_KEY, formatCurrency, getObservationScheduleState, OBSERVATION_SCHEDULE_STORAGE_KEY, OUTCOME_STORAGE_KEY, type EconomicsAssumptions, type ListingOutcome } from "@/lib/market-data";
 import { MARKETPLACE_SOURCES, PHASE_ONE_EBAY_TASKS, SOURCE_SYNC_SNAPSHOT } from "@/server/marketplace";
 import { EbayMonitor } from "@/components/ebay-monitor";
 import { ThesisDraftEditor } from "@/components/thesis-draft-editor";
@@ -33,7 +33,7 @@ export default function ProfileScreen() {
   const [dailyDigest, setDailyDigest] = useState(false);
   const [economics, setEconomics] = useState(DEFAULT_ECONOMICS);
   const [ebayReadiness, setEbayReadiness] = useState<Record<string, boolean>>({});
-  const [followUps, setFollowUps] = useState<{ listingId: string; nextObserveAt: string }[]>([]);
+  const [followUps, setFollowUps] = useState<{ listingId: string; nextObserveAt: string; listingTitle?: string; platform?: string; askingPrice?: number; currency?: string }[]>([]);
   const [followUpOutcomes, setFollowUpOutcomes] = useState<ListingOutcome[]>([]);
 
   useEffect(() => {
@@ -59,7 +59,7 @@ export default function ProfileScreen() {
     void Promise.all([AsyncStorage.getItem(OBSERVATION_SCHEDULE_STORAGE_KEY), AsyncStorage.getItem(OUTCOME_STORAGE_KEY)]).then(([scheduleRaw, outcomesRaw]) => {
       try {
         const schedules = scheduleRaw ? JSON.parse(scheduleRaw) as Record<string, string | { nextObserveAt: string }> : {};
-        setFollowUps(Object.entries(schedules).map(([listingId, value]) => ({ listingId, nextObserveAt: typeof value === "string" ? value : value.nextObserveAt })).filter((item) => item.nextObserveAt).sort((a, b) => new Date(a.nextObserveAt).getTime() - new Date(b.nextObserveAt).getTime()));
+        setFollowUps(Object.entries(schedules).map(([listingId, value]) => typeof value === "string" ? { listingId, nextObserveAt: value } : { listingId, ...value }).filter((item) => item.nextObserveAt).sort((a, b) => new Date(a.nextObserveAt).getTime() - new Date(b.nextObserveAt).getTime()));
       } catch { setFollowUps([]); }
       try { setFollowUpOutcomes(outcomesRaw ? JSON.parse(outcomesRaw) as ListingOutcome[] : []); } catch { setFollowUpOutcomes([]); }
     });
@@ -152,7 +152,7 @@ export default function ProfileScreen() {
   );
 }
 
-function ObservationFollowUpQueue({ colors, followUps, outcomes }: { colors: ReturnType<typeof useColors>; followUps: { listingId: string; nextObserveAt: string }[]; outcomes: ListingOutcome[] }) {
+function ObservationFollowUpQueue({ colors, followUps, outcomes }: { colors: ReturnType<typeof useColors>; followUps: { listingId: string; nextObserveAt: string; listingTitle?: string; platform?: string; askingPrice?: number; currency?: string }[]; outcomes: ListingOutcome[] }) {
   const dueCount = followUps.filter((item) => { const state = getObservationScheduleState(item.nextObserveAt); return state === "due" || state === "overdue"; }).length;
   return <View style={[styles.followUpCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
     <View style={styles.readinessHeader}><View style={styles.settingCopy}><Text style={[styles.settingTitle, { color: colors.foreground }]}>Observation queue</Text><Text style={[styles.settingDescription, { color: colors.muted }]}>{followUps.length ? `${dueCount} due · ${followUps.length} scheduled` : "No local follow-ups scheduled"}</Text></View><View style={[styles.statusBadge, { backgroundColor: dueCount ? colors.warning : colors.background }]}><Text style={[styles.statusBadgeText, { color: dueCount ? colors.foreground : colors.muted }]}>{dueCount ? "REVIEW" : "QUIET"}</Text></View></View>
@@ -160,7 +160,7 @@ function ObservationFollowUpQueue({ colors, followUps, outcomes }: { colors: Ret
     {followUps.length ? followUps.slice(0, 8).map((item, index) => {
       const state = getObservationScheduleState(item.nextObserveAt);
       const latest = outcomes.filter((outcome) => outcome.listingId === item.listingId).sort((a, b) => b.observedAt.localeCompare(a.observedAt))[0];
-      return <Pressable key={item.listingId} accessibilityRole="button" onPress={() => router.push({ pathname: "/", params: { focusListingId: item.listingId } })} style={({ pressed }) => [styles.followUpRow, pressed && styles.pressed]}><MaterialIcons name={state === "overdue" ? "warning" : state === "due" ? "schedule" : "event-note"} size={18} color={state === "overdue" || state === "due" ? colors.warning : colors.primary} /><View style={styles.settingCopy}><Text style={[styles.settingTitle, { color: colors.foreground }]} numberOfLines={1}>{item.listingId}</Text><Text style={[styles.settingDescription, { color: colors.muted }]}>{state === "overdue" ? "Overdue" : state === "due" ? "Due now" : `Due ${new Date(item.nextObserveAt).toLocaleString()}`}{latest ? ` · last ${latest.kind}` : " · no outcome recorded"}</Text></View><MaterialIcons name="chevron-right" size={18} color={colors.muted} />{index < Math.min(followUps.length, 8) - 1 ? <View style={[styles.connectorDivider, { backgroundColor: colors.border }]} /> : null}</Pressable>;
+      return <Pressable key={item.listingId} accessibilityRole="button" onPress={() => router.push({ pathname: "/", params: { focusListingId: item.listingId } })} style={({ pressed }) => [styles.followUpRow, pressed && styles.pressed]}><MaterialIcons name={state === "overdue" ? "warning" : state === "due" ? "schedule" : "event-note"} size={18} color={state === "overdue" || state === "due" ? colors.warning : colors.primary} /><View style={styles.settingCopy}><Text style={[styles.settingTitle, { color: colors.foreground }]} numberOfLines={1}>{item.listingTitle ?? item.listingId}</Text><Text style={[styles.settingDescription, { color: colors.muted }]} numberOfLines={1}>{item.platform ?? "Marketplace"}{item.askingPrice !== undefined ? ` · ${formatCurrency(item.askingPrice, item.currency)}` : " · asking price unavailable"}</Text><Text style={[styles.settingDescription, { color: colors.muted }]}>{state === "overdue" ? "Overdue" : state === "due" ? "Due now" : `Due ${new Date(item.nextObserveAt).toLocaleString()}`}{latest ? ` · last ${latest.kind}` : " · no outcome recorded"}</Text></View><MaterialIcons name="chevron-right" size={18} color={colors.muted} />{index < Math.min(followUps.length, 8) - 1 ? <View style={[styles.connectorDivider, { backgroundColor: colors.border }]} /> : null}</Pressable>;
     }) : <Text style={[styles.dataNote, { color: colors.muted }]}>Open a live listing, then use its outcome ledger to schedule a 24-hour follow-up.</Text>}
   </View>;
 }
