@@ -86,6 +86,21 @@ describe("Top Cherry market data", () => {
     expect(summary.clusters[0].askingPrices).toEqual([first.askingPrice, first.askingPrice - 100]);
   });
 
+  it("keeps seller concentration unknown when seller identity is absent", () => {
+    const summary = getListingRedundancySummary(LISTINGS.slice(0, 2));
+    expect(summary.sellerIdentity).toBe("unavailable");
+    expect(summary.sellerCount).toBe(0);
+    expect(summary.largestSellerShare).toBeNull();
+  });
+
+  it("calculates seller concentration only from explicit seller IDs", () => {
+    const rows = LISTINGS.slice(0, 3).map((listing, index) => ({ ...listing, sellerId: index < 2 ? "seller-a" : "seller-b" }));
+    const summary = getListingRedundancySummary(rows);
+    expect(summary.sellerIdentity).toBe("known");
+    expect(summary.sellerCount).toBe(2);
+    expect(summary.largestSellerShare).toBeCloseTo(2 / 3, 5);
+  });
+
   it("changes the recommended mix when the available capital changes", () => {
     const modest = recommendAllocations(3000);
     const powerful = recommendAllocations(25000);

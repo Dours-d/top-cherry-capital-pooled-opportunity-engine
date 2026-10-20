@@ -33,6 +33,7 @@ export type Listing = {
   travelCost?: number;
   currency?: string;
   sourceMode?: "sample" | "live-asking-price";
+  sellerId?: string;
 };
 
 export type LiveEbayListing = {
@@ -48,6 +49,7 @@ export type LiveEbayListing = {
   url?: string;
   affiliateUrl?: string;
   fetchedAt?: string;
+  sellerId?: string;
 };
 
 export type LiveEbayItemDetail = {
@@ -96,6 +98,9 @@ export type ListingRedundancySummary = {
   candidateItemCount: number;
   redundantRows: number;
   clusters: { key: string; rowCount: number; askingPrices: number[] }[];
+  sellerIdentity: "known" | "unavailable";
+  sellerCount: number;
+  largestSellerShare: number | null;
 };
 
 export const getCandidateItemKey = (listing: Listing) => `${listing.brand} ${listing.model} ${listing.condition}`.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
@@ -107,7 +112,10 @@ export const getListingRedundancySummary = (listings: Listing[]): ListingRedunda
     grouped.set(key, [...(grouped.get(key) ?? []), listing]);
   });
   const clusters = [...grouped.entries()].map(([key, rows]) => ({ key, rowCount: rows.length, askingPrices: rows.map((row) => row.askingPrice) }));
-  return { rawListingCount: listings.length, candidateItemCount: clusters.length, redundantRows: Math.max(0, listings.length - clusters.length), clusters };
+  const sellerCounts = new Map<string, number>();
+  listings.forEach((listing) => { if (listing.sellerId) sellerCounts.set(listing.sellerId, (sellerCounts.get(listing.sellerId) ?? 0) + 1); });
+  const sellerValues = [...sellerCounts.values()];
+  return { rawListingCount: listings.length, candidateItemCount: clusters.length, redundantRows: Math.max(0, listings.length - clusters.length), clusters, sellerIdentity: sellerValues.length ? "known" : "unavailable", sellerCount: sellerValues.length, largestSellerShare: sellerValues.length && listings.length ? Math.max(...sellerValues) / listings.length : null };
 };
 
 export type MarketSignals = {
