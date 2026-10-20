@@ -59,6 +59,7 @@ Direction accepted on 14 October 2026, clarified as a multi-mechanism architectu
 - [x] R1.7g Local re-observation cadence: outcome records can schedule a persisted 24-hour follow-up timestamp; this is an in-app research reminder, not a server-side collector or unattended provider job.
 - [x] R1.7h Follow-up state: scheduled, due-now, and overdue states are explicit in the outcome ledger; the UI asks the operator to refresh and record evidence rather than implying an automatic fetch.
 - [x] R1.7i Workspace follow-up queue: persisted local schedules and outcome records are summarized in one review panel, with due counts, listing IDs, latest outcome context, and an explicit no-fetch disclaimer.
+- [x] R1.7j Follow-up navigation: queue rows open Discover with a listing focus target; matching current Browse rows open automatically, while unavailable rows produce an explicit no-replacement explanation.
 - [ ] R1.8 End-to-end acceptance.
 
 ## Later phases — paused

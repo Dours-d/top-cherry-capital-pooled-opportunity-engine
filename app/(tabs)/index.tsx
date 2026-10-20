@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import * as Haptics from "expo-haptics";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
   FlatList,
@@ -75,6 +75,7 @@ const toSavedDealInput = (listing: Listing) => ({
 
 export default function HomeScreen() {
   const colors = useColors();
+  const { focusListingId } = useLocalSearchParams<{ focusListingId?: string }>();
   const { isAuthenticated } = useAuth();
   const savedQuery = trpc.savedDeals.list.useQuery(undefined, { enabled: isAuthenticated });
   const toggleSavedMutation = trpc.savedDeals.toggle.useMutation({
@@ -134,6 +135,14 @@ export default function HomeScreen() {
     () => mapLiveEbayListings((liveSearch.data?.listings ?? []).map((listing) => ({ ...listing, profileSlug: activeSlug }))),
     [activeSlug, liveSearch.data?.listings],
   );
+  const focusTargetFound = !focusListingId || liveListings.some((listing) => listing.id === focusListingId || listing.id === `ebay:${focusListingId}`);
+
+  useEffect(() => {
+    if (!focusListingId || !liveListings.length) return;
+    const focusedListing = liveListings.find((listing) => listing.id === focusListingId || listing.id === `ebay:${focusListingId}`);
+    if (focusedListing) setSelectedListing(focusedListing);
+  }, [focusListingId, liveListings]);
+
   const displayedListings = feedMode === "live" ? liveListings : LISTINGS;
   const displayedProfileListings = useMemo(
     () => displayedListings.filter((listing) => listing.profileSlug === activeSlug),
@@ -312,7 +321,7 @@ export default function HomeScreen() {
               <MetricCard label={feedMode === "live" ? "Candidate items" : "Top cherries"} value={feedMode === "live" ? String(redundancy.candidateItemCount) : String(topCherries)} colors={colors} accent />
               <MetricCard label={feedMode === "live" ? "Redundant rows" : "Avg. margin"} value={feedMode === "live" ? String(redundancy.redundantRows) : `${averageMargin.toFixed(1)}%`} colors={colors} />
             </View>
-            {feedMode === "live" ? <LiveAskingPriceLens listing={leadListing} redundancy={redundancy} colors={colors} loading={liveSearch.isLoading} error={liveSearch.error ? "Live eBay search unavailable" : null} onRefresh={() => { setLiveOffset(0); void liveSearch.refetch(); }} /> : leadListing ? <PrototypeLens listing={leadListing} colors={colors} /> : null}
+            {feedMode === "live" ? <LiveAskingPriceLens listing={leadListing} redundancy={redundancy} colors={colors} loading={liveSearch.isLoading} error={liveSearch.error ? "Live eBay search unavailable" : null} focusTargetFound={focusTargetFound} onRefresh={() => { setLiveOffset(0); void liveSearch.refetch(); }} /> : leadListing ? <PrototypeLens listing={leadListing} colors={colors} /> : null}
 
             <View style={styles.filterRow}>
               <Text style={[styles.sectionTitle, { color: colors.foreground }]}>{feedMode === "live" ? "Live asking prices" : "Latest opportunities"}</Text>
@@ -466,7 +475,7 @@ function PrototypeLens({ listing, colors }: { listing: Listing; colors: ReturnTy
   );
 }
 
-function LiveAskingPriceLens({ listing, redundancy, colors, loading, error, onRefresh }: { listing?: Listing; redundancy: ReturnType<typeof getListingRedundancySummary>; colors: ReturnType<typeof useColors>; loading: boolean; error: string | null; onRefresh: () => void }) {
+function LiveAskingPriceLens({ listing, redundancy, colors, loading, error, focusTargetFound, onRefresh }: { listing?: Listing; redundancy: ReturnType<typeof getListingRedundancySummary>; colors: ReturnType<typeof useColors>; loading: boolean; error: string | null; focusTargetFound: boolean; onRefresh: () => void }) {
   return (
     <View style={[styles.prototypeLens, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       <View style={styles.prototypeLensTop}><View><Text style={[styles.prototypeEyebrow, { color: colors.primary }]}>LIVE ASKING PRICES</Text><Text style={[styles.prototypeTitle, { color: colors.foreground }]}>eBay Browse · EBAY_GB</Text></View><Text style={[styles.prototypeHint, { color: colors.muted }]}>{loading ? "loading" : error ? "error" : "read-only"}</Text></View>
@@ -474,6 +483,7 @@ function LiveAskingPriceLens({ listing, redundancy, colors, loading, error, onRe
       <Text style={[styles.liveDisclaimer, { color: colors.muted }]}>Asking price only. Market value, resale margin, availability history and transaction outcome are not inferred.</Text>
       <Text style={[styles.liveDisclaimer, { color: colors.muted }]}>{redundancy.rawListingCount} ask rows currently map to {redundancy.candidateItemCount} provisional candidate item cluster{redundancy.candidateItemCount === 1 ? "" : "s"}. Matching uses model, condition, location and seller when available; duplicate, relisted, cross-posted and same-model records can still create apparent supply without proving multiple physical units.</Text>
       <Text style={[styles.liveDisclaimer, { color: colors.muted }]}>{redundancy.sellerIdentity === "known" ? `${redundancy.sellerCount} seller identities observed; largest seller share is ${((redundancy.largestSellerShare ?? 0) * 100).toFixed(0)}%.` : "Seller identity is unavailable in this feed, so seller concentration and coordination risk remain unknown."}</Text>
+      {!focusTargetFound && !loading ? <Text style={[styles.liveDisclaimer, { color: colors.warning }]}>The requested follow-up listing is not in this page of current results. Search or load another page to locate it; no replacement listing has been assumed.</Text> : null}
       <Pressable onPress={onRefresh} disabled={loading} style={({ pressed }) => [styles.refreshButton, { backgroundColor: colors.primary, opacity: loading ? 0.5 : 1 }, pressed && styles.pressed]}><MaterialIcons name="refresh" size={15} color={colors.onPrimary} /><Text style={[styles.refreshText, { color: colors.onPrimary }]}>{loading ? "Refreshing" : "Refresh live prices"}</Text></Pressable>
     </View>
   );
