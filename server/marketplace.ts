@@ -25,6 +25,7 @@ export type NormalizedMarketplaceListing = {
   verified: boolean;
   url?: string;
   affiliateUrl?: string;
+  sellerId?: string;
   fetchedAt?: string;
 };
 
@@ -46,6 +47,7 @@ type EbayItemSummary = {
   itemWebUrl?: string;
   itemAffiliateWebUrl?: string;
   itemLocation?: { country?: string; postalCode?: string };
+  seller?: { username?: string };
 };
 
 type EbayLocalizedAspect = { name?: string; value?: string; type?: string };
@@ -71,7 +73,7 @@ export const normalizeEbayItemSummary = (item: EbayItemSummary, marketplaceId: s
   const askingPrice = Number(item.price?.value ?? 0);
   const title = item.title?.trim() || "Untitled eBay listing";
   const words = title.split(/\s+/);
-  return { listingId: item.itemId || title, profileSlug: "ebay-live", brand: words[0] || "Unknown", model: title, askingPrice, marketValue: 0, condition: item.condition || "Unknown", platformSource: "eBay", location: item.itemLocation?.country || marketplaceId, countryCode: item.itemLocation?.country, currency: item.price?.currency, escrowProtected: false, verified: false, url: item.itemWebUrl, affiliateUrl: item.itemAffiliateWebUrl, fetchedAt: new Date().toISOString() };
+  return { listingId: item.itemId || title, profileSlug: "ebay-live", brand: words[0] || "Unknown", model: title, askingPrice, marketValue: 0, condition: item.condition || "Unknown", platformSource: "eBay", location: item.itemLocation?.country || marketplaceId, countryCode: item.itemLocation?.country, currency: item.price?.currency, escrowProtected: false, verified: false, url: item.itemWebUrl, affiliateUrl: item.itemAffiliateWebUrl, sellerId: item.seller?.username, fetchedAt: new Date().toISOString() };
 };
 
 export async function searchEbayBrowse(input: { query: string; marketplaceId?: string; categoryId?: string; limit?: number; offset?: number }) {

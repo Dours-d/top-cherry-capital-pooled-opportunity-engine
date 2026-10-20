@@ -12,6 +12,7 @@ describe("eBay Browse adapter", () => {
       itemWebUrl: "https://www.ebay.co.uk/itm/123",
       itemAffiliateWebUrl: "https://www.ebay.co.uk/itm/123?campid=affiliate",
       itemLocation: { country: "GB" },
+      seller: { username: "verified-seller-1" },
     }, "EBAY_GB");
 
     expect(listing.listingId).toBe("v1|123|0");
@@ -21,6 +22,7 @@ describe("eBay Browse adapter", () => {
     expect(listing.verified).toBe(false);
     expect(listing.url).toContain("ebay.co.uk");
     expect(listing.affiliateUrl).toContain("campid=affiliate");
+    expect(listing.sellerId).toBe("verified-seller-1");
   });
 
   it("passes Browse offset and reports whether another page exists", async () => {

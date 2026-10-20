@@ -48,8 +48,8 @@ export type LiveEbayListing = {
   currency?: string;
   url?: string;
   affiliateUrl?: string;
-  fetchedAt?: string;
   sellerId?: string;
+  fetchedAt?: string;
 };
 
 export type LiveEbayItemDetail = {
@@ -203,6 +203,7 @@ export const mapLiveEbayListings = (listings: LiveEbayListing[]): Listing[] => l
   age: "just now",
   url: listing.url ?? "https://www.ebay.co.uk/",
   affiliateUrl: listing.affiliateUrl,
+  sellerId: listing.sellerId,
   currency: listing.currency ?? "GBP",
   sourceMode: "live-asking-price",
 }));
