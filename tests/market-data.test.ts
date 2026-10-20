@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_ECONOMICS, LISTINGS, PROFILES, formatCurrency, getAskingPriceDecisionGate, getCandidateIdentityConfidence, getListingEconomics, getListingRedundancySummary, getListingSignals, getMaxAskingPriceForTarget, getNextObservationAt, getProfile, getProfileListings, mapLiveEbayListings, recommendAllocations, summarizeListingOutcomes } from "../lib/market-data";
+import { DEFAULT_ECONOMICS, LISTINGS, PROFILES, formatCurrency, getAskingPriceDecisionGate, getCandidateIdentityConfidence, getListingEconomics, getListingRedundancySummary, getListingSignals, getMaxAskingPriceForTarget, getNextObservationAt, getObservationScheduleState, getProfile, getProfileListings, mapLiveEbayListings, recommendAllocations, summarizeListingOutcomes } from "../lib/market-data";
 
 describe("Top Cherry market data", () => {
   it("ships a broad marketplace-independent default category registry", () => {
@@ -118,6 +118,14 @@ describe("Top Cherry market data", () => {
   it("sets the next observation from the recorded observation time", () => {
     expect(getNextObservationAt("2026-10-20T00:00:00.000Z", 24)).toBe("2026-10-21T00:00:00.000Z");
     expect(getNextObservationAt("2026-10-20T00:00:00.000Z", 0)).toBe("2026-10-20T01:00:00.000Z");
+  });
+
+  it("distinguishes scheduled, due, and overdue follow-ups", () => {
+    const now = new Date("2026-10-20T12:00:00.000Z");
+    expect(getObservationScheduleState(null, now)).toBe("unscheduled");
+    expect(getObservationScheduleState("2026-10-20T13:00:00.000Z", now)).toBe("scheduled");
+    expect(getObservationScheduleState("2026-10-20T11:00:00.000Z", now)).toBe("due");
+    expect(getObservationScheduleState("2026-10-19T11:00:00.000Z", now)).toBe("overdue");
   });
 
   it("changes the recommended mix when the available capital changes", () => {

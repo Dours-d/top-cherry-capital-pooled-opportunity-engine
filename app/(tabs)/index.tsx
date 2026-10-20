@@ -37,6 +37,7 @@ import {
   getListingCountry,
   getListingSignals,
   getNextObservationAt,
+  getObservationScheduleState,
   getEbaySearchTerm,
   mapLiveEbayListings,
   type LiveEbayItemDetail,
@@ -540,6 +541,7 @@ function ListingOutcomeLedger({ listing, colors }: { listing: Listing; colors: R
   const [outcomes, setOutcomes] = useState<ListingOutcome[]>([]);
   const [nextObserveAt, setNextObserveAt] = useState<string | null>(null);
   const outcomeSummary = summarizeListingOutcomes(listing, outcomes);
+  const scheduleState = getObservationScheduleState(nextObserveAt);
 
   useEffect(() => {
     void AsyncStorage.getItem(OUTCOME_STORAGE_KEY).then((raw) => {
@@ -593,7 +595,7 @@ function ListingOutcomeLedger({ listing, colors }: { listing: Listing; colors: R
     <Pressable onPress={() => void addOutcome()} style={({ pressed }) => [styles.outcomeButton, { backgroundColor: colors.primary }, pressed && styles.pressed]}><Text style={[styles.outcomeButtonText, { color: colors.onPrimary }]}>Record observation</Text></Pressable>
     {outcomes.length ? <View style={styles.outcomeHistory}>{outcomes.map((outcome) => <View key={outcome.id} style={[styles.outcomeHistoryRow, { borderTopColor: colors.border }]}><Text style={[styles.outcomeHistoryLabel, { color: colors.foreground }]}>{OUTCOME_LABELS[outcome.kind]}{outcome.realizedPrice ? ` · ${formatCurrency(outcome.realizedPrice, listing.currency)}` : ""}</Text><Text style={[styles.outcomeHistoryDate, { color: colors.muted }]}>{new Date(outcome.observedAt).toLocaleDateString()}</Text></View>)}</View> : <Text style={[styles.outcomeEmpty, { color: colors.muted }]}>No outcome recorded yet.</Text>}
     {outcomes.length ? <Text style={[styles.outcomeSummary, { color: outcomeSummary.evidenceQuality === "strong" ? colors.success : colors.muted }]}>{outcomeSummary.evidenceQuality === "strong" && outcomeSummary.priceDeltaFromAsk !== null ? `Observed priced outcome is ${(outcomeSummary.priceDeltaFromAsk * 100).toFixed(1)}% versus the original ask.` : `${outcomeSummary.observationCount} observation${outcomeSummary.observationCount === 1 ? "" : "s"}; no realized sale price established.`}</Text> : null}
-    <View style={styles.observationScheduleRow}><Text style={[styles.outcomeEmpty, { color: colors.muted }]}>{nextObserveAt ? `Next observation: ${new Date(nextObserveAt).toLocaleString()}` : "No follow-up observation scheduled."}</Text><Pressable onPress={() => void scheduleNextObservation()} style={({ pressed }) => [styles.scheduleButton, { borderColor: colors.border }, pressed && styles.pressed]}><Text style={[styles.scheduleButtonText, { color: colors.foreground }]}>Set 24h follow-up</Text></Pressable></View>
+    <View style={styles.observationScheduleRow}><Text style={[styles.outcomeEmpty, { color: scheduleState === "overdue" || scheduleState === "due" ? colors.warning : colors.muted }]}>{scheduleState === "overdue" ? `Follow-up overdue · ${new Date(nextObserveAt as string).toLocaleString()}` : scheduleState === "due" ? "Follow-up due now; refresh and record what you observe." : nextObserveAt ? `Next observation: ${new Date(nextObserveAt).toLocaleString()}` : "No follow-up observation scheduled."}</Text><Pressable onPress={() => void scheduleNextObservation()} style={({ pressed }) => [styles.scheduleButton, { borderColor: colors.border }, pressed && styles.pressed]}><Text style={[styles.scheduleButtonText, { color: colors.foreground }]}>{scheduleState === "due" || scheduleState === "overdue" ? "Reschedule 24h" : "Set 24h follow-up"}</Text></Pressable></View>
   </View>;
 }
 

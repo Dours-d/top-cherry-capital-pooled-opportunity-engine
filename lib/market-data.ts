@@ -123,6 +123,12 @@ export type ListingObservationSchedule = {
 
 export const getNextObservationAt = (observedAt: string, cadenceHours = 24) => new Date(new Date(observedAt).getTime() + Math.max(1, cadenceHours) * 60 * 60 * 1000).toISOString();
 
+export const getObservationScheduleState = (nextObserveAt: string | null, now = new Date()): "unscheduled" | "scheduled" | "due" | "overdue" => {
+  if (!nextObserveAt) return "unscheduled";
+  const delta = new Date(nextObserveAt).getTime() - now.getTime();
+  return delta < -24 * 60 * 60 * 1000 ? "overdue" : delta <= 0 ? "due" : "scheduled";
+};
+
 export type ListingRedundancySummary = {
   rawListingCount: number;
   candidateItemCount: number;
