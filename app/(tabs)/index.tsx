@@ -32,6 +32,7 @@ import {
   getListingSignals,
   getEbaySearchTerm,
   mapLiveEbayListings,
+  type LiveEbayItemDetail,
   type Listing,
 } from "@/lib/market-data";
 import { buildDemoThesis } from "@/lib/demo-thesis";
@@ -68,6 +69,7 @@ export default function HomeScreen() {
   });
   const [activeSlug, setActiveSlug] = useState(PROFILES[0].slug);
   const [feedMode, setFeedMode] = useState<"sample" | "live">("live");
+  const [liveOffset, setLiveOffset] = useState(0);
   const [savedIds, setSavedIds] = useState<string[]>([]);
   const [filter, setFilter] = useState<"all" | "top" | "escrow">("all");
   const [sourceFilter, setSourceFilter] = useState("all");
@@ -79,8 +81,13 @@ export default function HomeScreen() {
 
   const liveSearchQuery = query.trim() || getEbaySearchTerm(activeSlug);
   const liveSearch = trpc.marketplace.searchEbay.useQuery(
-    { query: liveSearchQuery, marketplaceId: "EBAY_GB", limit: 20 },
+    { query: liveSearchQuery, marketplaceId: "EBAY_GB", limit: 20, offset: liveOffset },
     { enabled: feedMode === "live", staleTime: 60_000, refetchOnWindowFocus: false, retry: 1 },
+  );
+  const selectedLiveItemId = selectedListing?.sourceMode === "live-asking-price" ? selectedListing.id.replace(/^ebay:/, "") : "disabled-item";
+  const liveItemDetail = trpc.marketplace.getEbayItem.useQuery(
+    { itemId: selectedLiveItemId, marketplaceId: "EBAY_GB" },
+    { enabled: Boolean(selectedListing?.sourceMode === "live-asking-price"), staleTime: 60_000, refetchOnWindowFocus: false, retry: 1 },
   );
 
   useEffect(() => {
@@ -102,6 +109,10 @@ export default function HomeScreen() {
       setSavedIds(savedQuery.data.map((deal) => deal.listingId));
     }
   }, [isAuthenticated, savedQuery.data]);
+
+  useEffect(() => {
+    setLiveOffset(0);
+  }, [activeSlug, feedMode, query]);
 
   const activeProfile = getProfile(activeSlug);
 
@@ -286,7 +297,7 @@ export default function HomeScreen() {
               <MetricCard label={feedMode === "live" ? "Market value" : "Top cherries"} value={feedMode === "live" ? "Unknown" : String(topCherries)} colors={colors} accent />
               <MetricCard label={feedMode === "live" ? "Price history" : "Avg. margin"} value={feedMode === "live" ? "Not linked" : `${averageMargin.toFixed(1)}%`} colors={colors} />
             </View>
-            {feedMode === "live" ? <LiveAskingPriceLens listing={leadListing} colors={colors} loading={liveSearch.isLoading} error={liveSearch.error ? "Live eBay search unavailable" : null} /> : leadListing ? <PrototypeLens listing={leadListing} colors={colors} /> : null}
+            {feedMode === "live" ? <LiveAskingPriceLens listing={leadListing} colors={colors} loading={liveSearch.isLoading} error={liveSearch.error ? "Live eBay search unavailable" : null} onRefresh={() => { setLiveOffset(0); void liveSearch.refetch(); }} /> : leadListing ? <PrototypeLens listing={leadListing} colors={colors} /> : null}
 
             <View style={styles.filterRow}>
               <Text style={[styles.sectionTitle, { color: colors.foreground }]}>{feedMode === "live" ? "Live asking prices" : "Latest opportunities"}</Text>
@@ -363,6 +374,7 @@ export default function HomeScreen() {
             <Text style={[styles.emptyText, { color: colors.muted }]}>Try a different search or filter.</Text>
           </View>
         }
+        ListFooterComponent={feedMode === "live" ? <LiveFeedFooter loading={liveSearch.isFetching} hasMore={Boolean(liveSearch.data?.hasMore)} onRefresh={() => { setLiveOffset(0); void liveSearch.refetch(); }} onNext={() => setLiveOffset((current) => current + 20)} colors={colors} /> : null}
       />
       <Modal visible={Boolean(selectedListing)} transparent animationType="slide" onRequestClose={() => setSelectedListing(null)}>
         {selectedListing ? (
@@ -388,7 +400,7 @@ export default function HomeScreen() {
                 <DetailCell label="Margin" value={selectedListing.sourceMode === "live-asking-price" ? "Unavailable" : `${selectedListing.margin.toFixed(1)}%`} colors={colors} />
                 <DetailCell label="Condition" value={selectedListing.condition} colors={colors} />
               </View>
-              {selectedListing.sourceMode === "live-asking-price" ? <LiveAskingPriceDetail listing={selectedListing} colors={colors} /> : <><LayerLens listing={selectedListing} colors={colors} /><ReasoningDetail listing={selectedListing} colors={colors} /></>}
+              {selectedListing.sourceMode === "live-asking-price" ? <LiveAskingPriceDetail listing={selectedListing} colors={colors} detail={liveItemDetail.data} loading={liveItemDetail.isLoading} /> : <><LayerLens listing={selectedListing} colors={colors} /><ReasoningDetail listing={selectedListing} colors={colors} /></>}
               <View style={styles.trustRow}>
                 <MaterialIcons name={selectedListing.escrowProtected ? "verified-user" : "shield"} size={18} color={selectedListing.escrowProtected ? colors.success : colors.muted} />
                 <Text style={[styles.trustText, { color: colors.foreground }]}>{selectedListing.escrowProtected ? "Escrow protected listing" : "Review seller protection before buying"}</Text>
@@ -438,23 +450,36 @@ function PrototypeLens({ listing, colors }: { listing: Listing; colors: ReturnTy
   );
 }
 
-function LiveAskingPriceLens({ listing, colors, loading, error }: { listing?: Listing; colors: ReturnType<typeof useColors>; loading: boolean; error: string | null }) {
+function LiveAskingPriceLens({ listing, colors, loading, error, onRefresh }: { listing?: Listing; colors: ReturnType<typeof useColors>; loading: boolean; error: string | null; onRefresh: () => void }) {
   return (
     <View style={[styles.prototypeLens, { backgroundColor: colors.surface, borderColor: colors.border }]}> 
       <View style={styles.prototypeLensTop}><View><Text style={[styles.prototypeEyebrow, { color: colors.primary }]}>LIVE ASKING PRICES</Text><Text style={[styles.prototypeTitle, { color: colors.foreground }]}>eBay Browse · EBAY_GB</Text></View><Text style={[styles.prototypeHint, { color: colors.muted }]}>{loading ? "loading" : error ? "error" : "read-only"}</Text></View>
       <Text style={[styles.prototypeAction, { color: colors.foreground }]}>{error ?? (listing ? `${formatCurrency(listing.askingPrice, listing.currency)} is a current listing ask.` : "Fetching current eBay item summaries.")}</Text>
       <Text style={[styles.liveDisclaimer, { color: colors.muted }]}>Asking price only. Market value, resale margin, availability history and transaction outcome are not inferred.</Text>
+      <Pressable onPress={onRefresh} disabled={loading} style={({ pressed }) => [styles.refreshButton, { backgroundColor: colors.primary, opacity: loading ? 0.5 : 1 }, pressed && styles.pressed]}><MaterialIcons name="refresh" size={15} color={colors.foreground} /><Text style={[styles.refreshText, { color: colors.foreground }]}>{loading ? "Refreshing" : "Refresh live prices"}</Text></Pressable>
     </View>
   );
 }
 
-function LiveAskingPriceDetail({ listing, colors }: { listing: Listing; colors: ReturnType<typeof useColors> }) {
+function LiveAskingPriceDetail({ listing, colors, detail, loading }: { listing: Listing; colors: ReturnType<typeof useColors>; detail?: LiveEbayItemDetail; loading: boolean }) {
+  const aspects = detail?.localizedAspects.slice(0, 8) ?? [];
   return (
     <View style={[styles.layerLens, { backgroundColor: colors.surface, borderColor: colors.border }]}> 
       <Text style={[styles.layerLensEyebrow, { color: colors.primary }]}>SOURCE PROVENANCE</Text>
       <Text style={[styles.layerLensTitle, { color: colors.foreground }]}>Live eBay asking price</Text>
       <Text style={[styles.layerText, { color: colors.muted }]}>Retrieved from eBay Browse for EBAY_GB. This record is a visible marketplace observation, not a verified sale or valuation.</Text>
       <Text style={[styles.layerText, { color: colors.muted }]}>Use the source listing to inspect seller details, condition and delivery before any separate research decision.</Text>
+      <Text style={[styles.detailSubheading, { color: colors.foreground }]}>Item characteristics</Text>
+      {loading ? <Text style={[styles.layerText, { color: colors.muted }]}>Loading eBay item details…</Text> : aspects.length ? aspects.map((aspect) => <View key={`${aspect.name}-${aspect.value}`} style={styles.aspectRow}><Text style={[styles.aspectName, { color: colors.muted }]}>{aspect.name}</Text><Text style={[styles.aspectValue, { color: colors.foreground }]}>{aspect.value}</Text></View>) : <Text style={[styles.layerText, { color: colors.muted }]}>No seller-provided characteristics were returned for this listing.</Text>}
+    </View>
+  );
+}
+
+function LiveFeedFooter({ loading, hasMore, onRefresh, onNext, colors }: { loading: boolean; hasMore: boolean; onRefresh: () => void; onNext: () => void; colors: ReturnType<typeof useColors> }) {
+  return (
+    <View style={styles.feedFooter}>
+      {hasMore ? <Pressable onPress={onNext} disabled={loading} style={({ pressed }) => [styles.footerButton, { borderColor: colors.border }, pressed && styles.pressed]}><Text style={[styles.footerButtonText, { color: colors.foreground }]}>{loading ? "Loading" : "Load next 20"}</Text></Pressable> : null}
+      <Pressable onPress={onRefresh} disabled={loading} style={({ pressed }) => [styles.footerButton, { borderColor: colors.border }, pressed && styles.pressed]}><Text style={[styles.footerButtonText, { color: colors.muted }]}>{loading ? "Updating…" : "Refresh"}</Text></Pressable>
     </View>
   );
 }
@@ -599,6 +624,15 @@ const styles = StyleSheet.create({
   prototypeValue: { fontSize: 12, fontWeight: "800", marginTop: 4 },
   prototypeAction: { fontSize: 10, lineHeight: 15, marginTop: 13 },
   liveDisclaimer: { fontSize: 10, lineHeight: 15, marginTop: 7 },
+  detailSubheading: { fontSize: 12, fontWeight: "800", marginTop: 14, marginBottom: 6 },
+  aspectRow: { flexDirection: "row", justifyContent: "space-between", gap: 12, paddingVertical: 4 },
+  aspectName: { flex: 1, fontSize: 10 },
+  aspectValue: { flex: 1, fontSize: 10, fontWeight: "700", textAlign: "right" },
+  refreshButton: { alignSelf: "flex-start", borderRadius: 9, paddingHorizontal: 10, paddingVertical: 7, flexDirection: "row", alignItems: "center", gap: 5, marginTop: 11 },
+  refreshText: { fontSize: 10, fontWeight: "800" },
+  feedFooter: { flexDirection: "row", justifyContent: "center", gap: 8, paddingVertical: 12 },
+  footerButton: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 },
+  footerButtonText: { fontSize: 10, fontWeight: "800" },
   filterRow: { marginTop: 29, marginBottom: 13, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
   filterButtons: { flexDirection: "row", gap: 5 },
   filterButton: { borderRadius: 99, borderWidth: 1, paddingHorizontal: 9, paddingVertical: 7 },

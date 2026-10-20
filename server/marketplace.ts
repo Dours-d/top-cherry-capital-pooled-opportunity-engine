@@ -46,6 +46,9 @@ type EbayItemSummary = {
   itemLocation?: { country?: string; postalCode?: string };
 };
 
+type EbayLocalizedAspect = { name?: string; value?: string; type?: string };
+type EbayItemDetail = EbayItemSummary & { description?: string; localizedAspects?: EbayLocalizedAspect[] };
+
 let ebayApplicationToken: { value: string; expiresAt: number } | null = null;
 
 async function getEbayApplicationToken() {
@@ -69,17 +72,41 @@ export const normalizeEbayItemSummary = (item: EbayItemSummary, marketplaceId: s
   return { listingId: item.itemId || title, profileSlug: "ebay-live", brand: words[0] || "Unknown", model: title, askingPrice, marketValue: 0, condition: item.condition || "Unknown", platformSource: "eBay", location: item.itemLocation?.country || marketplaceId, countryCode: item.itemLocation?.country, currency: item.price?.currency, escrowProtected: false, verified: false, url: item.itemWebUrl, fetchedAt: new Date().toISOString() };
 };
 
-export async function searchEbayBrowse(input: { query: string; marketplaceId?: string; categoryId?: string; limit?: number }) {
+export async function searchEbayBrowse(input: { query: string; marketplaceId?: string; categoryId?: string; limit?: number; offset?: number }) {
   const marketplaceId = input.marketplaceId ?? "EBAY_GB";
   const url = new URL("https://api.ebay.com/buy/browse/v1/item_summary/search");
   url.searchParams.set("q", input.query);
   url.searchParams.set("limit", String(Math.min(50, Math.max(1, input.limit ?? 20))));
+  url.searchParams.set("offset", String(Math.max(0, Math.floor(input.offset ?? 0))));
   if (input.categoryId) url.searchParams.set("category_ids", input.categoryId);
   const response = await fetch(url, { headers: { Authorization: `Bearer ${await getEbayApplicationToken()}`, "X-EBAY-C-MARKETPLACE-ID": marketplaceId, Accept: "application/json" } });
   if (!response.ok) throw new Error(`eBay Browse search failed with HTTP ${response.status}`);
   const payload = await response.json() as { total?: number; itemSummaries?: EbayItemSummary[] };
   const listings = (payload.itemSummaries ?? []).map((item) => normalizeEbayItemSummary(item, marketplaceId));
-  return { source: "ebay", marketplaceId, query: input.query, total: payload.total ?? listings.length, fetchedAt: new Date().toISOString(), listings };
+  const total = payload.total ?? listings.length;
+  const offset = Math.max(0, Math.floor(input.offset ?? 0));
+  return { source: "ebay", marketplaceId, query: input.query, total, offset, hasMore: offset + listings.length < total, fetchedAt: new Date().toISOString(), listings };
+}
+
+export async function getEbayBrowseItem(input: { itemId: string; marketplaceId?: string }) {
+  const marketplaceId = input.marketplaceId ?? "EBAY_GB";
+  const url = new URL(`https://api.ebay.com/buy/browse/v1/item/${encodeURIComponent(input.itemId)}`);
+  url.searchParams.set("fieldgroups", "PRODUCT");
+  const response = await fetch(url, { headers: { Authorization: `Bearer ${await getEbayApplicationToken()}`, "X-EBAY-C-MARKETPLACE-ID": marketplaceId, Accept: "application/json" } });
+  if (!response.ok) throw new Error(`eBay Browse item lookup failed with HTTP ${response.status}`);
+  const item = await response.json() as EbayItemDetail;
+  return {
+    source: "ebay",
+    marketplaceId,
+    itemId: item.itemId ?? input.itemId,
+    title: item.title?.trim() || "Untitled eBay listing",
+    description: item.description,
+    condition: item.condition || "Unknown",
+    askingPrice: Number(item.price?.value ?? 0),
+    currency: item.price?.currency,
+    localizedAspects: (item.localizedAspects ?? []).filter((aspect) => aspect.name && aspect.value).map((aspect) => ({ name: aspect.name as string, value: aspect.value as string })),
+    fetchedAt: new Date().toISOString(),
+  };
 }
 
 export { classifyEbayListingTopic, deriveEbayMarketSignal, EBAY_MARKET_SIGNAL_TOPICS } from "../shared/ebay-signals";

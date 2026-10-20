@@ -43,6 +43,7 @@ Direction accepted on 14 October 2026, clarified as a multi-mechanism architectu
   - [x] R1.5m End-to-end acceptance gate now covers thesis readiness, candidate verification/protection, net upside, reserve, budget, and Plan handoff.
 - [x] R1.6 Partial: Plan now uses all-in acquisition cash and an explicit user-editable reserve; confirmed-stock and reservation semantics remain pending.
 - [x] R1.6b Discover live asking-price toggle: public, read-only eBay Browse results are surfaced by profile; currency is preserved and market value, margin, score and history remain explicitly unknown.
+- [x] R1.6c Live Browse controls and detail path: refresh and offset pagination are available; opening a live item requests seller-provided `localizedAspects` through Browse `getItem` with `PRODUCT`, without enabling checkout, bidding or user tokens.
 - [ ] R1.7 Outcomes and revision loop.
 - [ ] R1.8 End-to-end acceptance.
 
@@ -57,7 +58,7 @@ R2 full real-data ingestion, R3 response estimation, R4 network feedback and R5 
 - No credentials, eBay destinations, subscriptions, recurring jobs or money-handling features are changed by the AML-0 pause. The authenticated thesis-draft migration is research-workspace infrastructure only and does not collect funds or execute trades.
 
 ## Next artifact
-See `top-cherry-market-fit-aml-phase-assessment-2026-10-15.md` for the market-fit questions, operating-model options, AML risk register and go/no-go criteria. The next engineering artifact is a bounded eBay Browse reconciliation screen with provenance and no inferred market value.
+See `top-cherry-market-fit-aml-phase-assessment-2026-10-15.md` for the market-fit questions, operating-model options, AML risk register and go/no-go criteria. The next engineering artifact is a bounded eBay Browse reconciliation screen with provenance and no inferred market value. Partner Network, Application Growth Check and notification-topic approval remain separate provider gates; richer item aspects use the standard Browse item-detail path where the seller supplies them.
 
 ## Research artifact completed
 - [x] `docs/economic-context-source-inventory.md`: 12-domain source baseline covering drivers, populations, market structure, responses, eligibility constraints, vintages, proxies, and coverage gaps.

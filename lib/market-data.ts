@@ -48,6 +48,17 @@ export type LiveEbayListing = {
   fetchedAt?: string;
 };
 
+export type LiveEbayItemDetail = {
+  itemId: string;
+  title: string;
+  description?: string;
+  condition: string;
+  askingPrice: number;
+  currency?: string;
+  localizedAspects: { name: string; value: string }[];
+  fetchedAt: string;
+};
+
 export type MarketSignals = {
   activeComparables: number;
   newListings7d: number;
