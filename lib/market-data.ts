@@ -61,6 +61,25 @@ export type LiveEbayItemDetail = {
   fetchedAt: string;
 };
 
+export type AskingPriceDecisionGate = {
+  state: "observe-only" | "research-supported";
+  canAllocate: boolean;
+  leverage: string;
+  missingEvidence: string[];
+};
+
+export const getAskingPriceDecisionGate = (listing: Listing): AskingPriceDecisionGate => {
+  if (listing.sourceMode !== "live-asking-price") {
+    return { state: "research-supported", canAllocate: true, leverage: "This prototype record includes a separate research thesis and valuation assumptions.", missingEvidence: [] };
+  }
+  return {
+    state: "observe-only",
+    canAllocate: false,
+    leverage: "An asking price is the seller's requested entry price. It is useful for affordability, comparison and all-in cost calculation, but it is not proof of value, demand, liquidity or a completed sale.",
+    missingEvidence: ["independent benchmark or valuation thesis", "condition and provenance verification", "all-in acquisition cost", "evidence of demand or a credible exit path"],
+  };
+};
+
 export type MarketSignals = {
   activeComparables: number;
   newListings7d: number;

@@ -46,6 +46,7 @@ Direction accepted on 14 October 2026, clarified as a multi-mechanism architectu
 - [x] R1.6c Live Browse controls and detail path: refresh and offset pagination are available; opening a live item requests seller-provided `localizedAspects` through Browse `getItem` with `PRODUCT`, without enabling checkout, bidding or user tokens.
 - [x] R1.6d Affiliate destination boundary: preserve eBay `itemAffiliateWebUrl` when supplied and require an explicit outbound disclosure before opening live eBay listings.
 - [x] R1.6e Workspace provider-gate tracker: persistent local checklist for Browse verification, EPN onboarding, Application Growth Check preparation and restricted notification-topic requests; checklist completion never represents eBay approval.
+- [x] R1.6f Asking-price decision gate: live records explicitly remain observe-only; Discover states the leverage of asking prices and lists the independent evidence required before considering one unit for allocation.
 - [ ] R1.7 Outcomes and revision loop.
 - [ ] R1.8 End-to-end acceptance.
 

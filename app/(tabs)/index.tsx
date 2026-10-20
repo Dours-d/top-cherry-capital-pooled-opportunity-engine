@@ -27,6 +27,7 @@ import {
   PROFILE_STORAGE_KEY,
   SAVED_STORAGE_KEY,
   formatCurrency,
+  getAskingPriceDecisionGate,
   getProfile,
   getListingCountry,
   getListingSignals,
@@ -465,12 +466,19 @@ function LiveAskingPriceLens({ listing, colors, loading, error, onRefresh }: { l
 
 function LiveAskingPriceDetail({ listing, colors, detail, loading }: { listing: Listing; colors: ReturnType<typeof useColors>; detail?: LiveEbayItemDetail; loading: boolean }) {
   const aspects = detail?.localizedAspects.slice(0, 8) ?? [];
+  const gate = getAskingPriceDecisionGate(listing);
   return (
     <View style={[styles.layerLens, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       <Text style={[styles.layerLensEyebrow, { color: colors.primary }]}>SOURCE PROVENANCE</Text>
       <Text style={[styles.layerLensTitle, { color: colors.foreground }]}>Live eBay asking price</Text>
       <Text style={[styles.layerText, { color: colors.muted }]}>Retrieved from eBay Browse for EBAY_GB. This record is a visible marketplace observation, not a verified sale or valuation.</Text>
       <Text style={[styles.layerText, { color: colors.muted }]}>Use the source listing to inspect seller details, condition and delivery before any separate research decision.</Text>
+      <View style={[styles.decisionGate, { backgroundColor: colors.background, borderColor: colors.warning }]}>
+        <View style={styles.decisionGateHeader}><MaterialIcons name="rule" size={17} color={colors.warning} /><Text style={[styles.decisionGateTitle, { color: colors.foreground }]}>Decision gate · observe only</Text></View>
+        <Text style={[styles.decisionGateText, { color: colors.muted }]}>{gate.leverage}</Text>
+        <Text style={[styles.decisionGateMissing, { color: colors.foreground }]}>Before considering one unit, establish:</Text>
+        {gate.missingEvidence.map((item) => <Text key={item} style={[styles.decisionGateItem, { color: colors.muted }]}>• {item}</Text>)}
+      </View>
       <Text style={[styles.detailSubheading, { color: colors.foreground }]}>Item characteristics</Text>
       {loading ? <Text style={[styles.layerText, { color: colors.muted }]}>Loading eBay item details…</Text> : aspects.length ? aspects.map((aspect) => <View key={`${aspect.name}-${aspect.value}`} style={styles.aspectRow}><Text style={[styles.aspectName, { color: colors.muted }]}>{aspect.name}</Text><Text style={[styles.aspectValue, { color: colors.foreground }]}>{aspect.value}</Text></View>) : <Text style={[styles.layerText, { color: colors.muted }]}>No seller-provided characteristics were returned for this listing.</Text>}
     </View>
@@ -626,6 +634,12 @@ const styles = StyleSheet.create({
   prototypeValue: { fontSize: 12, fontWeight: "800", marginTop: 4 },
   prototypeAction: { fontSize: 10, lineHeight: 15, marginTop: 13 },
   liveDisclaimer: { fontSize: 10, lineHeight: 15, marginTop: 7 },
+  decisionGate: { borderWidth: 1, borderRadius: 14, padding: 11, marginTop: 12 },
+  decisionGateHeader: { flexDirection: "row", alignItems: "center", gap: 6 },
+  decisionGateTitle: { fontSize: 12, fontWeight: "800" },
+  decisionGateText: { fontSize: 10, lineHeight: 15, marginTop: 6 },
+  decisionGateMissing: { fontSize: 10, fontWeight: "800", marginTop: 9 },
+  decisionGateItem: { fontSize: 10, lineHeight: 15, marginTop: 2 },
   detailSubheading: { fontSize: 12, fontWeight: "800", marginTop: 14, marginBottom: 6 },
   aspectRow: { flexDirection: "row", justifyContent: "space-between", gap: 12, paddingVertical: 4 },
   aspectName: { flex: 1, fontSize: 10 },
