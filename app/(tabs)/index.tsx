@@ -30,6 +30,7 @@ import {
   formatCurrency,
   getAskingPriceDecisionGate,
   getListingEconomics,
+  getListingRedundancySummary,
   getMaxAskingPriceForTarget,
   getProfile,
   getListingCountry,
@@ -151,6 +152,7 @@ export default function HomeScreen() {
   }, [activeSlug, countryFilter, displayedProfileListings, feedMode, filter, query, radiusFilter, sourceFilter]);
 
   const profileListings = displayedProfileListings;
+  const redundancy = getListingRedundancySummary(profileListings);
   const topCherries = profileListings.filter((listing) => listing.score >= 85).length;
   const averageMargin = profileListings.length
     ? profileListings.reduce((sum, listing) => sum + listing.margin, 0) / profileListings.length
@@ -302,11 +304,11 @@ export default function HomeScreen() {
             </View>
 
             <View style={styles.metricsRow}>
-              <MetricCard label={feedMode === "live" ? "Live listings" : "Tracked"} value={String(profileListings.length || (feedMode === "sample" ? activeProfile.count : 0))} colors={colors} />
-              <MetricCard label={feedMode === "live" ? "Market value" : "Top cherries"} value={feedMode === "live" ? "Unknown" : String(topCherries)} colors={colors} accent />
-              <MetricCard label={feedMode === "live" ? "Price history" : "Avg. margin"} value={feedMode === "live" ? "Not linked" : `${averageMargin.toFixed(1)}%`} colors={colors} />
+              <MetricCard label={feedMode === "live" ? "Ask rows" : "Tracked"} value={String(profileListings.length || (feedMode === "sample" ? activeProfile.count : 0))} colors={colors} />
+              <MetricCard label={feedMode === "live" ? "Candidate items" : "Top cherries"} value={feedMode === "live" ? String(redundancy.candidateItemCount) : String(topCherries)} colors={colors} accent />
+              <MetricCard label={feedMode === "live" ? "Redundant rows" : "Avg. margin"} value={feedMode === "live" ? String(redundancy.redundantRows) : `${averageMargin.toFixed(1)}%`} colors={colors} />
             </View>
-            {feedMode === "live" ? <LiveAskingPriceLens listing={leadListing} colors={colors} loading={liveSearch.isLoading} error={liveSearch.error ? "Live eBay search unavailable" : null} onRefresh={() => { setLiveOffset(0); void liveSearch.refetch(); }} /> : leadListing ? <PrototypeLens listing={leadListing} colors={colors} /> : null}
+            {feedMode === "live" ? <LiveAskingPriceLens listing={leadListing} redundancy={redundancy} colors={colors} loading={liveSearch.isLoading} error={liveSearch.error ? "Live eBay search unavailable" : null} onRefresh={() => { setLiveOffset(0); void liveSearch.refetch(); }} /> : leadListing ? <PrototypeLens listing={leadListing} colors={colors} /> : null}
 
             <View style={styles.filterRow}>
               <Text style={[styles.sectionTitle, { color: colors.foreground }]}>{feedMode === "live" ? "Live asking prices" : "Latest opportunities"}</Text>
@@ -460,12 +462,13 @@ function PrototypeLens({ listing, colors }: { listing: Listing; colors: ReturnTy
   );
 }
 
-function LiveAskingPriceLens({ listing, colors, loading, error, onRefresh }: { listing?: Listing; colors: ReturnType<typeof useColors>; loading: boolean; error: string | null; onRefresh: () => void }) {
+function LiveAskingPriceLens({ listing, redundancy, colors, loading, error, onRefresh }: { listing?: Listing; redundancy: ReturnType<typeof getListingRedundancySummary>; colors: ReturnType<typeof useColors>; loading: boolean; error: string | null; onRefresh: () => void }) {
   return (
     <View style={[styles.prototypeLens, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       <View style={styles.prototypeLensTop}><View><Text style={[styles.prototypeEyebrow, { color: colors.primary }]}>LIVE ASKING PRICES</Text><Text style={[styles.prototypeTitle, { color: colors.foreground }]}>eBay Browse · EBAY_GB</Text></View><Text style={[styles.prototypeHint, { color: colors.muted }]}>{loading ? "loading" : error ? "error" : "read-only"}</Text></View>
       <Text style={[styles.prototypeAction, { color: colors.foreground }]}>{error ?? (listing ? `${formatCurrency(listing.askingPrice, listing.currency)} is a current listing ask.` : "Fetching current eBay item summaries.")}</Text>
       <Text style={[styles.liveDisclaimer, { color: colors.muted }]}>Asking price only. Market value, resale margin, availability history and transaction outcome are not inferred.</Text>
+      <Text style={[styles.liveDisclaimer, { color: colors.muted }]}>{redundancy.rawListingCount} ask rows currently map to {redundancy.candidateItemCount} candidate item cluster{redundancy.candidateItemCount === 1 ? "" : "s"}. Duplicate, relisted, cross-posted and same-model records can create apparent supply without proving multiple physical units.</Text>
       <Pressable onPress={onRefresh} disabled={loading} style={({ pressed }) => [styles.refreshButton, { backgroundColor: colors.primary, opacity: loading ? 0.5 : 1 }, pressed && styles.pressed]}><MaterialIcons name="refresh" size={15} color={colors.onPrimary} /><Text style={[styles.refreshText, { color: colors.onPrimary }]}>{loading ? "Refreshing" : "Refresh live prices"}</Text></Pressable>
     </View>
   );

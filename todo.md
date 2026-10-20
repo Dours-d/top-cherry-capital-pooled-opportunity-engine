@@ -50,6 +50,7 @@ Direction accepted on 14 October 2026, clarified as a multi-mechanism architectu
 - [x] R1.6g User-defined price test: live detail accepts an independent exit benchmark and minimum net buffer, then calculates a maximum acceptable ask after estimated shipping, fees and travel; it does not label the benchmark as market value.
 - [ ] R1.7 Outcomes and revision loop.
 - [x] R1.7a Local outcome ledger: live listing details can record observed sale, price revision, expiry/removal, or unavailability with optional realized price and notes; observations are research evidence only and do not infer a sale from disappearance.
+- [x] R1.7b Redundancy-aware live counts: Discover separates raw asking-price rows from candidate item clusters and flags apparent duplicate/relisted/cross-posted supply; clustering is a heuristic and does not confirm physical stock.
 - [ ] R1.8 End-to-end acceptance.
 
 ## Later phases — paused

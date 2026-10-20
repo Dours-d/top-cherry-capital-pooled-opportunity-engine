@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_ECONOMICS, LISTINGS, PROFILES, formatCurrency, getAskingPriceDecisionGate, getListingEconomics, getListingSignals, getMaxAskingPriceForTarget, getProfile, getProfileListings, mapLiveEbayListings, recommendAllocations } from "../lib/market-data";
+import { DEFAULT_ECONOMICS, LISTINGS, PROFILES, formatCurrency, getAskingPriceDecisionGate, getListingEconomics, getListingRedundancySummary, getListingSignals, getMaxAskingPriceForTarget, getProfile, getProfileListings, mapLiveEbayListings, recommendAllocations } from "../lib/market-data";
 
 describe("Top Cherry market data", () => {
   it("ships a broad marketplace-independent default category registry", () => {
@@ -74,6 +74,16 @@ describe("Top Cherry market data", () => {
   it("calculates a maximum asking price from a user-provided exit benchmark", () => {
     const maxAsk = getMaxAskingPriceForTarget({ targetExitPrice: 5000, minimumNetBuffer: 500, shippingRate: 0.02, transactionFeeRate: 0.03, fixedTravelCost: 100 });
     expect(maxAsk).toBeCloseTo(4190.47619, 4);
+  });
+
+  it("does not treat repeated rows for the same candidate item as stock", () => {
+    const first = LISTINGS.find((listing) => listing.id === "leica-q3")!;
+    const duplicate = { ...first, id: "duplicate-row", askingPrice: first.askingPrice - 100 };
+    const summary = getListingRedundancySummary([first, duplicate]);
+    expect(summary.rawListingCount).toBe(2);
+    expect(summary.candidateItemCount).toBe(1);
+    expect(summary.redundantRows).toBe(1);
+    expect(summary.clusters[0].askingPrices).toEqual([first.askingPrice, first.askingPrice - 100]);
   });
 
   it("changes the recommended mix when the available capital changes", () => {

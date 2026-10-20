@@ -91,6 +91,25 @@ export type ListingOutcome = {
   note?: string;
 };
 
+export type ListingRedundancySummary = {
+  rawListingCount: number;
+  candidateItemCount: number;
+  redundantRows: number;
+  clusters: { key: string; rowCount: number; askingPrices: number[] }[];
+};
+
+export const getCandidateItemKey = (listing: Listing) => `${listing.brand} ${listing.model} ${listing.condition}`.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+
+export const getListingRedundancySummary = (listings: Listing[]): ListingRedundancySummary => {
+  const grouped = new Map<string, Listing[]>();
+  listings.forEach((listing) => {
+    const key = getCandidateItemKey(listing);
+    grouped.set(key, [...(grouped.get(key) ?? []), listing]);
+  });
+  const clusters = [...grouped.entries()].map(([key, rows]) => ({ key, rowCount: rows.length, askingPrices: rows.map((row) => row.askingPrice) }));
+  return { rawListingCount: listings.length, candidateItemCount: clusters.length, redundantRows: Math.max(0, listings.length - clusters.length), clusters };
+};
+
 export type MarketSignals = {
   activeComparables: number;
   newListings7d: number;
