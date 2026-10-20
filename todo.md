@@ -42,11 +42,12 @@ Direction accepted on 14 October 2026, clarified as a multi-mechanism architectu
   - [x] R1.5l Reviewer identity and resolution timestamp metadata are retained in structured contradiction markers.
   - [x] R1.5m End-to-end acceptance gate now covers thesis readiness, candidate verification/protection, net upside, reserve, budget, and Plan handoff.
 - [x] R1.6 Partial: Plan now uses all-in acquisition cash and an explicit user-editable reserve; confirmed-stock and reservation semantics remain pending.
+- [x] R1.6b Discover live asking-price toggle: public, read-only eBay Browse results are surfaced by profile; currency is preserved and market value, margin, score and history remain explicitly unknown.
 - [ ] R1.7 Outcomes and revision loop.
 - [ ] R1.8 End-to-end acceptance.
 
 ## Later phases — paused
-R2 full real-data ingestion, R3 response estimation, R4 network feedback and R5 operational readiness remain gated. The eBay Browse application-token path is verified server-side and exposed as a protected read-only search procedure, but it is not yet reconciled into the mobile listing store or a recurring collector.
+R2 full real-data ingestion, R3 response estimation, R4 network feedback and R5 operational readiness remain gated. The eBay Browse application-token path is verified server-side and surfaced in Discover as a public, bounded read-only asking-price feed, but it is not yet reconciled into the persistent listing store or a recurring collector.
 
 ## Existing boundaries
 - eBay account-deletion delivery does not establish Browse search or listing-stream permissions.

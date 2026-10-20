@@ -30,6 +30,22 @@ export type Listing = {
   shippingCost?: number;
   transactionFee?: number;
   travelCost?: number;
+  currency?: string;
+  sourceMode?: "sample" | "live-asking-price";
+};
+
+export type LiveEbayListing = {
+  listingId: string;
+  profileSlug: string;
+  brand: string;
+  model: string;
+  askingPrice: number;
+  condition: string;
+  location?: string;
+  countryCode?: string;
+  currency?: string;
+  url?: string;
+  fetchedAt?: string;
 };
 
 export type MarketSignals = {
@@ -84,6 +100,41 @@ export const PROFILES: MarketProfile[] = [
   { slug: "sports_collectibles", name: "Sports collectibles", shortName: "Sports", description: "Authenticated pieces with event-driven demand.", accent: "#DBE9F5", threshold: 34, count: 8, icon: "sports-soccer" },
   { slug: "home_and_living", name: "Home & living", shortName: "Home", description: "Furniture, appliances, and design pieces suited to local pickup.", accent: "#F1E7D5", threshold: 22, count: 15, icon: "home" },
 ];
+
+export const EBAY_SEARCH_TERMS: Record<string, string> = {
+  luxury_watches: "luxury watch",
+  camera_gear: "camera lens",
+  collectibles: "collectibles",
+  premium_audio: "premium headphones",
+  performance_cars: "performance car",
+  musical_instruments: "musical instrument",
+  fine_jewellery: "fine jewellery",
+  sports_collectibles: "sports collectible",
+  home_and_living: "designer furniture",
+};
+
+export const getEbaySearchTerm = (profileSlug: string) => EBAY_SEARCH_TERMS[profileSlug] ?? "luxury watch";
+
+export const mapLiveEbayListings = (listings: LiveEbayListing[]): Listing[] => listings.map((listing) => ({
+  id: `ebay:${listing.listingId}`,
+  profileSlug: listing.profileSlug,
+  brand: listing.brand,
+  model: listing.model,
+  askingPrice: listing.askingPrice,
+  marketValue: 0,
+  score: 0,
+  margin: 0,
+  condition: listing.condition,
+  platform: "eBay",
+  location: listing.location ?? listing.countryCode ?? "eBay marketplace",
+  countryCode: listing.countryCode,
+  escrowProtected: false,
+  verified: false,
+  age: "just now",
+  url: listing.url ?? "https://www.ebay.co.uk/",
+  currency: listing.currency ?? "GBP",
+  sourceMode: "live-asking-price",
+}));
 
 export const LISTINGS: Listing[] = [
   { id: "rolex-gmt-126710", profileSlug: "luxury_watches", brand: "Rolex", model: "GMT-Master II 126710BLRO", askingPrice: 13800, marketValue: 19500, score: 94, margin: 29.2, condition: "Unworn", platform: "Chrono24", location: "Berlin, DE", escrowProtected: true, verified: true, age: "12 min ago", url: "https://www.chrono24.com/rolex/index.htm" },
@@ -168,5 +219,5 @@ export const recommendAllocations = (budget: number, listings: Listing[] = LISTI
   return best.allocations;
 };
 
-export const formatCurrency = (value: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(value);
+export const formatCurrency = (value: number, currency = "USD") => new Intl.NumberFormat("en-US", { style: "currency", currency, maximumFractionDigits: 0 }).format(value);
 export const getInitials = (value: string) => value.slice(0, 2).toUpperCase();

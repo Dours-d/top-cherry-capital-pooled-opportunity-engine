@@ -30,6 +30,8 @@ import {
   getProfile,
   getListingCountry,
   getListingSignals,
+  getEbaySearchTerm,
+  mapLiveEbayListings,
   type Listing,
 } from "@/lib/market-data";
 import { buildDemoThesis } from "@/lib/demo-thesis";
@@ -65,6 +67,7 @@ export default function HomeScreen() {
     onSuccess: () => void savedQuery.refetch(),
   });
   const [activeSlug, setActiveSlug] = useState(PROFILES[0].slug);
+  const [feedMode, setFeedMode] = useState<"sample" | "live">("live");
   const [savedIds, setSavedIds] = useState<string[]>([]);
   const [filter, setFilter] = useState<"all" | "top" | "escrow">("all");
   const [sourceFilter, setSourceFilter] = useState("all");
@@ -73,6 +76,12 @@ export default function HomeScreen() {
   const [query, setQuery] = useState("");
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
   const [showNotice, setShowNotice] = useState(false);
+
+  const liveSearchQuery = query.trim() || getEbaySearchTerm(activeSlug);
+  const liveSearch = trpc.marketplace.searchEbay.useQuery(
+    { query: liveSearchQuery, marketplaceId: "EBAY_GB", limit: 20 },
+    { enabled: feedMode === "live", staleTime: 60_000, refetchOnWindowFocus: false, retry: 1 },
+  );
 
   useEffect(() => {
     void Promise.all([
@@ -96,11 +105,21 @@ export default function HomeScreen() {
 
   const activeProfile = getProfile(activeSlug);
 
+  const liveListings = useMemo(
+    () => mapLiveEbayListings((liveSearch.data?.listings ?? []).map((listing) => ({ ...listing, profileSlug: activeSlug }))),
+    [activeSlug, liveSearch.data?.listings],
+  );
+  const displayedListings = feedMode === "live" ? liveListings : LISTINGS;
+  const displayedProfileListings = useMemo(
+    () => displayedListings.filter((listing) => listing.profileSlug === activeSlug),
+    [activeSlug, displayedListings],
+  );
+
   const listings = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
-    return LISTINGS.filter((listing) => {
+    return displayedProfileListings.filter((listing) => {
       const belongsToProfile = listing.profileSlug === activeSlug;
-      const matchesFilter = filter === "all" || (filter === "top" ? listing.score >= 85 : listing.escrowProtected);
+      const matchesFilter = feedMode === "live" || filter === "all" || (filter === "top" ? listing.score >= 85 : listing.escrowProtected);
       const matchesSource = sourceFilter === "all" || listing.platform === sourceFilter;
       const matchesCountry = countryFilter === "all" || getListingCountry(listing) === countryFilter;
       const matchesRadius = radiusFilter === 0 || (listing.pickupDistanceKm !== undefined && listing.pickupDistanceKm <= radiusFilter);
@@ -109,12 +128,9 @@ export default function HomeScreen() {
         `${listing.brand} ${listing.model} ${listing.platform}`.toLowerCase().includes(normalizedQuery);
       return belongsToProfile && matchesFilter && matchesSource && matchesCountry && matchesRadius && matchesQuery;
     });
-  }, [activeSlug, countryFilter, filter, query, radiusFilter, sourceFilter]);
+  }, [activeSlug, countryFilter, displayedProfileListings, feedMode, filter, query, radiusFilter, sourceFilter]);
 
-  const profileListings = useMemo(
-    () => LISTINGS.filter((listing) => listing.profileSlug === activeSlug),
-    [activeSlug],
-  );
+  const profileListings = displayedProfileListings;
   const topCherries = profileListings.filter((listing) => listing.score >= 85).length;
   const averageMargin = profileListings.length
     ? profileListings.reduce((sum, listing) => sum + listing.margin, 0) / profileListings.length
@@ -130,6 +146,15 @@ export default function HomeScreen() {
     setRadiusFilter(0);
     setQuery("");
     void AsyncStorage.setItem(PROFILE_STORAGE_KEY, slug);
+  };
+
+  const changeFeedMode = (mode: "sample" | "live") => {
+    triggerHaptic();
+    setFeedMode(mode);
+    setFilter("all");
+    setSourceFilter("all");
+    setCountryFilter("all");
+    setRadiusFilter(0);
   };
 
   const toggleSaved = (listing: Listing) => {
@@ -240,23 +265,33 @@ export default function HomeScreen() {
                 <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Your pulse</Text>
                 <Text style={[styles.sectionCaption, { color: colors.muted }]}>{activeProfile.description}</Text>
               </View>
-              <View style={[styles.livePill, { backgroundColor: colors.surface }]}>
-                <View style={[styles.liveDot, { backgroundColor: colors.success }]} />
-                <Text style={[styles.liveText, { color: colors.foreground }]}>SAMPLE</Text>
+              <View style={[styles.feedControls, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                {(["live", "sample"] as const).map((mode) => (
+                  <Pressable
+                    key={mode}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Use ${mode} opportunity feed`}
+                    onPress={() => changeFeedMode(mode)}
+                    style={({ pressed }) => [styles.feedButton, feedMode === mode && { backgroundColor: mode === "live" ? colors.primary : colors.foreground }, pressed && styles.pressed]}
+                  >
+                    {mode === "live" ? <View style={[styles.liveDot, { backgroundColor: feedMode === mode ? colors.foreground : colors.success }]} /> : null}
+                    <Text style={[styles.liveText, { color: feedMode === mode ? colors.background : colors.muted }]}>{mode === "live" ? "LIVE" : "SAMPLE"}</Text>
+                  </Pressable>
+                ))}
               </View>
             </View>
 
             <View style={styles.metricsRow}>
-              <MetricCard label="Tracked" value={String(profileListings.length || activeProfile.count)} colors={colors} />
-              <MetricCard label="Top cherries" value={String(topCherries)} colors={colors} accent />
-              <MetricCard label="Avg. margin" value={`${averageMargin.toFixed(1)}%`} colors={colors} />
+              <MetricCard label={feedMode === "live" ? "Live listings" : "Tracked"} value={String(profileListings.length || (feedMode === "sample" ? activeProfile.count : 0))} colors={colors} />
+              <MetricCard label={feedMode === "live" ? "Market value" : "Top cherries"} value={feedMode === "live" ? "Unknown" : String(topCherries)} colors={colors} accent />
+              <MetricCard label={feedMode === "live" ? "Price history" : "Avg. margin"} value={feedMode === "live" ? "Not linked" : `${averageMargin.toFixed(1)}%`} colors={colors} />
             </View>
-            {leadListing ? <PrototypeLens listing={leadListing} colors={colors} /> : null}
+            {feedMode === "live" ? <LiveAskingPriceLens listing={leadListing} colors={colors} loading={liveSearch.isLoading} error={liveSearch.error ? "Live eBay search unavailable" : null} /> : leadListing ? <PrototypeLens listing={leadListing} colors={colors} /> : null}
 
             <View style={styles.filterRow}>
-              <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Latest opportunities</Text>
+              <Text style={[styles.sectionTitle, { color: colors.foreground }]}>{feedMode === "live" ? "Live asking prices" : "Latest opportunities"}</Text>
               <View style={styles.filterButtons}>
-                {(["all", "top", "escrow"] as const).map((value) => (
+                {(feedMode === "live" ? (["all"] as const) : (["all", "top", "escrow"] as const)).map((value) => (
                   <Pressable
                     key={value}
                     onPress={() => { triggerHaptic(); setFilter(value); }}
@@ -348,13 +383,12 @@ export default function HomeScreen() {
               <Text style={[styles.modalTitle, { color: colors.foreground }]}>{selectedListing.brand}</Text>
               <Text style={[styles.modalModel, { color: colors.muted }]}>{selectedListing.model}</Text>
               <View style={[styles.detailGrid, { borderColor: colors.border }]}>
-                <DetailCell label="Asking" value={formatCurrency(selectedListing.askingPrice)} colors={colors} />
-                <DetailCell label="Market value" value={formatCurrency(selectedListing.marketValue)} colors={colors} />
-                <DetailCell label="Margin" value={`${selectedListing.margin.toFixed(1)}%`} colors={colors} />
+                <DetailCell label="Asking" value={formatCurrency(selectedListing.askingPrice, selectedListing.currency)} colors={colors} />
+                <DetailCell label="Market value" value={selectedListing.sourceMode === "live-asking-price" ? "Unknown" : formatCurrency(selectedListing.marketValue, selectedListing.currency)} colors={colors} />
+                <DetailCell label="Margin" value={selectedListing.sourceMode === "live-asking-price" ? "Unavailable" : `${selectedListing.margin.toFixed(1)}%`} colors={colors} />
                 <DetailCell label="Condition" value={selectedListing.condition} colors={colors} />
               </View>
-              <LayerLens listing={selectedListing} colors={colors} />
-              <ReasoningDetail listing={selectedListing} colors={colors} />
+              {selectedListing.sourceMode === "live-asking-price" ? <LiveAskingPriceDetail listing={selectedListing} colors={colors} /> : <><LayerLens listing={selectedListing} colors={colors} /><ReasoningDetail listing={selectedListing} colors={colors} /></>}
               <View style={styles.trustRow}>
                 <MaterialIcons name={selectedListing.escrowProtected ? "verified-user" : "shield"} size={18} color={selectedListing.escrowProtected ? colors.success : colors.muted} />
                 <Text style={[styles.trustText, { color: colors.foreground }]}>{selectedListing.escrowProtected ? "Escrow protected listing" : "Review seller protection before buying"}</Text>
@@ -393,13 +427,34 @@ function PrototypeLens({ listing, colors }: { listing: Listing; colors: ReturnTy
     <View style={[styles.prototypeLens, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       <View style={styles.prototypeLensTop}><View><Text style={[styles.prototypeEyebrow, { color: colors.primary }]}>THREE-LAYER PROTOTYPE</Text><Text style={[styles.prototypeTitle, { color: colors.foreground }]}>Market lens</Text></View><Text style={[styles.prototypeHint, { color: colors.muted }]}>sample signals</Text></View>
       <View style={styles.prototypeColumns}>
-        <View style={styles.prototypeColumn}><Text style={[styles.prototypeNumber, { color: colors.foreground }]}>1</Text><Text style={[styles.prototypeLabel, { color: colors.muted }]}>Visible</Text><Text style={[styles.prototypeValue, { color: colors.foreground }]}>{formatCurrency(listing.askingPrice)}</Text></View>
+        <View style={styles.prototypeColumn}><Text style={[styles.prototypeNumber, { color: colors.foreground }]}>1</Text><Text style={[styles.prototypeLabel, { color: colors.muted }]}>Visible</Text><Text style={[styles.prototypeValue, { color: colors.foreground }]}>{formatCurrency(listing.askingPrice, listing.currency)}</Text></View>
         <View style={[styles.prototypeDivider, { backgroundColor: colors.border }]} />
         <View style={styles.prototypeColumn}><Text style={[styles.prototypeNumber, { color: colors.foreground }]}>2</Text><Text style={[styles.prototypeLabel, { color: colors.muted }]}>Behavior</Text><Text style={[styles.prototypeValue, { color: colors.foreground }]}>{signals.inventoryPressure}</Text></View>
         <View style={[styles.prototypeDivider, { backgroundColor: colors.border }]} />
         <View style={styles.prototypeColumn}><Text style={[styles.prototypeNumber, { color: colors.foreground }]}>3</Text><Text style={[styles.prototypeLabel, { color: colors.muted }]}>Network</Text><Text style={[styles.prototypeValue, { color: colors.foreground }]}>{signals.networkMomentum}</Text></View>
       </View>
       <Text style={[styles.prototypeAction, { color: colors.foreground }]}>{signals.actionWindow}: <Text style={{ color: colors.muted }}>{signals.actionReason}</Text></Text>
+    </View>
+  );
+}
+
+function LiveAskingPriceLens({ listing, colors, loading, error }: { listing?: Listing; colors: ReturnType<typeof useColors>; loading: boolean; error: string | null }) {
+  return (
+    <View style={[styles.prototypeLens, { backgroundColor: colors.surface, borderColor: colors.border }]}> 
+      <View style={styles.prototypeLensTop}><View><Text style={[styles.prototypeEyebrow, { color: colors.primary }]}>LIVE ASKING PRICES</Text><Text style={[styles.prototypeTitle, { color: colors.foreground }]}>eBay Browse · EBAY_GB</Text></View><Text style={[styles.prototypeHint, { color: colors.muted }]}>{loading ? "loading" : error ? "error" : "read-only"}</Text></View>
+      <Text style={[styles.prototypeAction, { color: colors.foreground }]}>{error ?? (listing ? `${formatCurrency(listing.askingPrice, listing.currency)} is a current listing ask.` : "Fetching current eBay item summaries.")}</Text>
+      <Text style={[styles.liveDisclaimer, { color: colors.muted }]}>Asking price only. Market value, resale margin, availability history and transaction outcome are not inferred.</Text>
+    </View>
+  );
+}
+
+function LiveAskingPriceDetail({ listing, colors }: { listing: Listing; colors: ReturnType<typeof useColors> }) {
+  return (
+    <View style={[styles.layerLens, { backgroundColor: colors.surface, borderColor: colors.border }]}> 
+      <Text style={[styles.layerLensEyebrow, { color: colors.primary }]}>SOURCE PROVENANCE</Text>
+      <Text style={[styles.layerLensTitle, { color: colors.foreground }]}>Live eBay asking price</Text>
+      <Text style={[styles.layerText, { color: colors.muted }]}>Retrieved from eBay Browse for EBAY_GB. This record is a visible marketplace observation, not a verified sale or valuation.</Text>
+      <Text style={[styles.layerText, { color: colors.muted }]}>Use the source listing to inspect seller details, condition and delivery before any separate research decision.</Text>
     </View>
   );
 }
@@ -424,15 +479,12 @@ function ListingCard({ listing, isSaved, colors, onPress, onSave }: { listing: L
       <View style={styles.listingBottomRow}>
         <View>
           <Text style={[styles.priceLabel, { color: colors.muted }]}>ASKING</Text>
-          <Text style={[styles.price, { color: colors.foreground }]}>{formatCurrency(listing.askingPrice)}</Text>
+          <Text style={[styles.price, { color: colors.foreground }]}>{formatCurrency(listing.askingPrice, listing.currency)}</Text>
         </View>
-        <View style={styles.marginBlock}>
-          <Text style={[styles.priceLabel, { color: colors.muted }]}>MARGIN</Text>
-          <Text style={[styles.margin, { color: colors.success }]}>+{listing.margin.toFixed(1)}%</Text>
-        </View>
-        <View style={[styles.scorePill, { backgroundColor: colors.primary }]}>
-          <Text style={[styles.scorePillText, { color: colors.foreground }]}>{listing.score}</Text>
-          <Text style={[styles.scorePillLabel, { color: colors.foreground }]}>CHERRY</Text>
+        {listing.sourceMode === "live-asking-price" ? <View style={styles.marginBlock}><Text style={[styles.priceLabel, { color: colors.muted }]}>VALUE</Text><Text style={[styles.margin, { color: colors.muted }]}>Unknown</Text></View> : <View style={styles.marginBlock}><Text style={[styles.priceLabel, { color: colors.muted }]}>MARGIN</Text><Text style={[styles.margin, { color: colors.success }]}>+{listing.margin.toFixed(1)}%</Text></View>}
+        <View style={[styles.scorePill, { backgroundColor: colors.primary }]}> 
+          <Text style={[styles.scorePillText, { color: colors.foreground }]}>{listing.sourceMode === "live-asking-price" ? "LIVE" : listing.score}</Text>
+          <Text style={[styles.scorePillLabel, { color: colors.foreground }]}>{listing.sourceMode === "live-asking-price" ? "ASK" : "CHERRY"}</Text>
         </View>
       </View>
       <View style={styles.badgeRow}>
@@ -526,6 +578,8 @@ const styles = StyleSheet.create({
   profileName: { fontSize: 15, fontWeight: "800", marginTop: 18 },
   profileCount: { fontSize: 11, marginTop: 3 },
   livePill: { borderRadius: 99, paddingHorizontal: 9, paddingVertical: 6, flexDirection: "row", alignItems: "center", gap: 5 },
+  feedControls: { borderRadius: 99, borderWidth: 1, padding: 3, flexDirection: "row", alignItems: "center", gap: 2 },
+  feedButton: { borderRadius: 99, paddingHorizontal: 7, paddingVertical: 5, minHeight: 24, flexDirection: "row", alignItems: "center", gap: 4 },
   liveDot: { width: 6, height: 6, borderRadius: 3 },
   liveText: { fontSize: 9, fontWeight: "800", letterSpacing: 0.8 },
   metricsRow: { flexDirection: "row", gap: 8 },
@@ -544,6 +598,7 @@ const styles = StyleSheet.create({
   prototypeLabel: { fontSize: 10, marginTop: 2 },
   prototypeValue: { fontSize: 12, fontWeight: "800", marginTop: 4 },
   prototypeAction: { fontSize: 10, lineHeight: 15, marginTop: 13 },
+  liveDisclaimer: { fontSize: 10, lineHeight: 15, marginTop: 7 },
   filterRow: { marginTop: 29, marginBottom: 13, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
   filterButtons: { flexDirection: "row", gap: 5 },
   filterButton: { borderRadius: 99, borderWidth: 1, paddingHorizontal: 9, paddingVertical: 7 },

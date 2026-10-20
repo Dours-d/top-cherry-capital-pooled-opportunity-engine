@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_ECONOMICS, LISTINGS, PROFILES, formatCurrency, getListingEconomics, getListingSignals, getProfile, getProfileListings, recommendAllocations } from "../lib/market-data";
+import { DEFAULT_ECONOMICS, LISTINGS, PROFILES, formatCurrency, getListingEconomics, getListingSignals, getProfile, getProfileListings, mapLiveEbayListings, recommendAllocations } from "../lib/market-data";
 
 describe("Top Cherry market data", () => {
   it("ships a broad marketplace-independent default category registry", () => {
@@ -35,6 +35,24 @@ describe("Top Cherry market data", () => {
 
   it("formats deal prices as whole-dollar USD", () => {
     expect(formatCurrency(13800)).toBe("$13,800");
+  });
+
+  it("maps live eBay asking prices without inventing valuation signals", () => {
+    const [listing] = mapLiveEbayListings([{
+      listingId: "v1|123|0",
+      profileSlug: "luxury_watches",
+      brand: "Tudor",
+      model: "Tudor Black Bay",
+      askingPrice: 3066.7,
+      condition: "Used",
+      location: "GB",
+      countryCode: "GB",
+      currency: "GBP",
+      url: "https://www.ebay.co.uk/itm/123",
+    }]);
+
+    expect(listing).toMatchObject({ id: "ebay:v1|123|0", askingPrice: 3066.7, currency: "GBP", sourceMode: "live-asking-price", marketValue: 0, score: 0, margin: 0 });
+    expect(formatCurrency(listing.askingPrice, listing.currency)).toBe("£3,067");
   });
 
   it("changes the recommended mix when the available capital changes", () => {

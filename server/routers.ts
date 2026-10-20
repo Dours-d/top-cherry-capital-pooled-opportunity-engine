@@ -77,7 +77,7 @@ export const appRouter = router({
   marketplace: router({
     sources: publicProcedure.query(() => MARKETPLACE_SOURCES),
     previewImport: protectedProcedure.input(z.object({ sourceSlug: z.string(), listings: z.array(normalizedListingInput).max(500) })).mutation(({ input }) => previewNormalizedImport(input.sourceSlug, input.listings)),
-    searchEbay: protectedProcedure.input(z.object({ query: z.string().min(2).max(120), marketplaceId: z.string().regex(/^EBAY_[A-Z]{2}$/).optional(), categoryId: z.string().regex(/^\d+$/).optional(), limit: z.number().int().min(1).max(50).optional() })).query(({ input }) => searchEbayBrowse(input)),
+    searchEbay: publicProcedure.input(z.object({ query: z.string().min(2).max(120), marketplaceId: z.string().regex(/^EBAY_[A-Z]{2}$/).optional(), categoryId: z.string().regex(/^\d+$/).optional(), limit: z.number().int().min(1).max(50).optional() })).query(({ input }) => searchEbayBrowse(input)),
   }),
   thesisDrafts: router({
     list: protectedProcedure.input(z.object({ draftId: z.string().min(1).max(128) })).query(async ({ ctx, input }) => (await db.listThesisDraftRevisions(ctx.user.id, input.draftId)).map((row) => ({ ...row, payload: JSON.parse(row.payload) }))),
