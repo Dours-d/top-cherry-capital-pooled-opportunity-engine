@@ -47,6 +47,7 @@ Direction accepted on 14 October 2026, clarified as a multi-mechanism architectu
 - [x] R1.6d Affiliate destination boundary: preserve eBay `itemAffiliateWebUrl` when supplied and require an explicit outbound disclosure before opening live eBay listings.
 - [x] R1.6e Workspace provider-gate tracker: persistent local checklist for Browse verification, EPN onboarding, Application Growth Check preparation and restricted notification-topic requests; checklist completion never represents eBay approval.
 - [x] R1.6f Asking-price decision gate: live records explicitly remain observe-only; Discover states the leverage of asking prices and lists the independent evidence required before considering one unit for allocation.
+- [x] R1.6g User-defined price test: live detail accepts an independent exit benchmark and minimum net buffer, then calculates a maximum acceptable ask after estimated shipping, fees and travel; it does not label the benchmark as market value.
 - [ ] R1.7 Outcomes and revision loop.
 - [ ] R1.8 End-to-end acceptance.
 

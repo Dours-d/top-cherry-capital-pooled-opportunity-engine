@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_ECONOMICS, LISTINGS, PROFILES, formatCurrency, getAskingPriceDecisionGate, getListingEconomics, getListingSignals, getProfile, getProfileListings, mapLiveEbayListings, recommendAllocations } from "../lib/market-data";
+import { DEFAULT_ECONOMICS, LISTINGS, PROFILES, formatCurrency, getAskingPriceDecisionGate, getListingEconomics, getListingSignals, getMaxAskingPriceForTarget, getProfile, getProfileListings, mapLiveEbayListings, recommendAllocations } from "../lib/market-data";
 
 describe("Top Cherry market data", () => {
   it("ships a broad marketplace-independent default category registry", () => {
@@ -69,6 +69,11 @@ describe("Top Cherry market data", () => {
     expect(gate).toMatchObject({ state: "observe-only", canAllocate: false });
     expect(gate.missingEvidence).toContain("independent benchmark or valuation thesis");
     expect(gate.leverage).toContain("affordability");
+  });
+
+  it("calculates a maximum asking price from a user-provided exit benchmark", () => {
+    const maxAsk = getMaxAskingPriceForTarget({ targetExitPrice: 5000, minimumNetBuffer: 500, shippingRate: 0.02, transactionFeeRate: 0.03, fixedTravelCost: 100 });
+    expect(maxAsk).toBeCloseTo(4190.47619, 4);
   });
 
   it("changes the recommended mix when the available capital changes", () => {

@@ -250,6 +250,20 @@ export const getMaxPlannableQuantity = ({
   return Math.min(confirmedStock, Math.floor(Math.max(0, budget - reserve - otherCommitted) / unitCost));
 };
 
+export const getMaxAskingPriceForTarget = ({
+  targetExitPrice,
+  minimumNetBuffer,
+  shippingRate = DEFAULT_ECONOMICS.shippingRate,
+  transactionFeeRate = DEFAULT_ECONOMICS.transactionFeeRate,
+  fixedTravelCost = 0,
+}: {
+  targetExitPrice: number;
+  minimumNetBuffer: number;
+  shippingRate?: number;
+  transactionFeeRate?: number;
+  fixedTravelCost?: number;
+}) => Math.max(0, (targetExitPrice - minimumNetBuffer - Math.max(0, fixedTravelCost)) / (1 + Math.max(0, shippingRate) + Math.max(0, transactionFeeRate)));
+
 export const recommendAllocations = (budget: number, listings: Listing[] = LISTINGS, assumptions: EconomicsAssumptions = DEFAULT_ECONOMICS, reserve = 0): Record<string, number> => {
   const safeBudget = Math.max(0, Math.floor(budget - Math.max(0, reserve)));
   let best: { allocations: Record<string, number>; upside: number; score: number; count: number } = { allocations: {}, upside: 0, score: 0, count: 0 };

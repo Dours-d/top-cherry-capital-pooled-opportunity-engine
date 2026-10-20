@@ -26,8 +26,11 @@ import {
   PROFILES,
   PROFILE_STORAGE_KEY,
   SAVED_STORAGE_KEY,
+  DEFAULT_ECONOMICS,
   formatCurrency,
   getAskingPriceDecisionGate,
+  getListingEconomics,
+  getMaxAskingPriceForTarget,
   getProfile,
   getListingCountry,
   getListingSignals,
@@ -479,10 +482,36 @@ function LiveAskingPriceDetail({ listing, colors, detail, loading }: { listing: 
         <Text style={[styles.decisionGateMissing, { color: colors.foreground }]}>Before considering one unit, establish:</Text>
         {gate.missingEvidence.map((item) => <Text key={item} style={[styles.decisionGateItem, { color: colors.muted }]}>• {item}</Text>)}
       </View>
+      <AskingPriceWorksheet listing={listing} colors={colors} />
       <Text style={[styles.detailSubheading, { color: colors.foreground }]}>Item characteristics</Text>
       {loading ? <Text style={[styles.layerText, { color: colors.muted }]}>Loading eBay item details…</Text> : aspects.length ? aspects.map((aspect) => <View key={`${aspect.name}-${aspect.value}`} style={styles.aspectRow}><Text style={[styles.aspectName, { color: colors.muted }]}>{aspect.name}</Text><Text style={[styles.aspectValue, { color: colors.foreground }]}>{aspect.value}</Text></View>) : <Text style={[styles.layerText, { color: colors.muted }]}>No seller-provided characteristics were returned for this listing.</Text>}
     </View>
   );
+}
+
+function AskingPriceWorksheet({ listing, colors }: { listing: Listing; colors: ReturnType<typeof useColors> }) {
+  const [targetExitText, setTargetExitText] = useState("");
+  const [minimumBufferText, setMinimumBufferText] = useState("");
+  const targetExit = Number(targetExitText.replace(/[^0-9.]/g, "")) || 0;
+  const minimumBuffer = Number(minimumBufferText.replace(/[^0-9.]/g, "")) || 0;
+  const economics = getListingEconomics(listing, DEFAULT_ECONOMICS);
+  const currentAllIn = listing.askingPrice + economics.totalCosts;
+  const maxAsk = targetExit > 0 ? getMaxAskingPriceForTarget({ targetExitPrice: targetExit, minimumNetBuffer: minimumBuffer, fixedTravelCost: economics.travelCost }) : null;
+  const withinThreshold = maxAsk !== null && listing.askingPrice <= maxAsk;
+  return <View style={[styles.worksheet, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+    <Text style={[styles.worksheetEyebrow, { color: colors.primary }]}>USER-DEFINED PRICE TEST</Text>
+    <Text style={[styles.worksheetTitle, { color: colors.foreground }]}>Why give up this amount?</Text>
+    <Text style={[styles.worksheetText, { color: colors.muted }]}>Enter your independent exit benchmark and minimum net buffer. This does not create a market value; it tests whether the current ask fits your own hurdle after estimated friction.</Text>
+    <View style={styles.worksheetInputs}>
+      <View style={styles.worksheetInputBlock}><Text style={[styles.worksheetLabel, { color: colors.muted }]}>EXIT BENCHMARK</Text><TextInput value={targetExitText} onChangeText={setTargetExitText} keyboardType="decimal-pad" placeholder="e.g. 5000" placeholderTextColor={colors.muted} style={[styles.worksheetInput, { color: colors.foreground, backgroundColor: colors.background, borderColor: colors.border }]} /></View>
+      <View style={styles.worksheetInputBlock}><Text style={[styles.worksheetLabel, { color: colors.muted }]}>MIN NET BUFFER</Text><TextInput value={minimumBufferText} onChangeText={setMinimumBufferText} keyboardType="decimal-pad" placeholder="e.g. 500" placeholderTextColor={colors.muted} style={[styles.worksheetInput, { color: colors.foreground, backgroundColor: colors.background, borderColor: colors.border }]} /></View>
+    </View>
+    <View style={styles.worksheetResults}>
+      <View><Text style={[styles.worksheetLabel, { color: colors.muted }]}>CURRENT ALL-IN ESTIMATE</Text><Text style={[styles.worksheetValue, { color: colors.foreground }]}>{formatCurrency(currentAllIn, listing.currency)}</Text></View>
+      <View><Text style={[styles.worksheetLabel, { color: colors.muted }]}>MAX ASK AT YOUR HURDLE</Text><Text style={[styles.worksheetValue, { color: maxAsk === null ? colors.muted : withinThreshold ? colors.success : colors.error }]}>{maxAsk === null ? "Enter benchmark" : formatCurrency(maxAsk, listing.currency)}</Text></View>
+    </View>
+    {maxAsk !== null ? <Text style={[styles.worksheetResultNote, { color: withinThreshold ? colors.success : colors.error }]}>{withinThreshold ? "The asking price is inside your stated hurdle; independent evidence is still required." : "The asking price is above your stated hurdle after estimated friction."}</Text> : null}
+  </View>;
 }
 
 function LiveFeedFooter({ loading, hasMore, onRefresh, onNext, colors }: { loading: boolean; hasMore: boolean; onRefresh: () => void; onNext: () => void; colors: ReturnType<typeof useColors> }) {
@@ -640,6 +669,17 @@ const styles = StyleSheet.create({
   decisionGateText: { fontSize: 10, lineHeight: 15, marginTop: 6 },
   decisionGateMissing: { fontSize: 10, fontWeight: "800", marginTop: 9 },
   decisionGateItem: { fontSize: 10, lineHeight: 15, marginTop: 2 },
+  worksheet: { borderWidth: 1, borderRadius: 14, padding: 11, marginTop: 12 },
+  worksheetEyebrow: { fontSize: 9, fontWeight: "900", letterSpacing: 0.8 },
+  worksheetTitle: { fontSize: 13, fontWeight: "800", marginTop: 3 },
+  worksheetText: { fontSize: 10, lineHeight: 15, marginTop: 5 },
+  worksheetInputs: { flexDirection: "row", gap: 8, marginTop: 10 },
+  worksheetInputBlock: { flex: 1 },
+  worksheetLabel: { fontSize: 8, fontWeight: "800", letterSpacing: 0.4 },
+  worksheetInput: { borderWidth: 1, borderRadius: 8, height: 32, paddingHorizontal: 8, marginTop: 4, fontSize: 11 },
+  worksheetResults: { flexDirection: "row", justifyContent: "space-between", gap: 10, marginTop: 11 },
+  worksheetValue: { fontSize: 14, fontWeight: "800", marginTop: 3 },
+  worksheetResultNote: { fontSize: 10, lineHeight: 15, marginTop: 8 },
   detailSubheading: { fontSize: 12, fontWeight: "800", marginTop: 14, marginBottom: 6 },
   aspectRow: { flexDirection: "row", justifyContent: "space-between", gap: 12, paddingVertical: 4 },
   aspectName: { flex: 1, fontSize: 10 },
