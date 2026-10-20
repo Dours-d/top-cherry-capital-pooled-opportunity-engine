@@ -385,8 +385,8 @@ export default function HomeScreen() {
               <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.modalScroll}>
               <View style={styles.modalTopRow}>
                 <View style={[styles.scoreLarge, { backgroundColor: colors.primary }]}>
-                  <Text style={[styles.scoreLargeText, { color: colors.foreground }]}>{selectedListing.score}</Text>
-                  <Text style={[styles.scoreLargeLabel, { color: colors.foreground }]}>SCORE</Text>
+                  <Text style={[styles.scoreLargeText, { color: colors.onPrimary }]}>{selectedListing.score}</Text>
+                  <Text style={[styles.scoreLargeLabel, { color: colors.onPrimary }]}>SCORE</Text>
                 </View>
                 <Pressable onPress={() => setSelectedListing(null)} style={({ pressed }) => [styles.closeButton, { backgroundColor: colors.surface }, pressed && styles.pressed]}>
                   <MaterialIcons name="close" size={20} color={colors.foreground} />
@@ -412,11 +412,11 @@ export default function HomeScreen() {
                   <Text style={[styles.secondaryButtonText, { color: colors.foreground }]}>{savedIds.includes(selectedListing.id) ? "Saved" : "Save deal"}</Text>
                 </Pressable>
                 <Pressable onPress={() => { if (selectedListing.sourceMode === "live-asking-price") setShowOutboundNotice(true); else void Linking.openURL(selectedListing.url); }} style={({ pressed }) => [styles.primaryButton, { backgroundColor: colors.primary }, pressed && styles.pressed]}>
-                  <Text style={[styles.primaryButtonText, { color: colors.foreground }]}>Open listing</Text>
-                  <MaterialIcons name="north-east" size={18} color={colors.foreground} />
+                  <Text style={[styles.primaryButtonText, { color: colors.onPrimary }]}>Open listing</Text>
+                  <MaterialIcons name="north-east" size={18} color={colors.onPrimary} />
                 </Pressable>
               </View>
-              {selectedListing.sourceMode === "live-asking-price" && showOutboundNotice ? <View style={[styles.outboundNotice, { backgroundColor: colors.surface, borderColor: colors.border }]}><Text style={[styles.outboundTitle, { color: colors.foreground }]}>Leaving Top Cherry</Text><Text style={[styles.outboundText, { color: colors.muted }]}>You are going to eBay to inspect this listing. Top Cherry is not eBay, does not process the transaction, and has not verified the asking price as a sale price. Affiliate disclosure: Top Cherry may earn a commission if you buy through this link.</Text><View style={styles.outboundActions}><Pressable onPress={() => setShowOutboundNotice(false)} style={({ pressed }) => [styles.secondaryButton, { borderColor: colors.border }, pressed && styles.pressed]}><Text style={[styles.secondaryButtonText, { color: colors.foreground }]}>Cancel</Text></Pressable><Pressable onPress={() => { setShowOutboundNotice(false); void Linking.openURL(selectedListing.affiliateUrl ?? selectedListing.url); }} style={({ pressed }) => [styles.primaryButton, { backgroundColor: colors.primary }, pressed && styles.pressed]}><Text style={[styles.primaryButtonText, { color: colors.foreground }]}>Continue to eBay</Text></Pressable></View></View> : null}
+              {selectedListing.sourceMode === "live-asking-price" && showOutboundNotice ? <View style={[styles.outboundNotice, { backgroundColor: colors.surface, borderColor: colors.border }]}><Text style={[styles.outboundTitle, { color: colors.foreground }]}>Leaving Top Cherry</Text><Text style={[styles.outboundText, { color: colors.muted }]}>You are going to eBay to inspect this listing. Top Cherry is not eBay, does not process the transaction, and has not verified the asking price as a sale price. Affiliate disclosure: Top Cherry may earn a commission if you buy through this link.</Text><View style={styles.outboundActions}><Pressable onPress={() => setShowOutboundNotice(false)} style={({ pressed }) => [styles.secondaryButton, { borderColor: colors.border }, pressed && styles.pressed]}><Text style={[styles.secondaryButtonText, { color: colors.foreground }]}>Cancel</Text></Pressable><Pressable onPress={() => { setShowOutboundNotice(false); void Linking.openURL(selectedListing.affiliateUrl ?? selectedListing.url); }} style={({ pressed }) => [styles.primaryButton, { backgroundColor: colors.primary }, pressed && styles.pressed]}><Text style={[styles.primaryButtonText, { color: colors.onPrimary }]}>Continue to eBay</Text></Pressable></View></View> : null}
               </ScrollView>
             </View>
           </View>
@@ -429,7 +429,7 @@ export default function HomeScreen() {
 function MetricCard({ label, value, colors, accent = false }: { label: string; value: string; colors: ReturnType<typeof useColors>; accent?: boolean }) {
   return (
     <View style={[styles.metricCard, { backgroundColor: accent ? colors.primary : colors.surface, borderColor: accent ? colors.primary : colors.border }]}>
-      <Text style={[styles.metricValue, { color: colors.foreground }]}>{value}</Text>
+      <Text style={[styles.metricValue, { color: accent ? colors.onPrimary : colors.foreground }]}>{value}</Text>
       <Text style={[styles.metricLabel, { color: colors.muted }]}>{label}</Text>
     </View>
   );
@@ -454,11 +454,11 @@ function PrototypeLens({ listing, colors }: { listing: Listing; colors: ReturnTy
 
 function LiveAskingPriceLens({ listing, colors, loading, error, onRefresh }: { listing?: Listing; colors: ReturnType<typeof useColors>; loading: boolean; error: string | null; onRefresh: () => void }) {
   return (
-    <View style={[styles.prototypeLens, { backgroundColor: colors.surface, borderColor: colors.border }]}> 
+    <View style={[styles.prototypeLens, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       <View style={styles.prototypeLensTop}><View><Text style={[styles.prototypeEyebrow, { color: colors.primary }]}>LIVE ASKING PRICES</Text><Text style={[styles.prototypeTitle, { color: colors.foreground }]}>eBay Browse · EBAY_GB</Text></View><Text style={[styles.prototypeHint, { color: colors.muted }]}>{loading ? "loading" : error ? "error" : "read-only"}</Text></View>
       <Text style={[styles.prototypeAction, { color: colors.foreground }]}>{error ?? (listing ? `${formatCurrency(listing.askingPrice, listing.currency)} is a current listing ask.` : "Fetching current eBay item summaries.")}</Text>
       <Text style={[styles.liveDisclaimer, { color: colors.muted }]}>Asking price only. Market value, resale margin, availability history and transaction outcome are not inferred.</Text>
-      <Pressable onPress={onRefresh} disabled={loading} style={({ pressed }) => [styles.refreshButton, { backgroundColor: colors.primary, opacity: loading ? 0.5 : 1 }, pressed && styles.pressed]}><MaterialIcons name="refresh" size={15} color={colors.foreground} /><Text style={[styles.refreshText, { color: colors.foreground }]}>{loading ? "Refreshing" : "Refresh live prices"}</Text></Pressable>
+      <Pressable onPress={onRefresh} disabled={loading} style={({ pressed }) => [styles.refreshButton, { backgroundColor: colors.primary, opacity: loading ? 0.5 : 1 }, pressed && styles.pressed]}><MaterialIcons name="refresh" size={15} color={colors.onPrimary} /><Text style={[styles.refreshText, { color: colors.onPrimary }]}>{loading ? "Refreshing" : "Refresh live prices"}</Text></Pressable>
     </View>
   );
 }
@@ -466,7 +466,7 @@ function LiveAskingPriceLens({ listing, colors, loading, error, onRefresh }: { l
 function LiveAskingPriceDetail({ listing, colors, detail, loading }: { listing: Listing; colors: ReturnType<typeof useColors>; detail?: LiveEbayItemDetail; loading: boolean }) {
   const aspects = detail?.localizedAspects.slice(0, 8) ?? [];
   return (
-    <View style={[styles.layerLens, { backgroundColor: colors.surface, borderColor: colors.border }]}> 
+    <View style={[styles.layerLens, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       <Text style={[styles.layerLensEyebrow, { color: colors.primary }]}>SOURCE PROVENANCE</Text>
       <Text style={[styles.layerLensTitle, { color: colors.foreground }]}>Live eBay asking price</Text>
       <Text style={[styles.layerText, { color: colors.muted }]}>Retrieved from eBay Browse for EBAY_GB. This record is a visible marketplace observation, not a verified sale or valuation.</Text>
@@ -509,9 +509,9 @@ function ListingCard({ listing, isSaved, colors, onPress, onSave }: { listing: L
           <Text style={[styles.price, { color: colors.foreground }]}>{formatCurrency(listing.askingPrice, listing.currency)}</Text>
         </View>
         {listing.sourceMode === "live-asking-price" ? <View style={styles.marginBlock}><Text style={[styles.priceLabel, { color: colors.muted }]}>VALUE</Text><Text style={[styles.margin, { color: colors.muted }]}>Unknown</Text></View> : <View style={styles.marginBlock}><Text style={[styles.priceLabel, { color: colors.muted }]}>MARGIN</Text><Text style={[styles.margin, { color: colors.success }]}>+{listing.margin.toFixed(1)}%</Text></View>}
-        <View style={[styles.scorePill, { backgroundColor: colors.primary }]}> 
-          <Text style={[styles.scorePillText, { color: colors.foreground }]}>{listing.sourceMode === "live-asking-price" ? "LIVE" : listing.score}</Text>
-          <Text style={[styles.scorePillLabel, { color: colors.foreground }]}>{listing.sourceMode === "live-asking-price" ? "ASK" : "CHERRY"}</Text>
+      <View style={[styles.scorePill, { backgroundColor: colors.primary }]}>
+          <Text style={[styles.scorePillText, { color: colors.onPrimary }]}>{listing.sourceMode === "live-asking-price" ? "LIVE" : listing.score}</Text>
+          <Text style={[styles.scorePillLabel, { color: colors.onPrimary }]}>{listing.sourceMode === "live-asking-price" ? "ASK" : "CHERRY"}</Text>
         </View>
       </View>
       <View style={styles.badgeRow}>
@@ -552,7 +552,7 @@ function LayerLens({ listing, colors }: { listing: Listing; colors: ReturnType<t
           <Text style={[styles.layerLensEyebrow, { color: colors.primary }]}>THREE-LAYER LENS</Text>
           <Text style={[styles.layerLensTitle, { color: colors.foreground }]}>Why this may be actionable</Text>
         </View>
-        <View style={[styles.actionBadge, { backgroundColor: colors.primary }]}><Text style={[styles.actionBadgeText, { color: colors.foreground }]}>{signals.actionWindow.toUpperCase()}</Text></View>
+        <View style={[styles.actionBadge, { backgroundColor: colors.primary }]}><Text style={[styles.actionBadgeText, { color: colors.onPrimary }]}>{signals.actionWindow.toUpperCase()}</Text></View>
       </View>
       <View style={styles.layerRow}>
         <View style={[styles.layerNumber, { backgroundColor: colors.background }]}><Text style={[styles.layerNumberText, { color: colors.primary }]}>1</Text></View>

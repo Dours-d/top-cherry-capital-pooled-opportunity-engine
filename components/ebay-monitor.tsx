@@ -37,7 +37,7 @@ export function EbayMonitor() {
       <Text style={[styles.note, { color: colors.muted }]}>{data?.market.observations ? data.observationWindow : "No verified listing observations yet. The opportunity feed remains sample data; account-deletion events are not listing signals."}</Text>
       <Text style={[styles.note, { color: colors.muted }]}>A missing listing is not proof of a sale. Currency-matched price history is required before direction is reported.</Text>
       <View style={styles.actions}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Refresh eBay monitoring" disabled={query.isFetching} onPress={() => void query.refetch()} style={({ pressed }) => [styles.button, { backgroundColor: colors.primary }, pressed && styles.pressed]}><MaterialIcons name="refresh" size={18} color={colors.foreground} /><Text style={[styles.buttonText, { color: colors.foreground }]}>{query.isFetching ? "Checking…" : "Refresh"}</Text></Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="Refresh eBay monitoring" disabled={query.isFetching} onPress={() => void query.refetch()} style={({ pressed }) => [styles.button, { backgroundColor: colors.primary }, pressed && styles.pressed]}><MaterialIcons name="refresh" size={18} color={colors.onPrimary} /><Text style={[styles.buttonText, { color: colors.onPrimary }]}>{query.isFetching ? "Checking…" : "Refresh"}</Text></Pressable>
         <Pressable accessibilityRole="link" onPress={() => void Linking.openURL("https://developer.ebay.com/develop/api/buy/notification_events")} style={({ pressed }) => [styles.link, pressed && styles.pressed]}><Text style={[styles.buttonText, { color: colors.muted }]}>Access requirements</Text></Pressable>
       </View>
     </View>
