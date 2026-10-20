@@ -38,8 +38,12 @@ import {
   mapLiveEbayListings,
   type LiveEbayItemDetail,
   type Listing,
+  type ListingOutcome,
+  type ListingOutcomeKind,
 } from "@/lib/market-data";
 import { buildDemoThesis } from "@/lib/demo-thesis";
+
+const OUTCOME_STORAGE_KEY = "topCherry.listingOutcomes.v1";
 
 const triggerHaptic = () => {
   if (Platform.OS !== "web") {
@@ -483,6 +487,7 @@ function LiveAskingPriceDetail({ listing, colors, detail, loading }: { listing: 
         {gate.missingEvidence.map((item) => <Text key={item} style={[styles.decisionGateItem, { color: colors.muted }]}>• {item}</Text>)}
       </View>
       <AskingPriceWorksheet listing={listing} colors={colors} />
+      <ListingOutcomeLedger listing={listing} colors={colors} />
       <Text style={[styles.detailSubheading, { color: colors.foreground }]}>Item characteristics</Text>
       {loading ? <Text style={[styles.layerText, { color: colors.muted }]}>Loading eBay item details…</Text> : aspects.length ? aspects.map((aspect) => <View key={`${aspect.name}-${aspect.value}`} style={styles.aspectRow}><Text style={[styles.aspectName, { color: colors.muted }]}>{aspect.name}</Text><Text style={[styles.aspectValue, { color: colors.foreground }]}>{aspect.value}</Text></View>) : <Text style={[styles.layerText, { color: colors.muted }]}>No seller-provided characteristics were returned for this listing.</Text>}
     </View>
@@ -511,6 +516,56 @@ function AskingPriceWorksheet({ listing, colors }: { listing: Listing; colors: R
       <View><Text style={[styles.worksheetLabel, { color: colors.muted }]}>MAX ASK AT YOUR HURDLE</Text><Text style={[styles.worksheetValue, { color: maxAsk === null ? colors.muted : withinThreshold ? colors.success : colors.error }]}>{maxAsk === null ? "Enter benchmark" : formatCurrency(maxAsk, listing.currency)}</Text></View>
     </View>
     {maxAsk !== null ? <Text style={[styles.worksheetResultNote, { color: withinThreshold ? colors.success : colors.error }]}>{withinThreshold ? "The asking price is inside your stated hurdle; independent evidence is still required." : "The asking price is above your stated hurdle after estimated friction."}</Text> : null}
+  </View>;
+}
+
+const OUTCOME_LABELS: Record<ListingOutcomeKind, string> = {
+  "sale-observed": "Sale observed",
+  "price-revised": "Price revised",
+  "expired-or-removed": "Expired / removed",
+  unavailable: "Unavailable",
+};
+
+function ListingOutcomeLedger({ listing, colors }: { listing: Listing; colors: ReturnType<typeof useColors> }) {
+  const [kind, setKind] = useState<ListingOutcomeKind>("sale-observed");
+  const [realizedPriceText, setRealizedPriceText] = useState("");
+  const [note, setNote] = useState("");
+  const [outcomes, setOutcomes] = useState<ListingOutcome[]>([]);
+
+  useEffect(() => {
+    void AsyncStorage.getItem(OUTCOME_STORAGE_KEY).then((raw) => {
+      if (!raw) return;
+      try {
+        const all = JSON.parse(raw) as ListingOutcome[];
+        setOutcomes(all.filter((outcome) => outcome.listingId === listing.id).slice(0, 5));
+      } catch {
+        setOutcomes([]);
+      }
+    });
+  }, [listing.id]);
+
+  const addOutcome = async () => {
+    const realizedPrice = Number(realizedPriceText.replace(/[^0-9.]/g, "")) || undefined;
+    const record: ListingOutcome = { id: `${listing.id}:${Date.now()}`, listingId: listing.id, kind, observedAt: new Date().toISOString(), ...(realizedPrice ? { realizedPrice } : {}), ...(note.trim() ? { note: note.trim() } : {}) };
+    const raw = await AsyncStorage.getItem(OUTCOME_STORAGE_KEY);
+    let all: ListingOutcome[] = [];
+    try { all = raw ? JSON.parse(raw) as ListingOutcome[] : []; } catch { all = []; }
+    const next = [record, ...all].slice(0, 100);
+    await AsyncStorage.setItem(OUTCOME_STORAGE_KEY, JSON.stringify(next));
+    setOutcomes(next.filter((outcome) => outcome.listingId === listing.id).slice(0, 5));
+    setRealizedPriceText("");
+    setNote("");
+  };
+
+  return <View style={[styles.outcomeLedger, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+    <Text style={[styles.worksheetEyebrow, { color: colors.primary }]}>OUTCOME EVIDENCE</Text>
+    <Text style={[styles.worksheetTitle, { color: colors.foreground }]}>What happened afterward?</Text>
+    <Text style={[styles.worksheetText, { color: colors.muted }]}>Record observations without treating disappearance as a sale. This is the evidence that can eventually connect an ask to market response.</Text>
+    <View style={styles.outcomeKinds}>{(Object.keys(OUTCOME_LABELS) as ListingOutcomeKind[]).map((option) => <Pressable key={option} onPress={() => setKind(option)} style={[styles.outcomeKind, { backgroundColor: kind === option ? colors.foreground : colors.background, borderColor: colors.border }]}><Text style={[styles.outcomeKindText, { color: kind === option ? colors.background : colors.muted }]}>{OUTCOME_LABELS[option]}</Text></Pressable>)}</View>
+    {(kind === "sale-observed" || kind === "price-revised") ? <TextInput value={realizedPriceText} onChangeText={setRealizedPriceText} keyboardType="decimal-pad" placeholder="Observed price (optional)" placeholderTextColor={colors.muted} style={[styles.outcomeInput, { color: colors.foreground, backgroundColor: colors.background, borderColor: colors.border }]} /> : null}
+    <TextInput value={note} onChangeText={setNote} placeholder="Observation note (optional)" placeholderTextColor={colors.muted} style={[styles.outcomeInput, { color: colors.foreground, backgroundColor: colors.background, borderColor: colors.border }]} />
+    <Pressable onPress={() => void addOutcome()} style={({ pressed }) => [styles.outcomeButton, { backgroundColor: colors.primary }, pressed && styles.pressed]}><Text style={[styles.outcomeButtonText, { color: colors.onPrimary }]}>Record observation</Text></Pressable>
+    {outcomes.length ? <View style={styles.outcomeHistory}>{outcomes.map((outcome) => <View key={outcome.id} style={[styles.outcomeHistoryRow, { borderTopColor: colors.border }]}><Text style={[styles.outcomeHistoryLabel, { color: colors.foreground }]}>{OUTCOME_LABELS[outcome.kind]}{outcome.realizedPrice ? ` · ${formatCurrency(outcome.realizedPrice, listing.currency)}` : ""}</Text><Text style={[styles.outcomeHistoryDate, { color: colors.muted }]}>{new Date(outcome.observedAt).toLocaleDateString()}</Text></View>)}</View> : <Text style={[styles.outcomeEmpty, { color: colors.muted }]}>No outcome recorded yet.</Text>}
   </View>;
 }
 
@@ -680,6 +735,18 @@ const styles = StyleSheet.create({
   worksheetResults: { flexDirection: "row", justifyContent: "space-between", gap: 10, marginTop: 11 },
   worksheetValue: { fontSize: 14, fontWeight: "800", marginTop: 3 },
   worksheetResultNote: { fontSize: 10, lineHeight: 15, marginTop: 8 },
+  outcomeLedger: { borderWidth: 1, borderRadius: 14, padding: 11, marginTop: 12 },
+  outcomeKinds: { flexDirection: "row", flexWrap: "wrap", gap: 5, marginTop: 10 },
+  outcomeKind: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 7, paddingVertical: 6 },
+  outcomeKindText: { fontSize: 9, fontWeight: "700" },
+  outcomeInput: { borderWidth: 1, borderRadius: 8, height: 32, paddingHorizontal: 8, marginTop: 7, fontSize: 10 },
+  outcomeButton: { borderRadius: 8, alignItems: "center", paddingVertical: 8, marginTop: 8 },
+  outcomeButtonText: { fontSize: 10, fontWeight: "800" },
+  outcomeHistory: { marginTop: 8 },
+  outcomeHistoryRow: { borderTopWidth: 1, paddingTop: 7, marginTop: 7, flexDirection: "row", justifyContent: "space-between", gap: 8 },
+  outcomeHistoryLabel: { fontSize: 10, fontWeight: "700" },
+  outcomeHistoryDate: { fontSize: 9 },
+  outcomeEmpty: { fontSize: 9, marginTop: 8 },
   detailSubheading: { fontSize: 12, fontWeight: "800", marginTop: 14, marginBottom: 6 },
   aspectRow: { flexDirection: "row", justifyContent: "space-between", gap: 12, paddingVertical: 4 },
   aspectName: { flex: 1, fontSize: 10 },

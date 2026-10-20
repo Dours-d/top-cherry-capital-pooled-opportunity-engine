@@ -80,6 +80,17 @@ export const getAskingPriceDecisionGate = (listing: Listing): AskingPriceDecisio
   };
 };
 
+export type ListingOutcomeKind = "sale-observed" | "price-revised" | "expired-or-removed" | "unavailable";
+
+export type ListingOutcome = {
+  id: string;
+  listingId: string;
+  kind: ListingOutcomeKind;
+  observedAt: string;
+  realizedPrice?: number;
+  note?: string;
+};
+
 export type MarketSignals = {
   activeComparables: number;
   newListings7d: number;

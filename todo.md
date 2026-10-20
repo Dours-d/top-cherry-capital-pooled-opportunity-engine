@@ -49,6 +49,7 @@ Direction accepted on 14 October 2026, clarified as a multi-mechanism architectu
 - [x] R1.6f Asking-price decision gate: live records explicitly remain observe-only; Discover states the leverage of asking prices and lists the independent evidence required before considering one unit for allocation.
 - [x] R1.6g User-defined price test: live detail accepts an independent exit benchmark and minimum net buffer, then calculates a maximum acceptable ask after estimated shipping, fees and travel; it does not label the benchmark as market value.
 - [ ] R1.7 Outcomes and revision loop.
+- [x] R1.7a Local outcome ledger: live listing details can record observed sale, price revision, expiry/removal, or unavailability with optional realized price and notes; observations are research evidence only and do not infer a sale from disappearance.
 - [ ] R1.8 End-to-end acceptance.
 
 ## Later phases — paused
