@@ -54,6 +54,8 @@ Direction accepted on 14 October 2026, clarified as a multi-mechanism architectu
 - [x] R1.7c Seller concentration boundary: live feed reports seller concentration only when explicit seller IDs are present; current eBay summary normalization keeps seller identity unavailable rather than inferring coordination from titles or prices.
 - [x] R1.7d Seller identity propagation: preserve eBay Browse seller usernames when supplied, enabling verified seller concentration analysis without changing the unknown state when the provider omits the field.
 - [x] R1.7e Confidence-aware identity clustering: candidate keys now combine normalized model/condition with seller and location when available; same-model rows from different sellers are not merged, and cluster confidence remains provisional.
+- [x] R1.7f Outcome quality summary: observed outcomes are summarized by evidence quality and ask-to-observed-price movement; expiry/removal remains partial evidence and never becomes a sale automatically.
+- [x] R1.8a Acceptance extension: regression coverage now traverses provisional identity clustering, observed outcome evidence, and the existing thesis/candidate/budget allocation gate.
 - [ ] R1.8 End-to-end acceptance.
 
 ## Later phases — paused

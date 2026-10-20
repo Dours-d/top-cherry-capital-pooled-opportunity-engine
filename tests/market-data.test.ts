@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_ECONOMICS, LISTINGS, PROFILES, formatCurrency, getAskingPriceDecisionGate, getCandidateIdentityConfidence, getListingEconomics, getListingRedundancySummary, getListingSignals, getMaxAskingPriceForTarget, getProfile, getProfileListings, mapLiveEbayListings, recommendAllocations } from "../lib/market-data";
+import { DEFAULT_ECONOMICS, LISTINGS, PROFILES, formatCurrency, getAskingPriceDecisionGate, getCandidateIdentityConfidence, getListingEconomics, getListingRedundancySummary, getListingSignals, getMaxAskingPriceForTarget, getProfile, getProfileListings, mapLiveEbayListings, recommendAllocations, summarizeListingOutcomes } from "../lib/market-data";
 
 describe("Top Cherry market data", () => {
   it("ships a broad marketplace-independent default category registry", () => {
@@ -107,6 +107,12 @@ describe("Top Cherry market data", () => {
     const summary = getListingRedundancySummary([first, second]);
     expect(summary.candidateItemCount).toBe(2);
     expect(getCandidateIdentityConfidence(first)).toBe("high");
+  });
+
+  it("grades outcome evidence without treating removal as a sale", () => {
+    const listing = { askingPrice: 1000 };
+    expect(summarizeListingOutcomes(listing, [{ id: "removed", listingId: "x", kind: "expired-or-removed", observedAt: "2026-10-20T00:00:00.000Z" }])).toMatchObject({ evidenceQuality: "partial", latestKind: "expired-or-removed", latestObservedPrice: null, priceDeltaFromAsk: null });
+    expect(summarizeListingOutcomes(listing, [{ id: "sale", listingId: "x", kind: "sale-observed", observedAt: "2026-10-20T00:00:00.000Z", realizedPrice: 900 }])).toMatchObject({ evidenceQuality: "strong", latestObservedPrice: 900, priceDeltaFromAsk: -0.1 });
   });
 
   it("changes the recommended mix when the available capital changes", () => {

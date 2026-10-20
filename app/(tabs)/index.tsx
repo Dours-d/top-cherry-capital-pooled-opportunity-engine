@@ -32,6 +32,7 @@ import {
   getListingEconomics,
   getListingRedundancySummary,
   getMaxAskingPriceForTarget,
+  summarizeListingOutcomes,
   getProfile,
   getListingCountry,
   getListingSignals,
@@ -535,6 +536,7 @@ function ListingOutcomeLedger({ listing, colors }: { listing: Listing; colors: R
   const [realizedPriceText, setRealizedPriceText] = useState("");
   const [note, setNote] = useState("");
   const [outcomes, setOutcomes] = useState<ListingOutcome[]>([]);
+  const outcomeSummary = summarizeListingOutcomes(listing, outcomes);
 
   useEffect(() => {
     void AsyncStorage.getItem(OUTCOME_STORAGE_KEY).then((raw) => {
@@ -570,6 +572,7 @@ function ListingOutcomeLedger({ listing, colors }: { listing: Listing; colors: R
     <TextInput value={note} onChangeText={setNote} placeholder="Observation note (optional)" placeholderTextColor={colors.muted} style={[styles.outcomeInput, { color: colors.foreground, backgroundColor: colors.background, borderColor: colors.border }]} />
     <Pressable onPress={() => void addOutcome()} style={({ pressed }) => [styles.outcomeButton, { backgroundColor: colors.primary }, pressed && styles.pressed]}><Text style={[styles.outcomeButtonText, { color: colors.onPrimary }]}>Record observation</Text></Pressable>
     {outcomes.length ? <View style={styles.outcomeHistory}>{outcomes.map((outcome) => <View key={outcome.id} style={[styles.outcomeHistoryRow, { borderTopColor: colors.border }]}><Text style={[styles.outcomeHistoryLabel, { color: colors.foreground }]}>{OUTCOME_LABELS[outcome.kind]}{outcome.realizedPrice ? ` · ${formatCurrency(outcome.realizedPrice, listing.currency)}` : ""}</Text><Text style={[styles.outcomeHistoryDate, { color: colors.muted }]}>{new Date(outcome.observedAt).toLocaleDateString()}</Text></View>)}</View> : <Text style={[styles.outcomeEmpty, { color: colors.muted }]}>No outcome recorded yet.</Text>}
+    {outcomes.length ? <Text style={[styles.outcomeSummary, { color: outcomeSummary.evidenceQuality === "strong" ? colors.success : colors.muted }]}>{outcomeSummary.evidenceQuality === "strong" && outcomeSummary.priceDeltaFromAsk !== null ? `Observed priced outcome is ${(outcomeSummary.priceDeltaFromAsk * 100).toFixed(1)}% versus the original ask.` : `${outcomeSummary.observationCount} observation${outcomeSummary.observationCount === 1 ? "" : "s"}; no realized sale price established.`}</Text> : null}
   </View>;
 }
 
@@ -751,6 +754,7 @@ const styles = StyleSheet.create({
   outcomeHistoryLabel: { fontSize: 10, fontWeight: "700" },
   outcomeHistoryDate: { fontSize: 9 },
   outcomeEmpty: { fontSize: 9, marginTop: 8 },
+  outcomeSummary: { fontSize: 10, lineHeight: 15, marginTop: 8 },
   detailSubheading: { fontSize: 12, fontWeight: "800", marginTop: 14, marginBottom: 6 },
   aspectRow: { flexDirection: "row", justifyContent: "space-between", gap: 12, paddingVertical: 4 },
   aspectName: { flex: 1, fontSize: 10 },

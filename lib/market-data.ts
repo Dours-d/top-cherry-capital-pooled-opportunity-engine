@@ -93,6 +93,28 @@ export type ListingOutcome = {
   note?: string;
 };
 
+export type ListingOutcomeSummary = {
+  observationCount: number;
+  latestKind: ListingOutcomeKind | null;
+  latestObservedPrice: number | null;
+  priceDeltaFromAsk: number | null;
+  evidenceQuality: "none" | "partial" | "strong";
+};
+
+export const summarizeListingOutcomes = (listing: Pick<Listing, "askingPrice">, outcomes: ListingOutcome[]): ListingOutcomeSummary => {
+  const ordered = [...outcomes].sort((a, b) => b.observedAt.localeCompare(a.observedAt));
+  const latest = ordered[0];
+  const priced = ordered.find((outcome) => typeof outcome.realizedPrice === "number");
+  const latestObservedPrice = priced?.realizedPrice ?? null;
+  return {
+    observationCount: ordered.length,
+    latestKind: latest?.kind ?? null,
+    latestObservedPrice,
+    priceDeltaFromAsk: latestObservedPrice !== null && listing.askingPrice > 0 ? (latestObservedPrice - listing.askingPrice) / listing.askingPrice : null,
+    evidenceQuality: ordered.some((outcome) => outcome.kind === "sale-observed" && typeof outcome.realizedPrice === "number") ? "strong" : ordered.length ? "partial" : "none",
+  };
+};
+
 export type ListingRedundancySummary = {
   rawListingCount: number;
   candidateItemCount: number;
