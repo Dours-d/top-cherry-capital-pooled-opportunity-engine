@@ -10,6 +10,7 @@ describe("eBay Browse adapter", () => {
       price: { value: "3066.70", currency: "GBP" },
       condition: "Used",
       itemWebUrl: "https://www.ebay.co.uk/itm/123",
+      itemAffiliateWebUrl: "https://www.ebay.co.uk/itm/123?campid=affiliate",
       itemLocation: { country: "GB" },
     }, "EBAY_GB");
 
@@ -19,6 +20,7 @@ describe("eBay Browse adapter", () => {
     expect(listing.marketValue).toBe(0);
     expect(listing.verified).toBe(false);
     expect(listing.url).toContain("ebay.co.uk");
+    expect(listing.affiliateUrl).toContain("campid=affiliate");
   });
 
   it("passes Browse offset and reports whether another page exists", async () => {

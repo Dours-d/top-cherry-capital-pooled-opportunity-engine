@@ -49,6 +49,8 @@ Search can also request `fieldgroups=ASPECT_REFINEMENTS` to discover the dominan
 
 The next data-layer step for Top Cherry is therefore `live listing -> getItem detail -> localizedAspects/product/shipping observation`, with each field retaining retrieval time and source URL. This does not require enabling checkout or bidding.
 
+The live adapter now also preserves eBay's `itemAffiliateWebUrl` when eBay supplies it. Before a live listing is opened, Discover presents an explicit disclosure that the user is leaving Top Cherry for eBay, that Top Cherry is not eBay and has not verified a sale, and that a commission may be earned. If eBay does not return an affiliate URL, the app falls back to the ordinary listing URL but does not claim that a commission is available.
+
 ## How to become authorised for restricted item and listing capabilities
 
 There are two different approvals and they should not be conflated:

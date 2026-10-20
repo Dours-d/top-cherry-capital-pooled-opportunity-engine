@@ -78,6 +78,7 @@ export default function HomeScreen() {
   const [query, setQuery] = useState("");
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
   const [showNotice, setShowNotice] = useState(false);
+  const [showOutboundNotice, setShowOutboundNotice] = useState(false);
 
   const liveSearchQuery = query.trim() || getEbaySearchTerm(activeSlug);
   const liveSearch = trpc.marketplace.searchEbay.useQuery(
@@ -410,11 +411,12 @@ export default function HomeScreen() {
                   <MaterialIcons name={savedIds.includes(selectedListing.id) ? "bookmark" : "bookmark-border"} size={20} color={colors.foreground} />
                   <Text style={[styles.secondaryButtonText, { color: colors.foreground }]}>{savedIds.includes(selectedListing.id) ? "Saved" : "Save deal"}</Text>
                 </Pressable>
-                <Pressable onPress={() => Linking.openURL(selectedListing.url)} style={({ pressed }) => [styles.primaryButton, { backgroundColor: colors.primary }, pressed && styles.pressed]}>
+                <Pressable onPress={() => { if (selectedListing.sourceMode === "live-asking-price") setShowOutboundNotice(true); else void Linking.openURL(selectedListing.url); }} style={({ pressed }) => [styles.primaryButton, { backgroundColor: colors.primary }, pressed && styles.pressed]}>
                   <Text style={[styles.primaryButtonText, { color: colors.foreground }]}>Open listing</Text>
                   <MaterialIcons name="north-east" size={18} color={colors.foreground} />
                 </Pressable>
               </View>
+              {selectedListing.sourceMode === "live-asking-price" && showOutboundNotice ? <View style={[styles.outboundNotice, { backgroundColor: colors.surface, borderColor: colors.border }]}><Text style={[styles.outboundTitle, { color: colors.foreground }]}>Leaving Top Cherry</Text><Text style={[styles.outboundText, { color: colors.muted }]}>You are going to eBay to inspect this listing. Top Cherry is not eBay, does not process the transaction, and has not verified the asking price as a sale price. Affiliate disclosure: Top Cherry may earn a commission if you buy through this link.</Text><View style={styles.outboundActions}><Pressable onPress={() => setShowOutboundNotice(false)} style={({ pressed }) => [styles.secondaryButton, { borderColor: colors.border }, pressed && styles.pressed]}><Text style={[styles.secondaryButtonText, { color: colors.foreground }]}>Cancel</Text></Pressable><Pressable onPress={() => { setShowOutboundNotice(false); void Linking.openURL(selectedListing.affiliateUrl ?? selectedListing.url); }} style={({ pressed }) => [styles.primaryButton, { backgroundColor: colors.primary }, pressed && styles.pressed]}><Text style={[styles.primaryButtonText, { color: colors.foreground }]}>Continue to eBay</Text></Pressable></View></View> : null}
               </ScrollView>
             </View>
           </View>
@@ -628,6 +630,10 @@ const styles = StyleSheet.create({
   aspectRow: { flexDirection: "row", justifyContent: "space-between", gap: 12, paddingVertical: 4 },
   aspectName: { flex: 1, fontSize: 10 },
   aspectValue: { flex: 1, fontSize: 10, fontWeight: "700", textAlign: "right" },
+  outboundNotice: { borderWidth: 1, borderRadius: 14, padding: 12, marginTop: 12 },
+  outboundTitle: { fontSize: 13, fontWeight: "800" },
+  outboundText: { fontSize: 10, lineHeight: 15, marginTop: 6 },
+  outboundActions: { flexDirection: "row", justifyContent: "flex-end", gap: 8, marginTop: 10 },
   refreshButton: { alignSelf: "flex-start", borderRadius: 9, paddingHorizontal: 10, paddingVertical: 7, flexDirection: "row", alignItems: "center", gap: 5, marginTop: 11 },
   refreshText: { fontSize: 10, fontWeight: "800" },
   feedFooter: { flexDirection: "row", justifyContent: "center", gap: 8, paddingVertical: 12 },

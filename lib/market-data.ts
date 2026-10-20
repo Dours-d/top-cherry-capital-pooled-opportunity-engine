@@ -25,6 +25,7 @@ export type Listing = {
   verified: boolean;
   age: string;
   url: string;
+  affiliateUrl?: string;
   countryCode?: string;
   pickupDistanceKm?: number;
   shippingCost?: number;
@@ -45,6 +46,7 @@ export type LiveEbayListing = {
   countryCode?: string;
   currency?: string;
   url?: string;
+  affiliateUrl?: string;
   fetchedAt?: string;
 };
 
@@ -143,6 +145,7 @@ export const mapLiveEbayListings = (listings: LiveEbayListing[]): Listing[] => l
   verified: false,
   age: "just now",
   url: listing.url ?? "https://www.ebay.co.uk/",
+  affiliateUrl: listing.affiliateUrl,
   currency: listing.currency ?? "GBP",
   sourceMode: "live-asking-price",
 }));
