@@ -56,6 +56,7 @@ Direction accepted on 14 October 2026, clarified as a multi-mechanism architectu
 - [x] R1.7e Confidence-aware identity clustering: candidate keys now combine normalized model/condition with seller and location when available; same-model rows from different sellers are not merged, and cluster confidence remains provisional.
 - [x] R1.7f Outcome quality summary: observed outcomes are summarized by evidence quality and ask-to-observed-price movement; expiry/removal remains partial evidence and never becomes a sale automatically.
 - [x] R1.8a Acceptance extension: regression coverage now traverses provisional identity clustering, observed outcome evidence, and the existing thesis/candidate/budget allocation gate.
+- [x] R1.7g Local re-observation cadence: outcome records can schedule a persisted 24-hour follow-up timestamp; this is an in-app research reminder, not a server-side collector or unattended provider job.
 - [ ] R1.8 End-to-end acceptance.
 
 ## Later phases — paused

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_ECONOMICS, LISTINGS, PROFILES, formatCurrency, getAskingPriceDecisionGate, getCandidateIdentityConfidence, getListingEconomics, getListingRedundancySummary, getListingSignals, getMaxAskingPriceForTarget, getProfile, getProfileListings, mapLiveEbayListings, recommendAllocations, summarizeListingOutcomes } from "../lib/market-data";
+import { DEFAULT_ECONOMICS, LISTINGS, PROFILES, formatCurrency, getAskingPriceDecisionGate, getCandidateIdentityConfidence, getListingEconomics, getListingRedundancySummary, getListingSignals, getMaxAskingPriceForTarget, getNextObservationAt, getProfile, getProfileListings, mapLiveEbayListings, recommendAllocations, summarizeListingOutcomes } from "../lib/market-data";
 
 describe("Top Cherry market data", () => {
   it("ships a broad marketplace-independent default category registry", () => {
@@ -113,6 +113,11 @@ describe("Top Cherry market data", () => {
     const listing = { askingPrice: 1000 };
     expect(summarizeListingOutcomes(listing, [{ id: "removed", listingId: "x", kind: "expired-or-removed", observedAt: "2026-10-20T00:00:00.000Z" }])).toMatchObject({ evidenceQuality: "partial", latestKind: "expired-or-removed", latestObservedPrice: null, priceDeltaFromAsk: null });
     expect(summarizeListingOutcomes(listing, [{ id: "sale", listingId: "x", kind: "sale-observed", observedAt: "2026-10-20T00:00:00.000Z", realizedPrice: 900 }])).toMatchObject({ evidenceQuality: "strong", latestObservedPrice: 900, priceDeltaFromAsk: -0.1 });
+  });
+
+  it("sets the next observation from the recorded observation time", () => {
+    expect(getNextObservationAt("2026-10-20T00:00:00.000Z", 24)).toBe("2026-10-21T00:00:00.000Z");
+    expect(getNextObservationAt("2026-10-20T00:00:00.000Z", 0)).toBe("2026-10-20T01:00:00.000Z");
   });
 
   it("changes the recommended mix when the available capital changes", () => {
