@@ -8,7 +8,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { trpc } from "@/lib/trpc";
 import { startOAuthLogin } from "@/constants/oauth";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { DEFAULT_ECONOMICS, ECONOMICS_STORAGE_KEY, type EconomicsAssumptions } from "@/lib/market-data";
+import { DEFAULT_ECONOMICS, ECONOMICS_STORAGE_KEY, getObservationScheduleState, OBSERVATION_SCHEDULE_STORAGE_KEY, OUTCOME_STORAGE_KEY, type EconomicsAssumptions, type ListingOutcome } from "@/lib/market-data";
 import { MARKETPLACE_SOURCES, PHASE_ONE_EBAY_TASKS, SOURCE_SYNC_SNAPSHOT } from "@/server/marketplace";
 import { EbayMonitor } from "@/components/ebay-monitor";
 import { ThesisDraftEditor } from "@/components/thesis-draft-editor";
@@ -32,6 +32,8 @@ export default function ProfileScreen() {
   const [dailyDigest, setDailyDigest] = useState(false);
   const [economics, setEconomics] = useState(DEFAULT_ECONOMICS);
   const [ebayReadiness, setEbayReadiness] = useState<Record<string, boolean>>({});
+  const [followUps, setFollowUps] = useState<{ listingId: string; nextObserveAt: string }[]>([]);
+  const [followUpOutcomes, setFollowUpOutcomes] = useState<ListingOutcome[]>([]);
 
   useEffect(() => {
     if (preferencesQuery.data) {
@@ -50,6 +52,16 @@ export default function ProfileScreen() {
     void AsyncStorage.getItem(EBAY_READINESS_KEY).then((raw) => {
       if (raw) setEbayReadiness(JSON.parse(raw) as Record<string, boolean>);
     }).catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    void Promise.all([AsyncStorage.getItem(OBSERVATION_SCHEDULE_STORAGE_KEY), AsyncStorage.getItem(OUTCOME_STORAGE_KEY)]).then(([scheduleRaw, outcomesRaw]) => {
+      try {
+        const schedules = scheduleRaw ? JSON.parse(scheduleRaw) as Record<string, string | { nextObserveAt: string }> : {};
+        setFollowUps(Object.entries(schedules).map(([listingId, value]) => ({ listingId, nextObserveAt: typeof value === "string" ? value : value.nextObserveAt })).filter((item) => item.nextObserveAt).sort((a, b) => new Date(a.nextObserveAt).getTime() - new Date(b.nextObserveAt).getTime()));
+      } catch { setFollowUps([]); }
+      try { setFollowUpOutcomes(outcomesRaw ? JSON.parse(outcomesRaw) as ListingOutcome[] : []); } catch { setFollowUpOutcomes([]); }
+    });
   }, []);
 
   const updateEconomics = (patch: Partial<EconomicsAssumptions>) => {
@@ -74,6 +86,8 @@ export default function ProfileScreen() {
         <ThesisDraftEditor />
         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Notification monitor</Text>
         <EbayMonitor />
+        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Research follow-ups</Text>
+        <ObservationFollowUpQueue colors={colors} followUps={followUps} outcomes={followUpOutcomes} />
         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>eBay authorization readiness</Text>
         <EbayReadinessChecklist colors={colors} completed={ebayReadiness} onToggle={(id) => {
           const next = { ...ebayReadiness, [id]: !ebayReadiness[id] };
@@ -137,6 +151,19 @@ export default function ProfileScreen() {
   );
 }
 
+function ObservationFollowUpQueue({ colors, followUps, outcomes }: { colors: ReturnType<typeof useColors>; followUps: { listingId: string; nextObserveAt: string }[]; outcomes: ListingOutcome[] }) {
+  const dueCount = followUps.filter((item) => { const state = getObservationScheduleState(item.nextObserveAt); return state === "due" || state === "overdue"; }).length;
+  return <View style={[styles.followUpCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+    <View style={styles.readinessHeader}><View style={styles.settingCopy}><Text style={[styles.settingTitle, { color: colors.foreground }]}>Observation queue</Text><Text style={[styles.settingDescription, { color: colors.muted }]}>{followUps.length ? `${dueCount} due · ${followUps.length} scheduled` : "No local follow-ups scheduled"}</Text></View><View style={[styles.statusBadge, { backgroundColor: dueCount ? colors.warning : colors.background }]}><Text style={[styles.statusBadgeText, { color: dueCount ? colors.foreground : colors.muted }]}>{dueCount ? "REVIEW" : "QUIET"}</Text></View></View>
+    <Text style={[styles.dataNote, { color: colors.muted }]}>This queue is a reminder to refresh and record evidence. It does not mean that a marketplace listing was fetched or that an outcome occurred.</Text>
+    {followUps.length ? followUps.slice(0, 8).map((item, index) => {
+      const state = getObservationScheduleState(item.nextObserveAt);
+      const latest = outcomes.filter((outcome) => outcome.listingId === item.listingId).sort((a, b) => b.observedAt.localeCompare(a.observedAt))[0];
+      return <View key={item.listingId} style={styles.followUpRow}><MaterialIcons name={state === "overdue" ? "warning" : state === "due" ? "schedule" : "event-note"} size={18} color={state === "overdue" || state === "due" ? colors.warning : colors.primary} /><View style={styles.settingCopy}><Text style={[styles.settingTitle, { color: colors.foreground }]} numberOfLines={1}>{item.listingId}</Text><Text style={[styles.settingDescription, { color: colors.muted }]}>{state === "overdue" ? "Overdue" : state === "due" ? "Due now" : `Due ${new Date(item.nextObserveAt).toLocaleString()}`}{latest ? ` · last ${latest.kind}` : " · no outcome recorded"}</Text></View>{index < Math.min(followUps.length, 8) - 1 ? <View style={[styles.connectorDivider, { backgroundColor: colors.border }]} /> : null}</View>;
+    }) : <Text style={[styles.dataNote, { color: colors.muted }]}>Open a live listing, then use its outcome ledger to schedule a 24-hour follow-up.</Text>}
+  </View>;
+}
+
 function EbayReadinessChecklist({ colors, completed, onToggle }: { colors: ReturnType<typeof useColors>; completed: Record<string, boolean>; onToggle: (id: string) => void }) {
   const doneCount = EBAY_READINESS_ITEMS.filter((item) => item.state === "DONE" || completed[item.id]).length;
   return <View style={[styles.readinessCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -189,8 +216,10 @@ const styles = StyleSheet.create({
   divider: { height: 1, marginLeft: 46 },
   dataCard: { borderRadius: 19, borderWidth: 1, padding: 14, marginBottom: 27 },
   readinessCard: { borderRadius: 19, borderWidth: 1, padding: 14, marginBottom: 27 },
+  followUpCard: { borderRadius: 19, borderWidth: 1, padding: 14, marginBottom: 27 },
   readinessHeader: { flexDirection: "row", alignItems: "center", gap: 10 },
   readinessItem: { minHeight: 58, flexDirection: "row", alignItems: "center", gap: 8, position: "relative" },
+  followUpRow: { minHeight: 58, flexDirection: "row", alignItems: "center", gap: 9, position: "relative" },
   readinessCheck: { width: 24, alignItems: "center" },
   readinessLink: { paddingHorizontal: 4, paddingVertical: 6 },
   readinessLinkText: { fontSize: 10, fontWeight: "800" },

@@ -38,6 +38,8 @@ import {
   getListingSignals,
   getNextObservationAt,
   getObservationScheduleState,
+  OBSERVATION_SCHEDULE_STORAGE_KEY,
+  OUTCOME_STORAGE_KEY,
   getEbaySearchTerm,
   mapLiveEbayListings,
   type LiveEbayItemDetail,
@@ -47,8 +49,6 @@ import {
 } from "@/lib/market-data";
 import { buildDemoThesis } from "@/lib/demo-thesis";
 
-const OUTCOME_STORAGE_KEY = "topCherry.listingOutcomes.v1";
-const OBSERVATION_SCHEDULE_KEY = "topCherry.observationSchedules.v1";
 
 const triggerHaptic = () => {
   if (Platform.OS !== "web") {
@@ -556,7 +556,7 @@ function ListingOutcomeLedger({ listing, colors }: { listing: Listing; colors: R
   }, [listing.id]);
 
   useEffect(() => {
-    void AsyncStorage.getItem(OBSERVATION_SCHEDULE_KEY).then((raw) => {
+    void AsyncStorage.getItem(OBSERVATION_SCHEDULE_STORAGE_KEY).then((raw) => {
       if (!raw) return;
       try { setNextObserveAt((JSON.parse(raw) as Record<string, string>)[listing.id] ?? null); } catch { setNextObserveAt(null); }
     });
@@ -565,9 +565,9 @@ function ListingOutcomeLedger({ listing, colors }: { listing: Listing; colors: R
   const scheduleNextObservation = async (observedAt = new Date().toISOString()) => {
     const next = getNextObservationAt(observedAt, 24);
     let all: Record<string, string> = {};
-    try { const raw = await AsyncStorage.getItem(OBSERVATION_SCHEDULE_KEY); all = raw ? JSON.parse(raw) as Record<string, string> : {}; } catch { all = {}; }
+    try { const raw = await AsyncStorage.getItem(OBSERVATION_SCHEDULE_STORAGE_KEY); all = raw ? JSON.parse(raw) as Record<string, string> : {}; } catch { all = {}; }
     all[listing.id] = next;
-    await AsyncStorage.setItem(OBSERVATION_SCHEDULE_KEY, JSON.stringify(all));
+    await AsyncStorage.setItem(OBSERVATION_SCHEDULE_STORAGE_KEY, JSON.stringify(all));
     setNextObserveAt(next);
   };
 
