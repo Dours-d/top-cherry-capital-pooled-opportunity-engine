@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { LISTINGS } from "../lib/market-data";
+import { LISTINGS, getMaxPlannableQuantity } from "../lib/market-data";
 import { MARKETPLACE_SOURCES, PHASE_ONE_EBAY_TASKS, getMarketplaceReadiness, previewNormalizedImport, scoreNormalizedListing } from "../server/marketplace";
 
 describe("pooled capital planning", () => {
@@ -13,6 +13,16 @@ describe("pooled capital planning", () => {
     expect(deployed).toBe(27600);
     expect(projectedUpside).toBe(11400);
     expect((deployed / budget) * 100).toBeCloseTo(92, 5);
+  });
+
+  it("requires a local reservation and confirmed stock before planning quantity", () => {
+    expect(getMaxPlannableQuantity({ budget: 10000, reserve: 1000, otherCommitted: 0, unitCost: 2000, confirmedStock: null, reservation: "reserved" })).toBe(0);
+    expect(getMaxPlannableQuantity({ budget: 10000, reserve: 1000, otherCommitted: 0, unitCost: 2000, confirmedStock: 5, reservation: "unreserved" })).toBe(0);
+    expect(getMaxPlannableQuantity({ budget: 10000, reserve: 1000, otherCommitted: 0, unitCost: 2000, confirmedStock: 2, reservation: "reserved" })).toBe(2);
+  });
+
+  it("caps planned quantity by both confirmed stock and all-in affordability", () => {
+    expect(getMaxPlannableQuantity({ budget: 10000, reserve: 1000, otherCommitted: 1000, unitCost: 2000, confirmedStock: 10, reservation: "reserved" })).toBe(4);
   });
 
   it("sizes a normalized import with a deterministic Cherry Score", () => {

@@ -41,7 +41,7 @@ Direction accepted on 14 October 2026, clarified as a multi-mechanism architectu
   - [x] R1.5k Server-to-device reconciliation with merge-on-newer behavior and explicit same-revision conflict state.
   - [x] R1.5l Reviewer identity and resolution timestamp metadata are retained in structured contradiction markers.
   - [x] R1.5m End-to-end acceptance gate now covers thesis readiness, candidate verification/protection, net upside, reserve, budget, and Plan handoff.
-- [x] R1.6 Partial: Plan now uses all-in acquisition cash and an explicit user-editable reserve; confirmed-stock and reservation semantics remain pending.
+- [x] R1.6 Plan uses all-in acquisition cash, an explicit user-editable cash reserve, confirmed-stock limits, and an explicit local reservation state; legacy quantities are reconciled out unless both prerequisites are present.
 - [x] R1.6b Discover live asking-price toggle: public, read-only eBay Browse results are surfaced by profile; currency is preserved and market value, margin, score and history remain explicitly unknown.
 - [x] R1.6c Live Browse controls and detail path: refresh and offset pagination are available; opening a live item requests seller-provided `localizedAspects` through Browse `getItem` with `PRODUCT`, without enabling checkout, bidding or user tokens.
 - [x] R1.6d Affiliate destination boundary: preserve eBay `itemAffiliateWebUrl` when supplied and require an explicit outbound disclosure before opening live eBay listings.

@@ -210,6 +210,27 @@ export const getListingEconomics = (listing: Listing, assumptions: EconomicsAssu
 
 export const getAllInAcquisitionCost = (listing: Listing, assumptions: EconomicsAssumptions = DEFAULT_ECONOMICS) => listing.askingPrice + getListingEconomics(listing, assumptions).totalCosts;
 
+export type ReservationStatus = "unreserved" | "reserved";
+
+export const getMaxPlannableQuantity = ({
+  budget,
+  reserve,
+  otherCommitted,
+  unitCost,
+  confirmedStock,
+  reservation,
+}: {
+  budget: number;
+  reserve: number;
+  otherCommitted: number;
+  unitCost: number;
+  confirmedStock: number | null;
+  reservation: ReservationStatus;
+}) => {
+  if (reservation !== "reserved" || confirmedStock === null || confirmedStock <= 0 || unitCost <= 0) return 0;
+  return Math.min(confirmedStock, Math.floor(Math.max(0, budget - reserve - otherCommitted) / unitCost));
+};
+
 export const recommendAllocations = (budget: number, listings: Listing[] = LISTINGS, assumptions: EconomicsAssumptions = DEFAULT_ECONOMICS, reserve = 0): Record<string, number> => {
   const safeBudget = Math.max(0, Math.floor(budget - Math.max(0, reserve)));
   let best: { allocations: Record<string, number>; upside: number; score: number; count: number } = { allocations: {}, upside: 0, score: 0, count: 0 };

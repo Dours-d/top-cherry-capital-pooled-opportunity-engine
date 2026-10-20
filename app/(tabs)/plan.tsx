@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { FlatList, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
-import { DEFAULT_ECONOMICS, ECONOMICS_STORAGE_KEY, LISTINGS, PROFILES, formatCurrency, getAllInAcquisitionCost, getListingEconomics, recommendAllocations, type EconomicsAssumptions, type Listing } from "@/lib/market-data";
+import { DEFAULT_ECONOMICS, ECONOMICS_STORAGE_KEY, LISTINGS, PROFILES, formatCurrency, getAllInAcquisitionCost, getListingEconomics, getMaxPlannableQuantity, recommendAllocations, type EconomicsAssumptions, type Listing, type ReservationStatus } from "@/lib/market-data";
 
 const PLAN_STORAGE_KEY = "topCherry.capitalPlan";
 const DEFAULT_BUDGET = 25000;
@@ -24,7 +24,9 @@ export default function PlanScreen() {
   const [budget, setBudget] = useState(DEFAULT_BUDGET);
   const [budgetText, setBudgetText] = useState(String(DEFAULT_BUDGET));
   const [reservePercent, setReservePercent] = useState(DEFAULT_RESERVE_PERCENT);
-  const [allocations, setAllocations] = useState<AllocationMap>(() => recommendAllocations(DEFAULT_BUDGET, LISTINGS, DEFAULT_ECONOMICS, DEFAULT_BUDGET * DEFAULT_RESERVE_PERCENT / 100));
+  const [allocations, setAllocations] = useState<AllocationMap>({});
+  const [confirmedStock, setConfirmedStock] = useState<Record<string, number | null>>({});
+  const [reservations, setReservations] = useState<Record<string, ReservationStatus>>({});
   const [profileFilter, setProfileFilter] = useState("all");
   const [economics, setEconomics] = useState<EconomicsAssumptions>(DEFAULT_ECONOMICS);
 
@@ -34,14 +36,18 @@ export default function PlanScreen() {
     });
     void AsyncStorage.getItem(PLAN_STORAGE_KEY).then((raw) => {
       if (!raw) return;
-      const saved = JSON.parse(raw) as { budget?: number; reservePercent?: number; allocations?: AllocationMap };
+      const saved = JSON.parse(raw) as { budget?: number; reservePercent?: number; allocations?: AllocationMap; confirmedStock?: Record<string, number | null>; reservations?: Record<string, ReservationStatus> };
       if (saved.budget) {
         setBudget(saved.budget);
         setBudgetText(String(saved.budget));
       }
       if (saved.reservePercent !== undefined) setReservePercent(saved.reservePercent);
-      if (saved.allocations) setAllocations(saved.allocations);
-      else setAllocations(recommendAllocations(saved.budget ?? DEFAULT_BUDGET, LISTINGS, economics, (saved.budget ?? DEFAULT_BUDGET) * (saved.reservePercent ?? DEFAULT_RESERVE_PERCENT) / 100));
+      const nextStock = saved.confirmedStock ?? {};
+      const nextReservations = saved.reservations ?? {};
+      const nextAllocations = Object.fromEntries(Object.entries(saved.allocations ?? {}).filter(([listingId, quantity]) => nextReservations[listingId] === "reserved" && typeof nextStock[listingId] === "number" && (nextStock[listingId] ?? 0) > 0 && quantity > 0));
+      setAllocations(nextAllocations);
+      setConfirmedStock(nextStock);
+      setReservations(nextReservations);
     });
   }, [economics]);
 
@@ -49,16 +55,32 @@ export default function PlanScreen() {
     () => profileFilter === "all" ? LISTINGS : LISTINGS.filter((listing) => listing.profileSlug === profileFilter),
     [profileFilter],
   );
-  const rows = LISTINGS.map((listing) => ({ listing, quantity: allocations[listing.id] ?? 0 }));
+  const rows = LISTINGS.map((listing) => ({ listing, quantity: allocations[listing.id] ?? 0, stock: confirmedStock[listing.id] ?? null, reservation: reservations[listing.id] ?? "unreserved" as ReservationStatus }));
   const reserve = budget * reservePercent / 100;
   const deployed = rows.reduce((sum, row) => sum + row.quantity * getAllInAcquisitionCost(row.listing, economics), 0);
   const upside = rows.reduce((sum, row) => sum + row.quantity * getListingEconomics(row.listing, economics).netUpside, 0);
   const remaining = budget - reserve - deployed;
   const selectedCount = rows.filter((row) => row.quantity > 0).length;
+  const reservedCount = rows.filter((row) => row.reservation === "reserved").length;
+  const confirmedCount = rows.filter((row) => row.stock !== null).length;
   const linkedCandidate = candidate ? LISTINGS.find((listing) => listing.id === candidate) : undefined;
 
-  const persist = (nextBudget: number, nextAllocations: AllocationMap, nextReservePercent = reservePercent) => {
-    void AsyncStorage.setItem(PLAN_STORAGE_KEY, JSON.stringify({ budget: nextBudget, reservePercent: nextReservePercent, allocations: nextAllocations }));
+  const persist = (nextBudget: number, nextAllocations: AllocationMap, nextReservePercent = reservePercent, nextStock = confirmedStock, nextReservations = reservations) => {
+    void AsyncStorage.setItem(PLAN_STORAGE_KEY, JSON.stringify({ budget: nextBudget, reservePercent: nextReservePercent, allocations: nextAllocations, confirmedStock: nextStock, reservations: nextReservations }));
+  };
+
+  const reconcileAllocations = (nextBudget: number, nextReserve: number, sourceAllocations: AllocationMap, stock = confirmedStock, reservationMap = reservations) => {
+    let committed = 0;
+    const next: AllocationMap = {};
+    for (const listing of LISTINGS) {
+      const quantity = sourceAllocations[listing.id] ?? 0;
+      const unitCost = getAllInAcquisitionCost(listing, economics);
+      const max = getMaxPlannableQuantity({ budget: nextBudget, reserve: nextReserve, otherCommitted: committed, unitCost, confirmedStock: stock[listing.id] ?? null, reservation: reservationMap[listing.id] ?? "unreserved" });
+      const accepted = Math.min(quantity, max);
+      if (accepted > 0) next[listing.id] = accepted;
+      committed += accepted * unitCost;
+    }
+    return next;
   };
 
   const updateBudget = (value: string) => {
@@ -66,7 +88,7 @@ export default function PlanScreen() {
     setBudgetText(sanitized);
     const nextBudget = Math.max(0, Number(sanitized || 0));
     setBudget(nextBudget);
-    const nextAllocations = recommendAllocations(nextBudget, LISTINGS, economics, nextBudget * reservePercent / 100);
+    const nextAllocations = reconcileAllocations(nextBudget, nextBudget * reservePercent / 100, allocations);
     setAllocations(nextAllocations);
     persist(nextBudget, nextAllocations);
   };
@@ -76,11 +98,34 @@ export default function PlanScreen() {
     const current = allocations[listing.id] ?? 0;
     const allInCost = getAllInAcquisitionCost(listing, economics);
     const otherDeployed = deployed - current * allInCost;
-    const maxAffordable = Math.floor(Math.max(0, budget - reserve - otherDeployed) / allInCost);
-    const nextQuantity = Math.max(0, Math.min(maxAffordable, current + delta));
+    const maxPlannable = getMaxPlannableQuantity({ budget, reserve, otherCommitted: otherDeployed, unitCost: allInCost, confirmedStock: confirmedStock[listing.id] ?? null, reservation: reservations[listing.id] ?? "unreserved" });
+    const nextQuantity = Math.max(0, Math.min(maxPlannable, current + delta));
     const next = { ...allocations, [listing.id]: nextQuantity };
     setAllocations(next);
     persist(budget, next);
+  };
+
+  const updateConfirmedStock = (listing: Listing, value: string) => {
+    const nextValue = value.trim() === "" ? null : Math.max(0, Math.min(999, Number(value.replace(/[^0-9]/g, ""))));
+    const nextStock = { ...confirmedStock, [listing.id]: nextValue };
+    const nextAllocations = { ...allocations };
+    const current = nextAllocations[listing.id] ?? 0;
+    const maxPlannable = getMaxPlannableQuantity({ budget, reserve, otherCommitted: deployed - current * getAllInAcquisitionCost(listing, economics), unitCost: getAllInAcquisitionCost(listing, economics), confirmedStock: nextValue, reservation: reservations[listing.id] ?? "unreserved" });
+    if (current > maxPlannable) nextAllocations[listing.id] = maxPlannable;
+    setConfirmedStock(nextStock);
+    setAllocations(nextAllocations);
+    persist(budget, nextAllocations, reservePercent, nextStock);
+  };
+
+  const toggleReservation = (listing: Listing) => {
+    haptic();
+    const nextStatus: ReservationStatus = (reservations[listing.id] ?? "unreserved") === "reserved" ? "unreserved" : "reserved";
+    const nextReservations = { ...reservations, [listing.id]: nextStatus };
+    const nextAllocations = { ...allocations };
+    if (nextStatus === "unreserved") delete nextAllocations[listing.id];
+    setReservations(nextReservations);
+    setAllocations(nextAllocations);
+    persist(budget, nextAllocations, reservePercent, confirmedStock, nextReservations);
   };
 
   return (
@@ -91,14 +136,14 @@ export default function PlanScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
         ListHeaderComponent={<View>
-          <View style={styles.header}><Text style={[styles.eyebrow, { color: colors.muted }]}>CAPITAL ALLOCATION</Text><Text style={[styles.title, { color: colors.foreground }]}>Pool your edge.</Text><Text style={[styles.subtitle, { color: colors.muted }]}>Size each opportunity against one shared budget, not in isolation.</Text></View>
-          <View style={[styles.budgetCard, { backgroundColor: colors.surface, borderColor: colors.border }]}><View style={styles.budgetHeader}><View><Text style={[styles.cardEyebrow, { color: colors.muted }]}>TOTAL INVESTABLE CAPITAL</Text><Text style={[styles.budgetHint, { color: colors.muted }]}>How much are you putting to work?</Text></View><MaterialIcons name="account-balance-wallet" size={22} color={colors.primary} /></View><View style={[styles.budgetInputWrap, { backgroundColor: colors.background }]}><Text style={[styles.currency, { color: colors.muted }]}>$</Text><TextInput value={budgetText} onChangeText={updateBudget} keyboardType="number-pad" style={[styles.budgetInput, { color: colors.foreground }]} /></View><View style={styles.reserveRow}><Text style={[styles.reserveLabel, { color: colors.muted }]}>CASH RESERVE</Text><TextInput value={String(reservePercent)} onChangeText={(value) => { const next = Math.max(0, Math.min(50, Number(value.replace(/[^0-9]/g, "") || 0))); setReservePercent(next); const nextAllocations = recommendAllocations(budget, LISTINGS, economics, budget * next / 100); setAllocations(nextAllocations); persist(budget, nextAllocations, next); }} keyboardType="number-pad" style={[styles.reserveInput, { color: colors.foreground, backgroundColor: colors.background }]} /><Text style={[styles.reserveLabel, { color: colors.muted }]}>% held back for friction and surprises</Text></View></View>
+          <View style={styles.header}><Text style={[styles.eyebrow, { color: colors.muted }]}>CAPITAL ALLOCATION</Text><Text style={[styles.title, { color: colors.foreground }]}>Pool your edge.</Text><Text style={[styles.subtitle, { color: colors.muted }]}>Size each opportunity against one shared budget, not in isolation.</Text><Text style={[styles.planNote, { color: colors.muted }]}>{reservedCount} reserved in plan · {confirmedCount} stock confirmations · local planning only</Text></View>
+          <View style={[styles.budgetCard, { backgroundColor: colors.surface, borderColor: colors.border }]}><View style={styles.budgetHeader}><View><Text style={[styles.cardEyebrow, { color: colors.muted }]}>TOTAL INVESTABLE CAPITAL</Text><Text style={[styles.budgetHint, { color: colors.muted }]}>How much are you putting to work?</Text></View><MaterialIcons name="account-balance-wallet" size={22} color={colors.primary} /></View><View style={[styles.budgetInputWrap, { backgroundColor: colors.background }]}><Text style={[styles.currency, { color: colors.muted }]}>$</Text><TextInput value={budgetText} onChangeText={updateBudget} keyboardType="number-pad" style={[styles.budgetInput, { color: colors.foreground }]} /></View><View style={styles.reserveRow}><Text style={[styles.reserveLabel, { color: colors.muted }]}>CASH RESERVE</Text><TextInput value={String(reservePercent)} onChangeText={(value) => { const next = Math.max(0, Math.min(50, Number(value.replace(/[^0-9]/g, "") || 0))); setReservePercent(next); const nextAllocations = reconcileAllocations(budget, budget * next / 100, allocations); setAllocations(nextAllocations); persist(budget, nextAllocations, next); }} keyboardType="number-pad" style={[styles.reserveInput, { color: colors.foreground, backgroundColor: colors.background }]} /><Text style={[styles.reserveLabel, { color: colors.muted }]}>% held back for friction and surprises</Text></View></View>
           <View style={[styles.summaryCard, { backgroundColor: colors.foreground }]}><View style={styles.summaryTop}><Text style={[styles.summaryEyebrow, { color: colors.primary }]}>PLAN SUMMARY</Text><Text style={[styles.summaryCount, { color: colors.background }]}>{selectedCount} opportunities</Text></View><View style={styles.summaryNumbers}><SummaryStat label="All-in deployed" value={formatCurrency(deployed)} color={colors.background} /><SummaryStat label="Reserve" value={formatCurrency(reserve)} color={colors.background} /><SummaryStat label="Net upside" value={`+${formatCurrency(Math.max(0, upside))}`} color={colors.primary} /></View><View style={styles.progressTrack}><View style={[styles.progressFill, { backgroundColor: colors.primary, width: `${Math.min(100, budget ? ((deployed + reserve) / budget) * 100 : 0)}%` }]} /></View><Text style={[styles.progressText, { color: colors.muted }]}>{budget ? `${(((deployed + reserve) / budget) * 100).toFixed(0)}% committed or reserved` : "Set a budget to begin"}</Text></View>
           {linkedCandidate ? <View style={[styles.linkedBanner, { backgroundColor: colors.surface, borderColor: colors.primary }]}><MaterialIcons name="link" size={17} color={colors.primary} /><View style={styles.linkedCopy}><Text style={[styles.linkedTitle, { color: colors.foreground }]}>Thesis candidate linked</Text><Text style={[styles.linkedText, { color: colors.muted }]}>{linkedCandidate.brand} {linkedCandidate.model} is highlighted below. Plan still checks shared-budget affordability and quantity.</Text></View></View> : null}
-          <View style={styles.sectionHeader}><View><Text style={[styles.sectionTitle, { color: colors.foreground }]}>Allocation opportunities</Text><Text style={[styles.sectionCaption, { color: colors.muted }]}>Quantity × all-in acquisition cost</Text></View><Pressable onPress={() => { const next = recommendAllocations(budget, LISTINGS, economics, reserve); setAllocations(next); persist(budget, next, reservePercent); }}><Text style={[styles.resetText, { color: colors.primary }]}>Recalculate</Text></Pressable></View>
+          <View style={styles.sectionHeader}><View><Text style={[styles.sectionTitle, { color: colors.foreground }]}>Allocation opportunities</Text><Text style={[styles.sectionCaption, { color: colors.muted }]}>Quantity × all-in acquisition cost</Text></View><Pressable onPress={() => { const next = reconcileAllocations(budget, reserve, allocations); setAllocations(next); persist(budget, next, reservePercent); }}><Text style={[styles.resetText, { color: colors.primary }]}>Recalculate</Text></Pressable></View>
           <FlatList horizontal data={[{ slug: "all", name: "All" }, ...PROFILES]} keyExtractor={(item) => item.slug} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips} renderItem={({ item }) => <Pressable onPress={() => setProfileFilter(item.slug)} style={[styles.chip, { backgroundColor: profileFilter === item.slug ? colors.foreground : colors.surface, borderColor: colors.border }]}><Text style={[styles.chipText, { color: profileFilter === item.slug ? colors.background : colors.muted }]}>{item.name}</Text></Pressable>} />
         </View>}
-        renderItem={({ item }) => <AllocationCard listing={item} quantity={allocations[item.id] ?? 0} budget={budget} reserve={reserve} deployed={deployed} economics={economics} colors={colors} linked={item.id === candidate} onChange={(delta) => updateQuantity(item, delta)} />}
+        renderItem={({ item }) => <AllocationCard listing={item} quantity={allocations[item.id] ?? 0} confirmedStock={confirmedStock[item.id] ?? null} reservation={reservations[item.id] ?? "unreserved"} budget={budget} reserve={reserve} deployed={deployed} economics={economics} colors={colors} linked={item.id === candidate} onChange={(delta) => updateQuantity(item, delta)} onStockChange={(value) => updateConfirmedStock(item, value)} onToggleReservation={() => toggleReservation(item)} />}
         ListFooterComponent={<View style={[styles.formulaCard, { backgroundColor: colors.surface, borderColor: colors.border }]}><MaterialIcons name="calculate" size={19} color={colors.primary} /><View style={styles.formulaCopy}><Text style={[styles.formulaTitle, { color: colors.foreground }]}>How the plan is calculated</Text><Text style={[styles.formulaText, { color: colors.muted }]}>Net upside = market value − asking price − shipping − transaction fees − estimated travel cost. Opportunity cost shows the share of your total pool committed to each deal.</Text></View></View>}
       />
     </ScreenContainer>
@@ -109,12 +154,19 @@ function SummaryStat({ label, value, color }: { label: string; value: string; co
   return <View style={styles.summaryStat}><Text style={[styles.summaryStatValue, { color }]}>{value}</Text><Text style={[styles.summaryStatLabel, { color: "#9AA597" }]}>{label}</Text></View>;
 }
 
-function AllocationCard({ listing, quantity, budget, reserve, deployed, economics, colors, linked = false, onChange }: { listing: Listing; quantity: number; budget: number; reserve: number; deployed: number; economics: EconomicsAssumptions; colors: ReturnType<typeof useColors>; linked?: boolean; onChange: (delta: number) => void }) {
+function AllocationCard({ listing, quantity, confirmedStock, reservation, budget, reserve, deployed, economics, colors, linked = false, onChange, onStockChange, onToggleReservation }: { listing: Listing; quantity: number; confirmedStock: number | null; reservation: ReservationStatus; budget: number; reserve: number; deployed: number; economics: EconomicsAssumptions; colors: ReturnType<typeof useColors>; linked?: boolean; onChange: (delta: number) => void; onStockChange: (value: string) => void; onToggleReservation: () => void }) {
   const capital = quantity * getAllInAcquisitionCost(listing, economics);
   const projectedUpside = quantity * getListingEconomics(listing, economics).netUpside;
   const opportunityCost = budget ? (capital / budget) * 100 : 0;
-  const canAdd = deployed + reserve + getAllInAcquisitionCost(listing, economics) <= budget;
-  return <View style={[styles.allocationCard, { backgroundColor: colors.surface, borderColor: linked ? colors.primary : quantity > 0 ? colors.primary : colors.border }]}><View style={styles.allocationTop}><View style={styles.sourceRow}><View style={[styles.sourceIcon, { backgroundColor: colors.background }]}><Text style={[styles.sourceText, { color: colors.foreground }]}>{listing.platform.slice(0, 1)}</Text></View><View><Text style={[styles.platform, { color: colors.muted }]}>{listing.platform} · {listing.location}</Text><Text style={[styles.brand, { color: colors.foreground }]}>{listing.brand}</Text></View></View><View style={styles.scorePillWrap}>{linked ? <Text style={[styles.linkedLabel, { color: colors.primary }]}>THESIS LINK</Text> : null}<View style={[styles.scorePill, { backgroundColor: colors.primary }]}><Text style={[styles.score, { color: colors.onPrimary }]}>{listing.score}</Text><Text style={[styles.scoreLabel, { color: colors.onPrimary }]}>SCORE</Text></View></View></View><Text style={[styles.model, { color: colors.muted }]} numberOfLines={1}>{listing.model}</Text><View style={styles.mathRow}><View><Text style={[styles.mathLabel, { color: colors.muted }]}>ALL-IN UNIT</Text><Text style={[styles.mathValue, { color: colors.foreground }]}>{formatCurrency(getAllInAcquisitionCost(listing, economics))}</Text></View><View><Text style={[styles.mathLabel, { color: colors.muted }]}>NET UNIT UPSIDE</Text><Text style={[styles.mathValue, { color: colors.success }]}>+{formatCurrency(getListingEconomics(listing, economics).netUpside)}</Text></View><View style={styles.quantityControl}><Pressable onPress={() => onChange(-1)} disabled={quantity === 0} style={[styles.quantityButton, { backgroundColor: colors.background, opacity: quantity === 0 ? 0.35 : 1 }]}><Text style={[styles.quantityButtonText, { color: colors.foreground }]}>−</Text></Pressable><Text style={[styles.quantityText, { color: colors.foreground }]}>{quantity}</Text><Pressable onPress={() => onChange(1)} disabled={!canAdd} style={[styles.quantityButton, { backgroundColor: colors.primary, opacity: canAdd ? 1 : 0.35 }]}><Text style={[styles.quantityButtonText, { color: colors.onPrimary }]}>+</Text></Pressable></View></View><View style={[styles.allocationFooter, { borderTopColor: colors.border }]}><View><Text style={[styles.footerLabel, { color: colors.muted }]}>ALL-IN COMMITTED</Text><Text style={[styles.footerValue, { color: colors.foreground }]}>{formatCurrency(capital)}</Text></View><View><Text style={[styles.footerLabel, { color: colors.muted }]}>POOL SHARE</Text><Text style={[styles.footerValue, { color: colors.foreground }]}>{opportunityCost.toFixed(1)}%</Text></View><View style={styles.upsideBlock}><Text style={[styles.footerLabel, { color: colors.muted }]}>NET UPSIDE</Text><Text style={[styles.footerValue, { color: colors.success }]}>+{formatCurrency(projectedUpside)}</Text></View></View></View>;
+  const canAdd = getMaxPlannableQuantity({ budget, reserve, otherCommitted: deployed - quantity * getAllInAcquisitionCost(listing, economics), unitCost: getAllInAcquisitionCost(listing, economics), confirmedStock, reservation }) > quantity;
+  return <View style={[styles.allocationCard, { backgroundColor: colors.surface, borderColor: linked ? colors.primary : quantity > 0 ? colors.primary : colors.border }]}>
+    <View style={styles.allocationTop}><View style={styles.sourceRow}><View style={[styles.sourceIcon, { backgroundColor: colors.background }]}><Text style={[styles.sourceText, { color: colors.foreground }]}>{listing.platform.slice(0, 1)}</Text></View><View><Text style={[styles.platform, { color: colors.muted }]}>{listing.platform} · {listing.location}</Text><Text style={[styles.brand, { color: colors.foreground }]}>{listing.brand}</Text></View></View><View style={styles.scorePillWrap}>{linked ? <Text style={[styles.linkedLabel, { color: colors.primary }]}>THESIS LINK</Text> : null}<View style={[styles.scorePill, { backgroundColor: colors.primary }]}><Text style={[styles.score, { color: colors.onPrimary }]}>{listing.score}</Text><Text style={[styles.scoreLabel, { color: colors.onPrimary }]}>SCORE</Text></View></View></View>
+    <Text style={[styles.model, { color: colors.muted }]} numberOfLines={1}>{listing.model}</Text>
+    <View style={styles.stockRow}><Text style={[styles.stockLabel, { color: colors.muted }]}>CONFIRMED STOCK</Text><TextInput value={confirmedStock === null ? "" : String(confirmedStock)} onChangeText={onStockChange} keyboardType="number-pad" placeholder="?" placeholderTextColor={colors.muted} style={[styles.stockInput, { color: colors.foreground, backgroundColor: colors.background, borderColor: colors.border }]} /><Pressable onPress={onToggleReservation} style={[styles.reserveButton, { backgroundColor: reservation === "reserved" ? colors.primary : colors.background, borderColor: colors.border }]}><Text style={[styles.reserveButtonText, { color: reservation === "reserved" ? colors.onPrimary : colors.foreground }]}>{reservation === "reserved" ? "Reserved in plan" : "Reserve in plan"}</Text></Pressable></View>
+    <Text style={[styles.stockHint, { color: colors.muted }]}>{reservation === "reserved" ? "Local planning lock only; it does not hold marketplace inventory." : "Reserve this line locally before adding quantity."}</Text>
+    <View style={styles.mathRow}><View><Text style={[styles.mathLabel, { color: colors.muted }]}>ALL-IN UNIT</Text><Text style={[styles.mathValue, { color: colors.foreground }]}>{formatCurrency(getAllInAcquisitionCost(listing, economics))}</Text></View><View><Text style={[styles.mathLabel, { color: colors.muted }]}>NET UNIT UPSIDE</Text><Text style={[styles.mathValue, { color: colors.success }]}>+{formatCurrency(getListingEconomics(listing, economics).netUpside)}</Text></View><View style={styles.quantityControl}><Pressable onPress={() => onChange(-1)} disabled={quantity === 0} style={[styles.quantityButton, { backgroundColor: colors.background, opacity: quantity === 0 ? 0.35 : 1 }]}><Text style={[styles.quantityButtonText, { color: colors.foreground }]}>−</Text></Pressable><Text style={[styles.quantityText, { color: colors.foreground }]}>{quantity}</Text><Pressable onPress={() => onChange(1)} disabled={!canAdd} style={[styles.quantityButton, { backgroundColor: colors.primary, opacity: canAdd ? 1 : 0.35 }]}><Text style={[styles.quantityButtonText, { color: colors.onPrimary }]}>+</Text></Pressable></View></View>
+    <View style={[styles.allocationFooter, { borderTopColor: colors.border }]}><View><Text style={[styles.footerLabel, { color: colors.muted }]}>ALL-IN COMMITTED</Text><Text style={[styles.footerValue, { color: colors.foreground }]}>{formatCurrency(capital)}</Text></View><View><Text style={[styles.footerLabel, { color: colors.muted }]}>POOL SHARE</Text><Text style={[styles.footerValue, { color: colors.foreground }]}>{opportunityCost.toFixed(1)}%</Text></View><View style={styles.upsideBlock}><Text style={[styles.footerLabel, { color: colors.muted }]}>NET UPSIDE</Text><Text style={[styles.footerValue, { color: colors.success }]}>+{formatCurrency(projectedUpside)}</Text></View></View>
+  </View>;
 }
 
 const styles = StyleSheet.create({
@@ -123,6 +175,7 @@ const styles = StyleSheet.create({
   eyebrow: { fontSize: 10, fontWeight: "800", letterSpacing: 1.3 },
   title: { fontSize: 34, fontWeight: "900", letterSpacing: -1.2, marginTop: 9 },
   subtitle: { fontSize: 14, lineHeight: 21, marginTop: 5, maxWidth: 320 },
+  planNote: { fontSize: 10, lineHeight: 15, marginTop: 8 },
   budgetCard: { borderRadius: 20, borderWidth: 1, padding: 15 },
   budgetHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
   cardEyebrow: { fontSize: 9, fontWeight: "800", letterSpacing: 1 },
@@ -168,6 +221,12 @@ const styles = StyleSheet.create({
   score: { fontSize: 17, fontWeight: "900", lineHeight: 18 },
   scoreLabel: { fontSize: 7, fontWeight: "900", letterSpacing: 0.4 },
   model: { fontSize: 13, fontWeight: "700", marginTop: 12 },
+  stockRow: { flexDirection: "row", alignItems: "center", gap: 7, marginTop: 13 },
+  stockLabel: { fontSize: 8, fontWeight: "800", letterSpacing: 0.3 },
+  stockInput: { width: 42, height: 29, borderRadius: 8, borderWidth: 1, paddingHorizontal: 6, textAlign: "center", fontSize: 12, fontWeight: "800" },
+  reserveButton: { flex: 1, minHeight: 29, borderRadius: 8, borderWidth: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
+  reserveButtonText: { fontSize: 9, fontWeight: "800" },
+  stockHint: { fontSize: 9, lineHeight: 13, marginTop: 5 },
   mathRow: { flexDirection: "row", alignItems: "flex-end", marginTop: 17, gap: 17 },
   mathLabel: { fontSize: 8, fontWeight: "700", letterSpacing: 0.5 },
   mathValue: { fontSize: 14, fontWeight: "800", marginTop: 4 },
