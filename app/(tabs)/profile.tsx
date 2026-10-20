@@ -13,6 +13,16 @@ import { MARKETPLACE_SOURCES, PHASE_ONE_EBAY_TASKS, SOURCE_SYNC_SNAPSHOT } from 
 import { EbayMonitor } from "@/components/ebay-monitor";
 import { ThesisDraftEditor } from "@/components/thesis-draft-editor";
 
+const EBAY_READINESS_KEY = "topCherry.ebayReadiness";
+const EBAY_READINESS_ITEMS = [
+  { id: "browse", label: "Verify read-only Browse access", detail: "Application-token search is verified for EBAY_GB.", state: "DONE" },
+  { id: "details", label: "Verify item-detail characteristics", detail: "getItem PRODUCT details are requested when a live listing opens.", state: "DONE" },
+  { id: "disclosure", label: "Add outbound affiliate disclosure", detail: "Live eBay links preserve itemAffiliateWebUrl and show a disclosure first.", state: "DONE" },
+  { id: "epn", label: "Join eBay Partner Network", detail: "Complete the account, promotional property, currency and agreement sections.", state: "NEXT", url: "https://partnernetwork.ebay.com/solutions/joining-the-ebay-partner-network" },
+  { id: "growth", label: "Prepare Application Growth Check", detail: "Submit the Sandbox journey, data flow, retention controls and production use case.", state: "NEXT", url: "https://developer.ebay.com/develop/get-started/application-growth-check" },
+  { id: "topics", label: "Request listing notification topics", detail: "Price revision and availability remain separate approved-partner scopes.", state: "GATED", url: "https://developer.ebay.com/develop/api/buy/notification_events" },
+];
+
 export default function ProfileScreen() {
   const colors = useColors();
   const { user, isAuthenticated, logout } = useAuth();
@@ -21,6 +31,7 @@ export default function ProfileScreen() {
   const [alerts, setAlerts] = useState(true);
   const [dailyDigest, setDailyDigest] = useState(false);
   const [economics, setEconomics] = useState(DEFAULT_ECONOMICS);
+  const [ebayReadiness, setEbayReadiness] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (preferencesQuery.data) {
@@ -33,6 +44,12 @@ export default function ProfileScreen() {
     void AsyncStorage.getItem(ECONOMICS_STORAGE_KEY).then((raw) => {
       if (raw) setEconomics({ ...DEFAULT_ECONOMICS, ...(JSON.parse(raw) as Partial<EconomicsAssumptions>) });
     });
+  }, []);
+
+  useEffect(() => {
+    void AsyncStorage.getItem(EBAY_READINESS_KEY).then((raw) => {
+      if (raw) setEbayReadiness(JSON.parse(raw) as Record<string, boolean>);
+    }).catch(() => undefined);
   }, []);
 
   const updateEconomics = (patch: Partial<EconomicsAssumptions>) => {
@@ -57,6 +74,12 @@ export default function ProfileScreen() {
         <ThesisDraftEditor />
         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Notification monitor</Text>
         <EbayMonitor />
+        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>eBay authorization readiness</Text>
+        <EbayReadinessChecklist colors={colors} completed={ebayReadiness} onToggle={(id) => {
+          const next = { ...ebayReadiness, [id]: !ebayReadiness[id] };
+          setEbayReadiness(next);
+          void AsyncStorage.setItem(EBAY_READINESS_KEY, JSON.stringify(next));
+        }} />
         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Alerts</Text>
         <View style={[styles.settingsCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <SettingRow icon="notifications-active" title="Opportunity alerts" description="When a score and margin clear your thresholds" value={alerts} onChange={() => toggle("alertsEnabled", setAlerts, alerts)} colors={colors} />
@@ -114,6 +137,23 @@ export default function ProfileScreen() {
   );
 }
 
+function EbayReadinessChecklist({ colors, completed, onToggle }: { colors: ReturnType<typeof useColors>; completed: Record<string, boolean>; onToggle: (id: string) => void }) {
+  const doneCount = EBAY_READINESS_ITEMS.filter((item) => item.state === "DONE" || completed[item.id]).length;
+  return <View style={[styles.readinessCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+    <View style={styles.readinessHeader}><View style={styles.settingCopy}><Text style={[styles.settingTitle, { color: colors.foreground }]}>Provider gate tracker</Text><Text style={[styles.settingDescription, { color: colors.muted }]}>{doneCount}/{EBAY_READINESS_ITEMS.length} recorded · completion does not grant eBay approval</Text></View><View style={[styles.statusBadge, { backgroundColor: colors.warning }]}><Text style={[styles.statusBadgeText, { color: colors.foreground }]}>NOT APPROVED</Text></View></View>
+    <Text style={[styles.dataNote, { color: colors.muted }]}>Use this as an evidence checklist for EPN and the Application Growth Check. It never stores credentials or submits an application.</Text>
+    {EBAY_READINESS_ITEMS.map((item, index) => {
+      const isDone = item.state === "DONE" || Boolean(completed[item.id]);
+      return <View key={item.id} style={styles.readinessItem}>
+        <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: isDone }} onPress={() => onToggle(item.id)} style={({ pressed }) => [styles.readinessCheck, pressed && styles.pressed]}><MaterialIcons name={isDone ? "check-circle" : item.state === "GATED" ? "lock" : "radio-button-unchecked"} size={19} color={isDone ? colors.success : item.state === "GATED" ? colors.warning : colors.muted} /></Pressable>
+        <View style={styles.settingCopy}><Text style={[styles.settingTitle, { color: colors.foreground }]}>{item.label}</Text><Text style={[styles.settingDescription, { color: colors.muted }]}>{item.detail}</Text></View>
+        {item.url ? <Pressable accessibilityRole="link" onPress={() => void Linking.openURL(item.url)} style={({ pressed }) => [styles.readinessLink, pressed && styles.pressed]}><Text style={[styles.readinessLinkText, { color: colors.primary }]}>Open</Text></Pressable> : <Text style={[styles.taskState, { color: isDone ? colors.success : colors.muted }]}>{isDone ? "DONE" : item.state}</Text>}
+        {index < EBAY_READINESS_ITEMS.length - 1 ? <View style={[styles.connectorDivider, { backgroundColor: colors.border }]} /> : null}
+      </View>;
+    })}
+  </View>;
+}
+
 function SettingRow({ icon, title, description, value, onChange, colors }: { icon: keyof typeof MaterialIcons.glyphMap; title: string; description: string; value: boolean; onChange: () => void; colors: ReturnType<typeof useColors> }) {
   return <View style={styles.settingRow}><View style={[styles.settingIcon, { backgroundColor: colors.background }]}><MaterialIcons name={icon} size={19} color={colors.primary} /></View><View style={styles.settingCopy}><Text style={[styles.settingTitle, { color: colors.foreground }]}>{title}</Text><Text style={[styles.settingDescription, { color: colors.muted }]}>{description}</Text></View><Switch value={value} onValueChange={onChange} trackColor={{ false: colors.border, true: colors.primary }} thumbColor={value ? colors.foreground : colors.muted} /></View>;
 }
@@ -148,6 +188,12 @@ const styles = StyleSheet.create({
   settingDescription: { fontSize: 11, marginTop: 3 },
   divider: { height: 1, marginLeft: 46 },
   dataCard: { borderRadius: 19, borderWidth: 1, padding: 14, marginBottom: 27 },
+  readinessCard: { borderRadius: 19, borderWidth: 1, padding: 14, marginBottom: 27 },
+  readinessHeader: { flexDirection: "row", alignItems: "center", gap: 10 },
+  readinessItem: { minHeight: 58, flexDirection: "row", alignItems: "center", gap: 8, position: "relative" },
+  readinessCheck: { width: 24, alignItems: "center" },
+  readinessLink: { paddingHorizontal: 4, paddingVertical: 6 },
+  readinessLinkText: { fontSize: 10, fontWeight: "800" },
   dataHeader: { flexDirection: "row", alignItems: "center", gap: 11 },
   dataIcon: { width: 35, height: 35, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   statusBadge: { borderRadius: 8, paddingHorizontal: 7, paddingVertical: 5 },
