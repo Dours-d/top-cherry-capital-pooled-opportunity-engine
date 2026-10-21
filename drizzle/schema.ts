@@ -105,6 +105,30 @@ export const thesisContradictionReviews = mysqlTable(
 export type ThesisContradictionReview = typeof thesisContradictionReviews.$inferSelect;
 export type InsertThesisContradictionReview = typeof thesisContradictionReviews.$inferInsert;
 
+export const observationReviews = mysqlTable(
+  "observation_reviews",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    reviewId: varchar("reviewId", { length: 160 }).notNull(),
+    listingId: varchar("listingId", { length: 255 }).notNull(),
+    reviewedAt: timestamp("reviewedAt").notNull(),
+    note: text("note"),
+    listingTitle: varchar("listingTitle", { length: 255 }),
+    platform: varchar("platform", { length: 128 }),
+    askingPrice: double("askingPrice"),
+    currency: varchar("currency", { length: 3 }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (table) => ({
+    reviewKeyIdx: uniqueIndex("observation_reviews_user_review_idx").on(table.userId, table.reviewId),
+    userReviewedIdx: index("observation_reviews_user_reviewed_idx").on(table.userId, table.reviewedAt),
+  }),
+);
+
+export type ObservationReview = typeof observationReviews.$inferSelect;
+export type InsertObservationReview = typeof observationReviews.$inferInsert;
+
 export const ingestionRuns = mysqlTable("ingestion_runs", {
   id: int("id").autoincrement().primaryKey(),
   sourceSlug: varchar("sourceSlug", { length: 64 }).notNull(),

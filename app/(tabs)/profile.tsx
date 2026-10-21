@@ -16,7 +16,7 @@ import { ThesisDraftEditor } from "@/components/thesis-draft-editor";
 
 const EBAY_READINESS_KEY = "topCherry.ebayReadiness";
 const OBSERVATION_REVIEW_STORAGE_KEY = "topCherry.observationReviews";
-type ObservationReview = { listingId: string; reviewedAt: string; note?: string };
+type ObservationReview = { reviewId: string; listingId: string; reviewedAt: string; note?: string; listingTitle?: string; platform?: string; askingPrice?: number; currency?: string };
 const EBAY_READINESS_ITEMS = [
   { id: "browse", label: "Verify read-only Browse access", detail: "Application-token search is verified for EBAY_GB.", state: "DONE" },
   { id: "details", label: "Verify item-detail characteristics", detail: "getItem PRODUCT details are requested when a live listing opens.", state: "DONE" },
@@ -31,6 +31,8 @@ export default function ProfileScreen() {
   const { user, isAuthenticated, logout } = useAuth();
   const preferencesQuery = trpc.preferences.get.useQuery(undefined, { enabled: isAuthenticated });
   const updatePreferences = trpc.preferences.update.useMutation({ onSuccess: () => void preferencesQuery.refetch() });
+  const remoteReviews = trpc.observationReviews.list.useQuery(undefined, { enabled: isAuthenticated });
+  const syncReview = trpc.observationReviews.upsert.useMutation();
   const [alerts, setAlerts] = useState(true);
   const [dailyDigest, setDailyDigest] = useState(false);
   const [economics, setEconomics] = useState(DEFAULT_ECONOMICS);
@@ -65,9 +67,22 @@ export default function ProfileScreen() {
         setFollowUps(Object.entries(schedules).map(([listingId, value]) => typeof value === "string" ? { listingId, nextObserveAt: value } : { listingId, ...value }).filter((item) => item.nextObserveAt).sort((a, b) => new Date(a.nextObserveAt).getTime() - new Date(b.nextObserveAt).getTime()));
       } catch { setFollowUps([]); }
       try { setFollowUpOutcomes(outcomesRaw ? JSON.parse(outcomesRaw) as ListingOutcome[] : []); } catch { setFollowUpOutcomes([]); }
-      try { setRecentReviews(reviewsRaw ? (JSON.parse(reviewsRaw) as ObservationReview[]).sort((a, b) => b.reviewedAt.localeCompare(a.reviewedAt)).slice(0, 5) : []); } catch { setRecentReviews([]); }
+      try {
+        const parsed = reviewsRaw ? JSON.parse(reviewsRaw) as Partial<ObservationReview>[] : [];
+        setRecentReviews(parsed.map((review) => ({ ...review, reviewId: review.reviewId ?? `${review.listingId}:${review.reviewedAt}` }) as ObservationReview).sort((a, b) => b.reviewedAt.localeCompare(a.reviewedAt)).slice(0, 20));
+      } catch { setRecentReviews([]); }
     });
   }, []);
+
+  useEffect(() => {
+    if (!isAuthenticated || !remoteReviews.data?.length) return;
+    const remote = remoteReviews.data.map((review) => ({ ...review, reviewedAt: new Date(review.reviewedAt).toISOString() })) as ObservationReview[];
+    const merged = [...recentReviews, ...remote].reduce<ObservationReview[]>((all, review) => all.some((item) => item.reviewId === review.reviewId) ? all : [...all, review], []).sort((a, b) => b.reviewedAt.localeCompare(a.reviewedAt)).slice(0, 20);
+    if (JSON.stringify(merged) !== JSON.stringify(recentReviews)) {
+      setRecentReviews(merged);
+      void AsyncStorage.setItem(OBSERVATION_REVIEW_STORAGE_KEY, JSON.stringify(merged));
+    }
+  }, [isAuthenticated, remoteReviews.data, recentReviews]);
 
   const updateEconomics = (patch: Partial<EconomicsAssumptions>) => {
     const next = { ...economics, ...patch };
@@ -93,10 +108,12 @@ export default function ProfileScreen() {
         <EbayMonitor />
         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Research follow-ups</Text>
         <ObservationFollowUpQueue colors={colors} followUps={followUps} outcomes={followUpOutcomes} recentReviews={recentReviews} onMarkReviewed={(listingId, note) => {
-          const review = { listingId, reviewedAt: new Date().toISOString(), ...(note ? { note } : {}) };
+          const context = followUps.find((item) => item.listingId === listingId);
+          const review = { reviewId: `${listingId}:${Date.now()}`, listingId, reviewedAt: new Date().toISOString(), ...(note ? { note } : {}), listingTitle: context?.listingTitle, platform: context?.platform, askingPrice: context?.askingPrice, currency: context?.currency };
           const nextReviews = [review, ...recentReviews.filter((item) => item.listingId !== listingId)].slice(0, 20);
           setRecentReviews(nextReviews);
           void AsyncStorage.setItem(OBSERVATION_REVIEW_STORAGE_KEY, JSON.stringify(nextReviews));
+          if (isAuthenticated) void syncReview.mutateAsync(review).catch(() => undefined);
           setFollowUps((current) => current.filter((item) => item.listingId !== listingId));
           void AsyncStorage.getItem(OBSERVATION_SCHEDULE_STORAGE_KEY).then((raw) => {
             try {

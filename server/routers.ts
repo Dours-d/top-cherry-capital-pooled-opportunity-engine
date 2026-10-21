@@ -37,6 +37,17 @@ const thesisRevisionInput = z.object({
   payload: thesisDraftSchema,
 });
 
+const observationReviewInput = z.object({
+  reviewId: z.string().min(1).max(160),
+  listingId: z.string().min(1).max(255),
+  reviewedAt: z.string().datetime(),
+  note: z.string().max(1000).optional(),
+  listingTitle: z.string().max(255).optional(),
+  platform: z.string().max(128).optional(),
+  askingPrice: z.number().nonnegative().optional(),
+  currency: z.string().regex(/^[A-Z]{3}$/).optional(),
+});
+
 export const appRouter = router({
   system: systemRouter,
   auth: router({
@@ -85,6 +96,10 @@ export const appRouter = router({
     upsert: protectedProcedure.input(thesisRevisionInput).mutation(({ ctx, input }) => db.upsertThesisDraftRevision({ userId: ctx.user.id, draftId: input.draftId, revision: input.revision, status: input.status, payload: JSON.stringify(input.payload) })),
     reviews: protectedProcedure.input(z.object({ draftId: z.string().min(1).max(128) })).query(({ ctx, input }) => db.listThesisContradictionReviews(ctx.user.id, input.draftId)),
     review: protectedProcedure.input(z.object({ draftId: z.string().min(1).max(128), revision: z.number().int().positive(), contradictionKey: z.string().min(1).max(255), status: z.enum(["open", "resolved"]), reviewer: z.string().min(1).max(160).nullable(), resolvedAt: z.string().datetime().nullable() })).mutation(({ ctx, input }) => db.upsertThesisContradictionReview({ userId: ctx.user.id, ...input, resolvedAt: input.resolvedAt ? new Date(input.resolvedAt) : null })),
+  }),
+  observationReviews: router({
+    list: protectedProcedure.query(({ ctx }) => db.listObservationReviews(ctx.user.id)),
+    upsert: protectedProcedure.input(observationReviewInput).mutation(({ ctx, input }) => db.upsertObservationReview({ userId: ctx.user.id, ...input, reviewedAt: new Date(input.reviewedAt) })),
   }),
   monitoring: router({
     ebay: publicProcedure.query(async () => {

@@ -1,6 +1,6 @@
 import { and, count, desc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { ebayListingEvents, ebayNotificationEvents, InsertEbayListingEvent, InsertEbayNotificationEvent, InsertSavedDeal, InsertThesisContradictionReview, InsertThesisDraftRevision, InsertUser, savedDeals, thesisContradictionReviews, thesisDraftRevisions, userPreferences, users } from "../drizzle/schema";
+import { ebayListingEvents, ebayNotificationEvents, InsertEbayListingEvent, InsertEbayNotificationEvent, InsertObservationReview, InsertSavedDeal, InsertThesisContradictionReview, InsertThesisDraftRevision, InsertUser, observationReviews, savedDeals, thesisContradictionReviews, thesisDraftRevisions, userPreferences, users } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import { buildEbayMarketSignals } from "../shared/ebay-signals";
 
@@ -126,6 +126,20 @@ export async function listThesisContradictionReviews(userId: number, draftId: st
   const db = await getDb();
   if (!db) return [];
   return db.select().from(thesisContradictionReviews).where(and(eq(thesisContradictionReviews.userId, userId), eq(thesisContradictionReviews.draftId, draftId))).orderBy(desc(thesisContradictionReviews.createdAt));
+}
+
+export async function upsertObservationReview(review: InsertObservationReview) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.insert(observationReviews).values(review).onDuplicateKeyUpdate({ set: { listingId: review.listingId, reviewedAt: review.reviewedAt, note: review.note ?? null, listingTitle: review.listingTitle ?? null, platform: review.platform ?? null, askingPrice: review.askingPrice ?? null, currency: review.currency ?? null } });
+  const result = await db.select().from(observationReviews).where(and(eq(observationReviews.userId, review.userId), eq(observationReviews.reviewId, review.reviewId))).limit(1);
+  return result[0];
+}
+
+export async function listObservationReviews(userId: number, limit = 50) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(observationReviews).where(eq(observationReviews.userId, userId)).orderBy(desc(observationReviews.reviewedAt)).limit(limit);
 }
 
 export async function insertEbayNotificationEvent(event: InsertEbayNotificationEvent) {
