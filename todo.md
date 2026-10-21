@@ -68,6 +68,7 @@ Direction accepted on 14 October 2026, clarified as a multi-mechanism architectu
 - [x] R1.7p Queue filters: Workspace separates active, due/overdue, and reviewed acknowledgments locally without changing the underlying evidence or allocation gates.
 - [x] R1.7q Authenticated review ledger foundation: user-scoped observation-review storage, protected tRPC list/upsert procedures, additive migration, and local-to-server upsert wiring are in place; anonymous users retain local fallback.
 - [x] R1.8b Review reconciliation acceptance: local and remote acknowledgments normalize, merge idempotently by review ID, prefer the latest review context, and remain structurally unable to create valuation fields.
+- [x] R1.8c Outcome sync foundation: user-scoped listing-outcome storage, protected tRPC list/upsert procedures, additive migration, local/server merge wiring, and evidence-only acceptance coverage are in place; outcomes still do not write valuation or allocation fields.
 - [ ] R1.8 End-to-end acceptance.
 
 ## Later phases — paused

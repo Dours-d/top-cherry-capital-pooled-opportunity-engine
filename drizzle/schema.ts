@@ -129,6 +129,29 @@ export const observationReviews = mysqlTable(
 export type ObservationReview = typeof observationReviews.$inferSelect;
 export type InsertObservationReview = typeof observationReviews.$inferInsert;
 
+export const listingOutcomes = mysqlTable(
+  "listing_outcomes",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    outcomeId: varchar("outcomeId", { length: 160 }).notNull(),
+    listingId: varchar("listingId", { length: 255 }).notNull(),
+    kind: mysqlEnum("kind", ["sale-observed", "price-revised", "expired-or-removed", "unavailable"]).notNull(),
+    observedAt: timestamp("observedAt").notNull(),
+    realizedPrice: double("realizedPrice"),
+    currency: varchar("currency", { length: 3 }),
+    note: text("note"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (table) => ({
+    outcomeKeyIdx: uniqueIndex("listing_outcomes_user_outcome_idx").on(table.userId, table.outcomeId),
+    userObservedIdx: index("listing_outcomes_user_observed_idx").on(table.userId, table.observedAt),
+  }),
+);
+
+export type ListingOutcome = typeof listingOutcomes.$inferSelect;
+export type InsertListingOutcome = typeof listingOutcomes.$inferInsert;
+
 export const ingestionRuns = mysqlTable("ingestion_runs", {
   id: int("id").autoincrement().primaryKey(),
   sourceSlug: varchar("sourceSlug", { length: 64 }).notNull(),

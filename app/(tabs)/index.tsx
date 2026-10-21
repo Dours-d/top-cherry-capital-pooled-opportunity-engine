@@ -48,8 +48,7 @@ import {
   type ListingOutcomeKind,
 } from "@/lib/market-data";
 import { buildDemoThesis } from "@/lib/demo-thesis";
-
-
+import { mergeListingOutcomes } from "@/shared/listing-outcomes";
 const triggerHaptic = () => {
   if (Platform.OS !== "web") {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -547,6 +546,9 @@ const OUTCOME_LABELS: Record<ListingOutcomeKind, string> = {
 };
 
 function ListingOutcomeLedger({ listing, colors }: { listing: Listing; colors: ReturnType<typeof useColors> }) {
+  const { isAuthenticated } = useAuth();
+  const remoteOutcomes = trpc.listingOutcomes.list.useQuery(undefined, { enabled: isAuthenticated });
+  const syncOutcome = trpc.listingOutcomes.upsert.useMutation();
   const [kind, setKind] = useState<ListingOutcomeKind>("sale-observed");
   const [realizedPriceText, setRealizedPriceText] = useState("");
   const [note, setNote] = useState("");
@@ -560,12 +562,25 @@ function ListingOutcomeLedger({ listing, colors }: { listing: Listing; colors: R
       if (!raw) return;
       try {
         const all = JSON.parse(raw) as ListingOutcome[];
-        setOutcomes(all.filter((outcome) => outcome.listingId === listing.id).slice(0, 5));
+        setOutcomes(mergeListingOutcomes(all.filter((outcome) => outcome.listingId === listing.id), []).slice(0, 5));
       } catch {
         setOutcomes([]);
       }
     });
   }, [listing.id]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !remoteOutcomes.data?.length) return;
+    const remote = remoteOutcomes.data.map((outcome) => ({ id: outcome.outcomeId, listingId: outcome.listingId, kind: outcome.kind, observedAt: new Date(outcome.observedAt).toISOString(), ...(outcome.realizedPrice === null ? {} : { realizedPrice: outcome.realizedPrice }), ...(outcome.currency ? { currency: outcome.currency } : {}), ...(outcome.note ? { note: outcome.note } : {}) })) as ListingOutcome[];
+    if (!remote.some((outcome) => outcome.listingId === listing.id)) return;
+    void AsyncStorage.getItem(OUTCOME_STORAGE_KEY).then(async (raw) => {
+      let all: ListingOutcome[] = [];
+      try { all = raw ? JSON.parse(raw) as ListingOutcome[] : []; } catch { all = []; }
+      const merged = mergeListingOutcomes(all, remote);
+      if (JSON.stringify(merged) !== JSON.stringify(all)) await AsyncStorage.setItem(OUTCOME_STORAGE_KEY, JSON.stringify(merged));
+      setOutcomes(merged.filter((outcome) => outcome.listingId === listing.id).slice(0, 5));
+    });
+  }, [isAuthenticated, listing.id, remoteOutcomes.data]);
 
   useEffect(() => {
     void AsyncStorage.getItem(OBSERVATION_SCHEDULE_STORAGE_KEY).then((raw) => {
@@ -592,9 +607,10 @@ function ListingOutcomeLedger({ listing, colors }: { listing: Listing; colors: R
     const raw = await AsyncStorage.getItem(OUTCOME_STORAGE_KEY);
     let all: ListingOutcome[] = [];
     try { all = raw ? JSON.parse(raw) as ListingOutcome[] : []; } catch { all = []; }
-    const next = [record, ...all].slice(0, 100);
+    const next = mergeListingOutcomes([record, ...all], []);
     await AsyncStorage.setItem(OUTCOME_STORAGE_KEY, JSON.stringify(next));
     setOutcomes(next.filter((outcome) => outcome.listingId === listing.id).slice(0, 5));
+    if (isAuthenticated) void syncOutcome.mutateAsync({ outcomeId: record.id, listingId: record.listingId, kind: record.kind, observedAt: record.observedAt, ...(record.realizedPrice === undefined ? {} : { realizedPrice: record.realizedPrice }), currency: listing.currency, ...(record.note ? { note: record.note } : {}) }).catch(() => undefined);
     await scheduleNextObservation(record.observedAt);
     setRealizedPriceText("");
     setNote("");

@@ -48,6 +48,16 @@ const observationReviewInput = z.object({
   currency: z.string().regex(/^[A-Z]{3}$/).optional(),
 });
 
+const listingOutcomeInput = z.object({
+  outcomeId: z.string().min(1).max(160),
+  listingId: z.string().min(1).max(255),
+  kind: z.enum(["sale-observed", "price-revised", "expired-or-removed", "unavailable"]),
+  observedAt: z.string().datetime(),
+  realizedPrice: z.number().nonnegative().optional(),
+  currency: z.string().regex(/^[A-Z]{3}$/).optional(),
+  note: z.string().max(1000).optional(),
+});
+
 export const appRouter = router({
   system: systemRouter,
   auth: router({
@@ -100,6 +110,10 @@ export const appRouter = router({
   observationReviews: router({
     list: protectedProcedure.query(({ ctx }) => db.listObservationReviews(ctx.user.id)),
     upsert: protectedProcedure.input(observationReviewInput).mutation(({ ctx, input }) => db.upsertObservationReview({ userId: ctx.user.id, ...input, reviewedAt: new Date(input.reviewedAt) })),
+  }),
+  listingOutcomes: router({
+    list: protectedProcedure.query(({ ctx }) => db.listListingOutcomes(ctx.user.id)),
+    upsert: protectedProcedure.input(listingOutcomeInput).mutation(({ ctx, input }) => db.upsertListingOutcome({ userId: ctx.user.id, ...input, observedAt: new Date(input.observedAt) })),
   }),
   monitoring: router({
     ebay: publicProcedure.query(async () => {

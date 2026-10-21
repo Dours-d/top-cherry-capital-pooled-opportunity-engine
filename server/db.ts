@@ -1,6 +1,6 @@
 import { and, count, desc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { ebayListingEvents, ebayNotificationEvents, InsertEbayListingEvent, InsertEbayNotificationEvent, InsertObservationReview, InsertSavedDeal, InsertThesisContradictionReview, InsertThesisDraftRevision, InsertUser, observationReviews, savedDeals, thesisContradictionReviews, thesisDraftRevisions, userPreferences, users } from "../drizzle/schema";
+import { ebayListingEvents, ebayNotificationEvents, InsertEbayListingEvent, InsertEbayNotificationEvent, InsertListingOutcome, InsertObservationReview, InsertSavedDeal, InsertThesisContradictionReview, InsertThesisDraftRevision, InsertUser, listingOutcomes, observationReviews, savedDeals, thesisContradictionReviews, thesisDraftRevisions, userPreferences, users } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import { buildEbayMarketSignals } from "../shared/ebay-signals";
 
@@ -140,6 +140,20 @@ export async function listObservationReviews(userId: number, limit = 50) {
   const db = await getDb();
   if (!db) return [];
   return db.select().from(observationReviews).where(eq(observationReviews.userId, userId)).orderBy(desc(observationReviews.reviewedAt)).limit(limit);
+}
+
+export async function upsertListingOutcome(outcome: InsertListingOutcome) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.insert(listingOutcomes).values(outcome).onDuplicateKeyUpdate({ set: { listingId: outcome.listingId, kind: outcome.kind, observedAt: outcome.observedAt, realizedPrice: outcome.realizedPrice ?? null, currency: outcome.currency ?? null, note: outcome.note ?? null } });
+  const result = await db.select().from(listingOutcomes).where(and(eq(listingOutcomes.userId, outcome.userId), eq(listingOutcomes.outcomeId, outcome.outcomeId))).limit(1);
+  return result[0];
+}
+
+export async function listListingOutcomes(userId: number, limit = 100) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(listingOutcomes).where(eq(listingOutcomes.userId, userId)).orderBy(desc(listingOutcomes.observedAt)).limit(limit);
 }
 
 export async function insertEbayNotificationEvent(event: InsertEbayNotificationEvent) {

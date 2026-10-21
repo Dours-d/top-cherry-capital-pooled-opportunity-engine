@@ -5,6 +5,7 @@ import { evaluateThesis } from "../shared/evaluate-thesis";
 import { canAllocateCandidate, reconcileThesisDrafts } from "../shared/reconcile-drafts";
 import { createThesisDraft, reviseThesisDraft } from "../shared/versioned-drafts";
 import { mergeObservationReviews, normalizeObservationReview } from "../shared/observation-reviews";
+import { mergeListingOutcomes } from "../shared/listing-outcomes";
 
 const listing = LISTINGS[0];
 
@@ -51,6 +52,16 @@ describe("thesis acceptance flow", () => {
     const merged = mergeObservationReviews([local], [remote, local]);
     expect(merged).toHaveLength(1);
     expect(merged[0]).toMatchObject({ listingId: listing.id, reviewedAt: local.reviewedAt });
+    expect(merged[0]).not.toHaveProperty("marketValue");
+    expect(merged[0]).not.toHaveProperty("score");
+    expect(merged[0]).not.toHaveProperty("marginPercentage");
+  });
+
+  it("reconciles outcome observations idempotently without creating a valuation record", () => {
+    const local = { id: "outcome-1", listingId: listing.id, kind: "sale-observed" as const, observedAt: "2026-10-20T12:00:00.000Z", realizedPrice: 12000, currency: "GBP", note: "Observed evidence" };
+    const merged = mergeListingOutcomes([local], [{ ...local }, local]);
+    expect(merged).toHaveLength(1);
+    expect(merged[0]).toMatchObject({ listingId: listing.id, realizedPrice: 12000 });
     expect(merged[0]).not.toHaveProperty("marketValue");
     expect(merged[0]).not.toHaveProperty("score");
     expect(merged[0]).not.toHaveProperty("marginPercentage");
