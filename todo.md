@@ -64,6 +64,7 @@ Direction accepted on 14 October 2026, clarified as a multi-mechanism architectu
 - [x] R1.7l Item-specific recovery: queued listing titles travel into Discover and expose a direct search action when pagination does not locate the original listing; no alternate item is treated as a match.
 - [x] R1.7m Review acknowledgment: Workspace follow-up rows can be marked reviewed, which clears only the local reminder and explicitly does not imply a fetch, sale, price change, or other outcome.
 - [x] R1.7n Review audit context: acknowledgments persist a local UTC timestamp and a compact recent-history view; outcome records remain separate and unchanged.
+- [x] R1.7o Operator context: reviewers can add an optional note when clearing a follow-up; notes are stored with the acknowledgment and labeled as context, not market evidence.
 - [ ] R1.8 End-to-end acceptance.
 
 ## Later phases — paused
