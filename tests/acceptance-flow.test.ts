@@ -4,6 +4,7 @@ import { buildDemoThesis } from "../lib/demo-thesis";
 import { evaluateThesis } from "../shared/evaluate-thesis";
 import { canAllocateCandidate, reconcileThesisDrafts } from "../shared/reconcile-drafts";
 import { createThesisDraft, reviseThesisDraft } from "../shared/versioned-drafts";
+import { mergeObservationReviews, normalizeObservationReview } from "../shared/observation-reviews";
 
 const listing = LISTINGS[0];
 
@@ -42,5 +43,16 @@ describe("thesis acceptance flow", () => {
     expect(outcome.evidenceQuality).toBe("strong");
     expect(outcome.priceDeltaFromAsk).toBeLessThan(0);
     expect(canAllocateCandidate({ thesisStatus: "ready", candidateVerified: true, escrowProtected: true, netUpside: 1000, budget: 20000, askingPrice: listing.askingPrice, reserve: 1000 })).toBe(true);
+  });
+
+  it("reconciles local and remote review acknowledgments idempotently without creating market evidence", () => {
+    const local = normalizeObservationReview({ listingId: listing.id, reviewedAt: "2026-10-20T12:00:00.000Z", note: "Checked manually" });
+    const remote = { ...local, note: "Server copy" };
+    const merged = mergeObservationReviews([local], [remote, local]);
+    expect(merged).toHaveLength(1);
+    expect(merged[0]).toMatchObject({ listingId: listing.id, reviewedAt: local.reviewedAt });
+    expect(merged[0]).not.toHaveProperty("marketValue");
+    expect(merged[0]).not.toHaveProperty("score");
+    expect(merged[0]).not.toHaveProperty("marginPercentage");
   });
 });

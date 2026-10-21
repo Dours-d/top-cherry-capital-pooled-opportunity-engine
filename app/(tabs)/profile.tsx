@@ -13,10 +13,10 @@ import { DEFAULT_ECONOMICS, ECONOMICS_STORAGE_KEY, formatCurrency, getObservatio
 import { MARKETPLACE_SOURCES, PHASE_ONE_EBAY_TASKS, SOURCE_SYNC_SNAPSHOT } from "@/server/marketplace";
 import { EbayMonitor } from "@/components/ebay-monitor";
 import { ThesisDraftEditor } from "@/components/thesis-draft-editor";
+import { mergeObservationReviews, normalizeObservationReview, type ObservationReview } from "@/shared/observation-reviews";
 
 const EBAY_READINESS_KEY = "topCherry.ebayReadiness";
 const OBSERVATION_REVIEW_STORAGE_KEY = "topCherry.observationReviews";
-type ObservationReview = { reviewId: string; listingId: string; reviewedAt: string; note?: string; listingTitle?: string; platform?: string; askingPrice?: number; currency?: string };
 const EBAY_READINESS_ITEMS = [
   { id: "browse", label: "Verify read-only Browse access", detail: "Application-token search is verified for EBAY_GB.", state: "DONE" },
   { id: "details", label: "Verify item-detail characteristics", detail: "getItem PRODUCT details are requested when a live listing opens.", state: "DONE" },
@@ -69,7 +69,7 @@ export default function ProfileScreen() {
       try { setFollowUpOutcomes(outcomesRaw ? JSON.parse(outcomesRaw) as ListingOutcome[] : []); } catch { setFollowUpOutcomes([]); }
       try {
         const parsed = reviewsRaw ? JSON.parse(reviewsRaw) as Partial<ObservationReview>[] : [];
-        setRecentReviews(parsed.map((review) => ({ ...review, reviewId: review.reviewId ?? `${review.listingId}:${review.reviewedAt}` }) as ObservationReview).sort((a, b) => b.reviewedAt.localeCompare(a.reviewedAt)).slice(0, 20));
+        setRecentReviews(parsed.filter((review): review is Partial<ObservationReview> & Pick<ObservationReview, "listingId" | "reviewedAt"> => typeof review.listingId === "string" && typeof review.reviewedAt === "string").map(normalizeObservationReview).sort((a, b) => b.reviewedAt.localeCompare(a.reviewedAt)).slice(0, 20));
       } catch { setRecentReviews([]); }
     });
   }, []);
@@ -77,7 +77,7 @@ export default function ProfileScreen() {
   useEffect(() => {
     if (!isAuthenticated || !remoteReviews.data?.length) return;
     const remote = remoteReviews.data.map((review) => ({ ...review, reviewedAt: new Date(review.reviewedAt).toISOString() })) as ObservationReview[];
-    const merged = [...recentReviews, ...remote].reduce<ObservationReview[]>((all, review) => all.some((item) => item.reviewId === review.reviewId) ? all : [...all, review], []).sort((a, b) => b.reviewedAt.localeCompare(a.reviewedAt)).slice(0, 20);
+    const merged = mergeObservationReviews(recentReviews, remote);
     if (JSON.stringify(merged) !== JSON.stringify(recentReviews)) {
       setRecentReviews(merged);
       void AsyncStorage.setItem(OBSERVATION_REVIEW_STORAGE_KEY, JSON.stringify(merged));
