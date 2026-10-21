@@ -88,7 +88,16 @@ export default function ProfileScreen() {
         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Notification monitor</Text>
         <EbayMonitor />
         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Research follow-ups</Text>
-        <ObservationFollowUpQueue colors={colors} followUps={followUps} outcomes={followUpOutcomes} />
+        <ObservationFollowUpQueue colors={colors} followUps={followUps} outcomes={followUpOutcomes} onMarkReviewed={(listingId) => {
+          setFollowUps((current) => current.filter((item) => item.listingId !== listingId));
+          void AsyncStorage.getItem(OBSERVATION_SCHEDULE_STORAGE_KEY).then((raw) => {
+            try {
+              const schedules = raw ? JSON.parse(raw) as Record<string, unknown> : {};
+              delete schedules[listingId];
+              return AsyncStorage.setItem(OBSERVATION_SCHEDULE_STORAGE_KEY, JSON.stringify(schedules));
+            } catch { return undefined; }
+          });
+        }} />
         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>eBay authorization readiness</Text>
         <EbayReadinessChecklist colors={colors} completed={ebayReadiness} onToggle={(id) => {
           const next = { ...ebayReadiness, [id]: !ebayReadiness[id] };
@@ -152,15 +161,15 @@ export default function ProfileScreen() {
   );
 }
 
-function ObservationFollowUpQueue({ colors, followUps, outcomes }: { colors: ReturnType<typeof useColors>; followUps: { listingId: string; nextObserveAt: string; listingTitle?: string; platform?: string; askingPrice?: number; currency?: string }[]; outcomes: ListingOutcome[] }) {
+function ObservationFollowUpQueue({ colors, followUps, outcomes, onMarkReviewed }: { colors: ReturnType<typeof useColors>; followUps: { listingId: string; nextObserveAt: string; listingTitle?: string; platform?: string; askingPrice?: number; currency?: string }[]; outcomes: ListingOutcome[]; onMarkReviewed: (listingId: string) => void }) {
   const dueCount = followUps.filter((item) => { const state = getObservationScheduleState(item.nextObserveAt); return state === "due" || state === "overdue"; }).length;
   return <View style={[styles.followUpCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
     <View style={styles.readinessHeader}><View style={styles.settingCopy}><Text style={[styles.settingTitle, { color: colors.foreground }]}>Observation queue</Text><Text style={[styles.settingDescription, { color: colors.muted }]}>{followUps.length ? `${dueCount} due · ${followUps.length} scheduled` : "No local follow-ups scheduled"}</Text></View><View style={[styles.statusBadge, { backgroundColor: dueCount ? colors.warning : colors.background }]}><Text style={[styles.statusBadgeText, { color: dueCount ? colors.foreground : colors.muted }]}>{dueCount ? "REVIEW" : "QUIET"}</Text></View></View>
-    <Text style={[styles.dataNote, { color: colors.muted }]}>This queue is a reminder to refresh and record evidence. It does not mean that a marketplace listing was fetched or that an outcome occurred.</Text>
+    <Text style={[styles.dataNote, { color: colors.muted }]}>This queue is a reminder to refresh and record evidence. It does not mean that a marketplace listing was fetched or that an outcome occurred. Marking an item reviewed only acknowledges the reminder.</Text>
     {followUps.length ? followUps.slice(0, 8).map((item, index) => {
       const state = getObservationScheduleState(item.nextObserveAt);
       const latest = outcomes.filter((outcome) => outcome.listingId === item.listingId).sort((a, b) => b.observedAt.localeCompare(a.observedAt))[0];
-      return <Pressable key={item.listingId} accessibilityRole="button" onPress={() => router.push({ pathname: "/", params: { focusListingId: item.listingId, focusQuery: item.listingTitle ?? item.listingId } })} style={({ pressed }) => [styles.followUpRow, pressed && styles.pressed]}><MaterialIcons name={state === "overdue" ? "warning" : state === "due" ? "schedule" : "event-note"} size={18} color={state === "overdue" || state === "due" ? colors.warning : colors.primary} /><View style={styles.settingCopy}><Text style={[styles.settingTitle, { color: colors.foreground }]} numberOfLines={1}>{item.listingTitle ?? item.listingId}</Text><Text style={[styles.settingDescription, { color: colors.muted }]} numberOfLines={1}>{item.platform ?? "Marketplace"}{item.askingPrice !== undefined ? ` · ${formatCurrency(item.askingPrice, item.currency)}` : " · asking price unavailable"}</Text><Text style={[styles.settingDescription, { color: colors.muted }]}>{state === "overdue" ? "Overdue" : state === "due" ? "Due now" : `Due ${new Date(item.nextObserveAt).toLocaleString()}`}{latest ? ` · last ${latest.kind}` : " · no outcome recorded"}</Text></View><MaterialIcons name="chevron-right" size={18} color={colors.muted} />{index < Math.min(followUps.length, 8) - 1 ? <View style={[styles.connectorDivider, { backgroundColor: colors.border }]} /> : null}</Pressable>;
+      return <View key={item.listingId} style={styles.followUpRow}><Pressable accessibilityRole="button" onPress={() => router.push({ pathname: "/", params: { focusListingId: item.listingId, focusQuery: item.listingTitle ?? item.listingId } })} style={({ pressed }) => [styles.followUpMain, pressed && styles.pressed]}><MaterialIcons name={state === "overdue" ? "warning" : state === "due" ? "schedule" : "event-note"} size={18} color={state === "overdue" || state === "due" ? colors.warning : colors.primary} /><View style={styles.settingCopy}><Text style={[styles.settingTitle, { color: colors.foreground }]} numberOfLines={1}>{item.listingTitle ?? item.listingId}</Text><Text style={[styles.settingDescription, { color: colors.muted }]} numberOfLines={1}>{item.platform ?? "Marketplace"}{item.askingPrice !== undefined ? ` · ${formatCurrency(item.askingPrice, item.currency)}` : " · asking price unavailable"}</Text><Text style={[styles.settingDescription, { color: colors.muted }]}>{state === "overdue" ? "Overdue" : state === "due" ? "Due now" : `Due ${new Date(item.nextObserveAt).toLocaleString()}`}{latest ? ` · last ${latest.kind}` : " · no outcome recorded"}</Text></View><MaterialIcons name="chevron-right" size={18} color={colors.muted} /></Pressable><Pressable accessibilityRole="button" accessibilityLabel={`Mark ${item.listingTitle ?? item.listingId} reviewed`} onPress={() => onMarkReviewed(item.listingId)} style={({ pressed }) => [styles.reviewButton, { borderColor: colors.border }, pressed && styles.pressed]}><Text style={[styles.reviewButtonText, { color: colors.muted }]}>Mark reviewed</Text></Pressable>{index < Math.min(followUps.length, 8) - 1 ? <View style={[styles.connectorDivider, { backgroundColor: colors.border }]} /> : null}</View>;
     }) : <Text style={[styles.dataNote, { color: colors.muted }]}>Open a live listing, then use its outcome ledger to schedule a 24-hour follow-up.</Text>}
   </View>;
 }
@@ -221,6 +230,9 @@ const styles = StyleSheet.create({
   readinessHeader: { flexDirection: "row", alignItems: "center", gap: 10 },
   readinessItem: { minHeight: 58, flexDirection: "row", alignItems: "center", gap: 8, position: "relative" },
   followUpRow: { minHeight: 58, flexDirection: "row", alignItems: "center", gap: 9, position: "relative" },
+  followUpMain: { flex: 1, minHeight: 58, flexDirection: "row", alignItems: "center", gap: 9 },
+  reviewButton: { paddingHorizontal: 8, paddingVertical: 6, borderWidth: 1, borderRadius: 8, marginLeft: 6 },
+  reviewButtonText: { fontSize: 9, fontWeight: "800" },
   readinessCheck: { width: 24, alignItems: "center" },
   readinessLink: { paddingHorizontal: 4, paddingVertical: 6 },
   readinessLinkText: { fontSize: 10, fontWeight: "800" },

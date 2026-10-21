@@ -62,6 +62,7 @@ Direction accepted on 14 October 2026, clarified as a multi-mechanism architectu
 - [x] R1.7j Follow-up navigation: queue rows open Discover with a listing focus target; matching current Browse rows open automatically, while unavailable rows produce an explicit no-replacement explanation.
 - [x] R1.7k Follow-up context and recovery: schedules preserve listing title, marketplace, asking price and currency when available; Discover offers a direct next-page action for an absent focus target while keeping the no-substitution rule.
 - [x] R1.7l Item-specific recovery: queued listing titles travel into Discover and expose a direct search action when pagination does not locate the original listing; no alternate item is treated as a match.
+- [x] R1.7m Review acknowledgment: Workspace follow-up rows can be marked reviewed, which clears only the local reminder and explicitly does not imply a fetch, sale, price change, or other outcome.
 - [ ] R1.8 End-to-end acceptance.
 
 ## Later phases — paused
