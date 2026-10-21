@@ -554,6 +554,8 @@ function ListingOutcomeLedger({ listing, colors }: { listing: Listing; colors: R
   const [note, setNote] = useState("");
   const [outcomes, setOutcomes] = useState<ListingOutcome[]>([]);
   const [nextObserveAt, setNextObserveAt] = useState<string | null>(null);
+  const [syncState, setSyncState] = useState<"idle" | "syncing" | "failed">("idle");
+  const [unsyncedOutcome, setUnsyncedOutcome] = useState<ListingOutcome | null>(null);
   const outcomeSummary = summarizeListingOutcomes(listing, outcomes);
   const scheduleState = getObservationScheduleState(nextObserveAt);
 
@@ -601,6 +603,19 @@ function ListingOutcomeLedger({ listing, colors }: { listing: Listing; colors: R
     setNextObserveAt(next);
   };
 
+  const syncRecord = async (record: ListingOutcome) => {
+    if (!isAuthenticated) return;
+    setSyncState("syncing");
+    try {
+      await syncOutcome.mutateAsync({ outcomeId: record.id, listingId: record.listingId, kind: record.kind, observedAt: record.observedAt, ...(record.realizedPrice === undefined ? {} : { realizedPrice: record.realizedPrice }), currency: listing.currency, ...(record.note ? { note: record.note } : {}) });
+      setUnsyncedOutcome(null);
+      setSyncState("idle");
+    } catch {
+      setUnsyncedOutcome(record);
+      setSyncState("failed");
+    }
+  };
+
   const addOutcome = async () => {
     const realizedPrice = Number(realizedPriceText.replace(/[^0-9.]/g, "")) || undefined;
     const record: ListingOutcome = { id: `${listing.id}:${Date.now()}`, listingId: listing.id, kind, observedAt: new Date().toISOString(), ...(realizedPrice ? { realizedPrice } : {}), ...(note.trim() ? { note: note.trim() } : {}) };
@@ -610,7 +625,7 @@ function ListingOutcomeLedger({ listing, colors }: { listing: Listing; colors: R
     const next = mergeListingOutcomes([record, ...all], []);
     await AsyncStorage.setItem(OUTCOME_STORAGE_KEY, JSON.stringify(next));
     setOutcomes(next.filter((outcome) => outcome.listingId === listing.id).slice(0, 5));
-    if (isAuthenticated) void syncOutcome.mutateAsync({ outcomeId: record.id, listingId: record.listingId, kind: record.kind, observedAt: record.observedAt, ...(record.realizedPrice === undefined ? {} : { realizedPrice: record.realizedPrice }), currency: listing.currency, ...(record.note ? { note: record.note } : {}) }).catch(() => undefined);
+    if (isAuthenticated) void syncRecord(record);
     await scheduleNextObservation(record.observedAt);
     setRealizedPriceText("");
     setNote("");
@@ -620,6 +635,8 @@ function ListingOutcomeLedger({ listing, colors }: { listing: Listing; colors: R
     <Text style={[styles.worksheetEyebrow, { color: colors.primary }]}>OUTCOME EVIDENCE</Text>
     <Text style={[styles.worksheetTitle, { color: colors.foreground }]}>What happened afterward?</Text>
     <Text style={[styles.worksheetText, { color: colors.muted }]}>Record observations without treating disappearance as a sale. This is the evidence that can eventually connect an ask to market response.</Text>
+    {isAuthenticated ? <Text style={[styles.outcomeSyncStatus, { color: syncState === "failed" ? colors.error : colors.muted }]}>{syncState === "syncing" ? "Syncing this observation securely…" : syncState === "failed" ? "Saved on this device; server sync failed." : "Authenticated outcome sync enabled."}</Text> : null}
+    {syncState === "failed" && unsyncedOutcome ? <Pressable onPress={() => void syncRecord(unsyncedOutcome)} style={({ pressed }) => [styles.scheduleButton, { borderColor: colors.border }, pressed && styles.pressed]}><Text style={[styles.scheduleButtonText, { color: colors.foreground }]}>Retry sync</Text></Pressable> : null}
     <View style={styles.outcomeKinds}>{(Object.keys(OUTCOME_LABELS) as ListingOutcomeKind[]).map((option) => <Pressable key={option} onPress={() => setKind(option)} style={[styles.outcomeKind, { backgroundColor: kind === option ? colors.foreground : colors.background, borderColor: colors.border }]}><Text style={[styles.outcomeKindText, { color: kind === option ? colors.background : colors.muted }]}>{OUTCOME_LABELS[option]}</Text></Pressable>)}</View>
     {(kind === "sale-observed" || kind === "price-revised") ? <TextInput value={realizedPriceText} onChangeText={setRealizedPriceText} keyboardType="decimal-pad" placeholder="Observed price (optional)" placeholderTextColor={colors.muted} style={[styles.outcomeInput, { color: colors.foreground, backgroundColor: colors.background, borderColor: colors.border }]} /> : null}
     <TextInput value={note} onChangeText={setNote} placeholder="Observation note (optional)" placeholderTextColor={colors.muted} style={[styles.outcomeInput, { color: colors.foreground, backgroundColor: colors.background, borderColor: colors.border }]} />
@@ -809,6 +826,7 @@ const styles = StyleSheet.create({
   outcomeHistoryDate: { fontSize: 9 },
   outcomeEmpty: { fontSize: 9, marginTop: 8 },
   outcomeSummary: { fontSize: 10, lineHeight: 15, marginTop: 8 },
+  outcomeSyncStatus: { fontSize: 9, lineHeight: 13, marginTop: 6 },
   observationScheduleRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, marginTop: 8 },
   scheduleButton: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 6 },
   scheduleButtonText: { fontSize: 9, fontWeight: "800" },

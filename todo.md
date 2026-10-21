@@ -69,6 +69,7 @@ Direction accepted on 14 October 2026, clarified as a multi-mechanism architectu
 - [x] R1.7q Authenticated review ledger foundation: user-scoped observation-review storage, protected tRPC list/upsert procedures, additive migration, and local-to-server upsert wiring are in place; anonymous users retain local fallback.
 - [x] R1.8b Review reconciliation acceptance: local and remote acknowledgments normalize, merge idempotently by review ID, prefer the latest review context, and remain structurally unable to create valuation fields.
 - [x] R1.8c Outcome sync foundation: user-scoped listing-outcome storage, protected tRPC list/upsert procedures, additive migration, local/server merge wiring, and evidence-only acceptance coverage are in place; outcomes still do not write valuation or allocation fields.
+- [x] R1.8d Outcome sync resilience: authenticated outcome writes expose syncing/failed states, retain the device copy on failure, and provide an explicit retry action; no silent conversion to market evidence occurs.
 - [ ] R1.8 End-to-end acceptance.
 
 ## Later phases — paused
