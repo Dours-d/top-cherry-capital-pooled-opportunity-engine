@@ -15,6 +15,8 @@ import { EbayMonitor } from "@/components/ebay-monitor";
 import { ThesisDraftEditor } from "@/components/thesis-draft-editor";
 
 const EBAY_READINESS_KEY = "topCherry.ebayReadiness";
+const OBSERVATION_REVIEW_STORAGE_KEY = "topCherry.observationReviews";
+type ObservationReview = { listingId: string; reviewedAt: string };
 const EBAY_READINESS_ITEMS = [
   { id: "browse", label: "Verify read-only Browse access", detail: "Application-token search is verified for EBAY_GB.", state: "DONE" },
   { id: "details", label: "Verify item-detail characteristics", detail: "getItem PRODUCT details are requested when a live listing opens.", state: "DONE" },
@@ -35,6 +37,7 @@ export default function ProfileScreen() {
   const [ebayReadiness, setEbayReadiness] = useState<Record<string, boolean>>({});
   const [followUps, setFollowUps] = useState<{ listingId: string; nextObserveAt: string; listingTitle?: string; platform?: string; askingPrice?: number; currency?: string }[]>([]);
   const [followUpOutcomes, setFollowUpOutcomes] = useState<ListingOutcome[]>([]);
+  const [recentReviews, setRecentReviews] = useState<ObservationReview[]>([]);
 
   useEffect(() => {
     if (preferencesQuery.data) {
@@ -56,12 +59,13 @@ export default function ProfileScreen() {
   }, []);
 
   useEffect(() => {
-    void Promise.all([AsyncStorage.getItem(OBSERVATION_SCHEDULE_STORAGE_KEY), AsyncStorage.getItem(OUTCOME_STORAGE_KEY)]).then(([scheduleRaw, outcomesRaw]) => {
+    void Promise.all([AsyncStorage.getItem(OBSERVATION_SCHEDULE_STORAGE_KEY), AsyncStorage.getItem(OUTCOME_STORAGE_KEY), AsyncStorage.getItem(OBSERVATION_REVIEW_STORAGE_KEY)]).then(([scheduleRaw, outcomesRaw, reviewsRaw]) => {
       try {
         const schedules = scheduleRaw ? JSON.parse(scheduleRaw) as Record<string, string | { nextObserveAt: string }> : {};
         setFollowUps(Object.entries(schedules).map(([listingId, value]) => typeof value === "string" ? { listingId, nextObserveAt: value } : { listingId, ...value }).filter((item) => item.nextObserveAt).sort((a, b) => new Date(a.nextObserveAt).getTime() - new Date(b.nextObserveAt).getTime()));
       } catch { setFollowUps([]); }
       try { setFollowUpOutcomes(outcomesRaw ? JSON.parse(outcomesRaw) as ListingOutcome[] : []); } catch { setFollowUpOutcomes([]); }
+      try { setRecentReviews(reviewsRaw ? (JSON.parse(reviewsRaw) as ObservationReview[]).sort((a, b) => b.reviewedAt.localeCompare(a.reviewedAt)).slice(0, 5) : []); } catch { setRecentReviews([]); }
     });
   }, []);
 
@@ -88,7 +92,11 @@ export default function ProfileScreen() {
         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Notification monitor</Text>
         <EbayMonitor />
         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Research follow-ups</Text>
-        <ObservationFollowUpQueue colors={colors} followUps={followUps} outcomes={followUpOutcomes} onMarkReviewed={(listingId) => {
+        <ObservationFollowUpQueue colors={colors} followUps={followUps} outcomes={followUpOutcomes} recentReviews={recentReviews} onMarkReviewed={(listingId) => {
+          const review = { listingId, reviewedAt: new Date().toISOString() };
+          const nextReviews = [review, ...recentReviews.filter((item) => item.listingId !== listingId)].slice(0, 20);
+          setRecentReviews(nextReviews);
+          void AsyncStorage.setItem(OBSERVATION_REVIEW_STORAGE_KEY, JSON.stringify(nextReviews));
           setFollowUps((current) => current.filter((item) => item.listingId !== listingId));
           void AsyncStorage.getItem(OBSERVATION_SCHEDULE_STORAGE_KEY).then((raw) => {
             try {
@@ -161,7 +169,7 @@ export default function ProfileScreen() {
   );
 }
 
-function ObservationFollowUpQueue({ colors, followUps, outcomes, onMarkReviewed }: { colors: ReturnType<typeof useColors>; followUps: { listingId: string; nextObserveAt: string; listingTitle?: string; platform?: string; askingPrice?: number; currency?: string }[]; outcomes: ListingOutcome[]; onMarkReviewed: (listingId: string) => void }) {
+function ObservationFollowUpQueue({ colors, followUps, outcomes, recentReviews, onMarkReviewed }: { colors: ReturnType<typeof useColors>; followUps: { listingId: string; nextObserveAt: string; listingTitle?: string; platform?: string; askingPrice?: number; currency?: string }[]; outcomes: ListingOutcome[]; recentReviews: ObservationReview[]; onMarkReviewed: (listingId: string) => void }) {
   const dueCount = followUps.filter((item) => { const state = getObservationScheduleState(item.nextObserveAt); return state === "due" || state === "overdue"; }).length;
   return <View style={[styles.followUpCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
     <View style={styles.readinessHeader}><View style={styles.settingCopy}><Text style={[styles.settingTitle, { color: colors.foreground }]}>Observation queue</Text><Text style={[styles.settingDescription, { color: colors.muted }]}>{followUps.length ? `${dueCount} due · ${followUps.length} scheduled` : "No local follow-ups scheduled"}</Text></View><View style={[styles.statusBadge, { backgroundColor: dueCount ? colors.warning : colors.background }]}><Text style={[styles.statusBadgeText, { color: dueCount ? colors.foreground : colors.muted }]}>{dueCount ? "REVIEW" : "QUIET"}</Text></View></View>
@@ -171,6 +179,7 @@ function ObservationFollowUpQueue({ colors, followUps, outcomes, onMarkReviewed 
       const latest = outcomes.filter((outcome) => outcome.listingId === item.listingId).sort((a, b) => b.observedAt.localeCompare(a.observedAt))[0];
       return <View key={item.listingId} style={styles.followUpRow}><Pressable accessibilityRole="button" onPress={() => router.push({ pathname: "/", params: { focusListingId: item.listingId, focusQuery: item.listingTitle ?? item.listingId } })} style={({ pressed }) => [styles.followUpMain, pressed && styles.pressed]}><MaterialIcons name={state === "overdue" ? "warning" : state === "due" ? "schedule" : "event-note"} size={18} color={state === "overdue" || state === "due" ? colors.warning : colors.primary} /><View style={styles.settingCopy}><Text style={[styles.settingTitle, { color: colors.foreground }]} numberOfLines={1}>{item.listingTitle ?? item.listingId}</Text><Text style={[styles.settingDescription, { color: colors.muted }]} numberOfLines={1}>{item.platform ?? "Marketplace"}{item.askingPrice !== undefined ? ` · ${formatCurrency(item.askingPrice, item.currency)}` : " · asking price unavailable"}</Text><Text style={[styles.settingDescription, { color: colors.muted }]}>{state === "overdue" ? "Overdue" : state === "due" ? "Due now" : `Due ${new Date(item.nextObserveAt).toLocaleString()}`}{latest ? ` · last ${latest.kind}` : " · no outcome recorded"}</Text></View><MaterialIcons name="chevron-right" size={18} color={colors.muted} /></Pressable><Pressable accessibilityRole="button" accessibilityLabel={`Mark ${item.listingTitle ?? item.listingId} reviewed`} onPress={() => onMarkReviewed(item.listingId)} style={({ pressed }) => [styles.reviewButton, { borderColor: colors.border }, pressed && styles.pressed]}><Text style={[styles.reviewButtonText, { color: colors.muted }]}>Mark reviewed</Text></Pressable>{index < Math.min(followUps.length, 8) - 1 ? <View style={[styles.connectorDivider, { backgroundColor: colors.border }]} /> : null}</View>;
     }) : <Text style={[styles.dataNote, { color: colors.muted }]}>Open a live listing, then use its outcome ledger to schedule a 24-hour follow-up.</Text>}
+    {recentReviews.length ? <View style={styles.reviewHistory}><Text style={[styles.reviewHistoryTitle, { color: colors.foreground }]}>Recent acknowledgments</Text>{recentReviews.slice(0, 3).map((review) => <View key={`${review.listingId}-${review.reviewedAt}`} style={styles.reviewHistoryRow}><MaterialIcons name="done" size={14} color={colors.success} /><Text style={[styles.settingDescription, { color: colors.muted }]} numberOfLines={1}>{review.listingId} · acknowledged {new Date(review.reviewedAt).toLocaleString()}</Text></View>)}</View> : null}
   </View>;
 }
 
@@ -233,6 +242,9 @@ const styles = StyleSheet.create({
   followUpMain: { flex: 1, minHeight: 58, flexDirection: "row", alignItems: "center", gap: 9 },
   reviewButton: { paddingHorizontal: 8, paddingVertical: 6, borderWidth: 1, borderRadius: 8, marginLeft: 6 },
   reviewButtonText: { fontSize: 9, fontWeight: "800" },
+  reviewHistory: { marginTop: 12, paddingTop: 11, borderTopWidth: 1, borderTopColor: "rgba(128,128,128,0.18)" },
+  reviewHistoryTitle: { fontSize: 11, fontWeight: "800", marginBottom: 7 },
+  reviewHistoryRow: { flexDirection: "row", alignItems: "center", gap: 6, minHeight: 24 },
   readinessCheck: { width: 24, alignItems: "center" },
   readinessLink: { paddingHorizontal: 4, paddingVertical: 6 },
   readinessLinkText: { fontSize: 10, fontWeight: "800" },
