@@ -15,9 +15,7 @@ import { EbayMonitor } from "@/components/ebay-monitor";
 import { ThesisDraftEditor } from "@/components/thesis-draft-editor";
 import { mergeObservationReviews, normalizeObservationReview, type ObservationReview } from "@/shared/observation-reviews";
 import { mergeListingOutcomes } from "@/shared/listing-outcomes";
-
-type PendingOutcomeRecord = ListingOutcome & { syncError?: string; lastAttemptAt?: string };
-type OutcomeSyncDismissal = { outcomeId: string; clearedAt: string; note: string; restoredAt?: string; restoreNote?: string };
+import { dismissPendingOutcome, restoreDismissedOutcome as restoreDismissedOutcomeTransition, type OutcomeSyncDismissal, type PendingOutcomeRecord } from "@/shared/outcome-sync-queue";
 
 const EBAY_READINESS_KEY = "topCherry.ebayReadiness";
 const OBSERVATION_REVIEW_STORAGE_KEY = "topCherry.observationReviews";
@@ -136,32 +134,23 @@ export default function ProfileScreen() {
   };
 
   const clearPendingOutcome = async (outcomeId: string, note: string) => {
-    const trimmed = note.trim();
-    if (!trimmed) return;
-    const remaining = pendingOutcomeRecords.filter((record) => record.id !== outcomeId);
-    const raw = await AsyncStorage.getItem(OUTCOME_SYNC_DISMISSAL_STORAGE_KEY);
-    let dismissals: OutcomeSyncDismissal[] = [];
-    try { dismissals = raw ? JSON.parse(raw) as OutcomeSyncDismissal[] : []; } catch { dismissals = []; }
-    dismissals.unshift({ outcomeId, clearedAt: new Date().toISOString(), note: trimmed });
-    setDismissedOutcomeRecords(dismissals.slice(0, 50));
-    setPendingOutcomeRecords(remaining);
-    setPendingOutcomeSyncs(remaining.length);
-    await AsyncStorage.setItem(OUTCOME_SYNC_QUEUE_STORAGE_KEY, JSON.stringify(remaining));
-    await AsyncStorage.setItem(OUTCOME_SYNC_DISMISSAL_STORAGE_KEY, JSON.stringify(dismissals.slice(0, 50)));
+    const result = dismissPendingOutcome(pendingOutcomeRecords, dismissedOutcomeRecords, outcomeId, note, new Date().toISOString());
+    if (!result) return;
+    setDismissedOutcomeRecords(result.dismissals);
+    setPendingOutcomeRecords(result.pending);
+    setPendingOutcomeSyncs(result.pending.length);
+    await AsyncStorage.setItem(OUTCOME_SYNC_QUEUE_STORAGE_KEY, JSON.stringify(result.pending));
+    await AsyncStorage.setItem(OUTCOME_SYNC_DISMISSAL_STORAGE_KEY, JSON.stringify(result.dismissals));
   };
 
   const restoreDismissedOutcome = async (outcomeId: string, note: string) => {
-    const trimmed = note.trim();
-    const outcome = followUpOutcomes.find((item) => item.id === outcomeId);
-    if (!trimmed || !outcome || pendingOutcomeRecords.some((item) => item.id === outcomeId)) return;
-    const restored: PendingOutcomeRecord = { ...outcome, syncError: "Restored after an intentional dismissal; retry required." };
-    const nextPending = [...pendingOutcomeRecords, restored];
-    const nextDismissals = dismissedOutcomeRecords.map((record) => record.outcomeId === outcomeId ? { ...record, restoredAt: new Date().toISOString(), restoreNote: trimmed } : record);
-    setPendingOutcomeRecords(nextPending);
-    setPendingOutcomeSyncs(nextPending.length);
-    setDismissedOutcomeRecords(nextDismissals);
-    await AsyncStorage.setItem(OUTCOME_SYNC_QUEUE_STORAGE_KEY, JSON.stringify(nextPending));
-    await AsyncStorage.setItem(OUTCOME_SYNC_DISMISSAL_STORAGE_KEY, JSON.stringify(nextDismissals));
+    const result = restoreDismissedOutcomeTransition(pendingOutcomeRecords, dismissedOutcomeRecords, followUpOutcomes, outcomeId, note, new Date().toISOString());
+    if (!result) return;
+    setPendingOutcomeRecords(result.pending);
+    setPendingOutcomeSyncs(result.pending.length);
+    setDismissedOutcomeRecords(result.dismissals);
+    await AsyncStorage.setItem(OUTCOME_SYNC_QUEUE_STORAGE_KEY, JSON.stringify(result.pending));
+    await AsyncStorage.setItem(OUTCOME_SYNC_DISMISSAL_STORAGE_KEY, JSON.stringify(result.dismissals));
   };
 
   useEffect(() => {
