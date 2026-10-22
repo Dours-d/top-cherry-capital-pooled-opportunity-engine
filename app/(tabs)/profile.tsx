@@ -9,7 +9,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { trpc } from "@/lib/trpc";
 import { startOAuthLogin } from "@/constants/oauth";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { DEFAULT_ECONOMICS, ECONOMICS_STORAGE_KEY, formatCurrency, getObservationScheduleState, OBSERVATION_SCHEDULE_STORAGE_KEY, OUTCOME_STORAGE_KEY, OUTCOME_SYNC_QUEUE_STORAGE_KEY, type EconomicsAssumptions, type ListingOutcome } from "@/lib/market-data";
+import { DEFAULT_ECONOMICS, ECONOMICS_STORAGE_KEY, formatCurrency, getObservationScheduleState, OBSERVATION_SCHEDULE_STORAGE_KEY, OUTCOME_STORAGE_KEY, OUTCOME_SYNC_DISMISSAL_STORAGE_KEY, OUTCOME_SYNC_QUEUE_STORAGE_KEY, type EconomicsAssumptions, type ListingOutcome } from "@/lib/market-data";
 import { MARKETPLACE_SOURCES, PHASE_ONE_EBAY_TASKS, SOURCE_SYNC_SNAPSHOT } from "@/server/marketplace";
 import { EbayMonitor } from "@/components/ebay-monitor";
 import { ThesisDraftEditor } from "@/components/thesis-draft-editor";
@@ -17,6 +17,7 @@ import { mergeObservationReviews, normalizeObservationReview, type ObservationRe
 import { mergeListingOutcomes } from "@/shared/listing-outcomes";
 
 type PendingOutcomeRecord = ListingOutcome & { syncError?: string; lastAttemptAt?: string };
+type OutcomeSyncDismissal = { outcomeId: string; clearedAt: string; note: string };
 
 const EBAY_READINESS_KEY = "topCherry.ebayReadiness";
 const OBSERVATION_REVIEW_STORAGE_KEY = "topCherry.observationReviews";
@@ -132,6 +133,20 @@ export default function ProfileScreen() {
     await AsyncStorage.setItem(OUTCOME_SYNC_QUEUE_STORAGE_KEY, JSON.stringify(remaining));
   };
 
+  const clearPendingOutcome = async (outcomeId: string, note: string) => {
+    const trimmed = note.trim();
+    if (!trimmed) return;
+    const remaining = pendingOutcomeRecords.filter((record) => record.id !== outcomeId);
+    const raw = await AsyncStorage.getItem(OUTCOME_SYNC_DISMISSAL_STORAGE_KEY);
+    let dismissals: OutcomeSyncDismissal[] = [];
+    try { dismissals = raw ? JSON.parse(raw) as OutcomeSyncDismissal[] : []; } catch { dismissals = []; }
+    dismissals.unshift({ outcomeId, clearedAt: new Date().toISOString(), note: trimmed });
+    setPendingOutcomeRecords(remaining);
+    setPendingOutcomeSyncs(remaining.length);
+    await AsyncStorage.setItem(OUTCOME_SYNC_QUEUE_STORAGE_KEY, JSON.stringify(remaining));
+    await AsyncStorage.setItem(OUTCOME_SYNC_DISMISSAL_STORAGE_KEY, JSON.stringify(dismissals.slice(0, 50)));
+  };
+
   useEffect(() => {
     if (!isAuthenticated || autoRetryAttempted || !pendingOutcomeRecords.length) return;
     setAutoRetryAttempted(true);
@@ -164,7 +179,7 @@ export default function ProfileScreen() {
             } catch { return undefined; }
           });
         }} />
-        <SyncedOutcomeHistory colors={colors} outcomes={followUpOutcomes} authenticated={isAuthenticated} pendingSyncs={pendingOutcomeSyncs} pendingRecords={pendingOutcomeRecords} onRetryPending={() => void retryPendingOutcomeSync()} retrying={syncOutcome.isPending} />
+        <SyncedOutcomeHistory colors={colors} outcomes={followUpOutcomes} authenticated={isAuthenticated} pendingSyncs={pendingOutcomeSyncs} pendingRecords={pendingOutcomeRecords} onRetryPending={() => void retryPendingOutcomeSync()} onClearPending={(outcomeId, note) => void clearPendingOutcome(outcomeId, note)} retrying={syncOutcome.isPending} />
         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>eBay authorization readiness</Text>
         <EbayReadinessChecklist colors={colors} completed={ebayReadiness} onToggle={(id) => {
           const next = { ...ebayReadiness, [id]: !ebayReadiness[id] };
@@ -245,12 +260,14 @@ function ObservationFollowUpQueue({ colors, followUps, outcomes, recentReviews, 
   </View>;
 }
 
-function SyncedOutcomeHistory({ colors, outcomes, authenticated, pendingSyncs, pendingRecords, onRetryPending, retrying }: { colors: ReturnType<typeof useColors>; outcomes: ListingOutcome[]; authenticated: boolean; pendingSyncs: number; pendingRecords: PendingOutcomeRecord[]; onRetryPending: () => void; retrying: boolean }) {
+function SyncedOutcomeHistory({ colors, outcomes, authenticated, pendingSyncs, pendingRecords, onRetryPending, onClearPending, retrying }: { colors: ReturnType<typeof useColors>; outcomes: ListingOutcome[]; authenticated: boolean; pendingSyncs: number; pendingRecords: PendingOutcomeRecord[]; onRetryPending: () => void; onClearPending: (outcomeId: string, note: string) => void; retrying: boolean }) {
+  const [clearTarget, setClearTarget] = useState<string | null>(null);
+  const [clearNote, setClearNote] = useState("");
   return <View style={[styles.outcomeHistoryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
     <View style={styles.readinessHeader}><View style={styles.settingCopy}><Text style={[styles.settingTitle, { color: colors.foreground }]}>Outcome evidence history</Text><Text style={[styles.settingDescription, { color: colors.muted }]}>{authenticated ? `${outcomes.length} local/server observations reconciled` : `${outcomes.length} local observations`}{pendingSyncs ? ` · ${pendingSyncs} pending sync` : ""}</Text></View><MaterialIcons name="fact-check" size={20} color={colors.primary} /></View>
     <Text style={[styles.dataNote, { color: colors.muted }]}>These are recorded observations, not verified market value, forecasts, or execution instructions. A realized price is evidence attached to an event, not an automatic benchmark.</Text>
     {authenticated && pendingSyncs ? <Pressable onPress={onRetryPending} disabled={retrying} style={({ pressed }) => [styles.retryAllButton, { backgroundColor: colors.primary }, pressed && styles.pressed]}><Text style={[styles.retryAllText, { color: colors.onPrimary }]}>{retrying ? "Retrying pending syncs…" : `Retry all pending (${pendingSyncs})`}</Text></Pressable> : null}
-    {pendingRecords.map((record) => <View key={`pending-${record.id}`} style={styles.pendingSyncRow}><MaterialIcons name="cloud-off" size={14} color={colors.warning} /><View style={styles.settingCopy}><Text style={[styles.settingDescription, { color: colors.foreground }]} numberOfLines={1}>{record.listingId} · pending synchronization</Text><Text style={[styles.settingDescription, { color: colors.muted }]}>{record.lastAttemptAt ? `Last attempt ${new Date(record.lastAttemptAt).toLocaleString()}` : "Not attempted yet"}</Text>{record.syncError ? <Text style={[styles.syncErrorText, { color: colors.warning }]} numberOfLines={2}>Reason: {record.syncError}</Text> : null}</View></View>)}
+    {pendingRecords.map((record) => <View key={`pending-${record.id}`} style={styles.pendingSyncRow}><MaterialIcons name="cloud-off" size={14} color={colors.warning} /><View style={styles.settingCopy}><Text style={[styles.settingDescription, { color: colors.foreground }]} numberOfLines={1}>{record.listingId} · pending synchronization</Text><Text style={[styles.settingDescription, { color: colors.muted }]}>{record.lastAttemptAt ? `Last attempt ${new Date(record.lastAttemptAt).toLocaleString()}` : "Not attempted yet"}</Text>{record.syncError ? <Text style={[styles.syncErrorText, { color: colors.warning }]} numberOfLines={2}>Reason: {record.syncError}</Text> : null}{clearTarget === record.id ? <><TextInput value={clearNote} onChangeText={setClearNote} placeholder="Required audit note" placeholderTextColor={colors.muted} style={[styles.clearNoteInput, { color: colors.foreground, backgroundColor: colors.background, borderColor: colors.border }]} /><View style={styles.clearActionRow}><Pressable onPress={() => { onClearPending(record.id, clearNote); setClearTarget(null); setClearNote(""); }} disabled={!clearNote.trim()} style={({ pressed }) => [styles.clearConfirmButton, { backgroundColor: clearNote.trim() ? colors.warning : colors.border }, pressed && styles.pressed]}><Text style={[styles.clearConfirmText, { color: colors.foreground }]}>Clear with note</Text></Pressable><Pressable onPress={() => { setClearTarget(null); setClearNote(""); }} style={({ pressed }) => [styles.clearCancelButton, pressed && styles.pressed]}><Text style={[styles.reviewButtonText, { color: colors.muted }]}>Cancel</Text></Pressable></View></> : <Pressable onPress={() => setClearTarget(record.id)} style={({ pressed }) => [styles.clearLink, pressed && styles.pressed]}><Text style={[styles.clearLinkText, { color: colors.warning }]}>Clear failed record</Text></Pressable>}</View></View>)}
     {outcomes.length ? outcomes.slice(0, 8).map((outcome) => <View key={outcome.id} style={styles.outcomeHistoryRow}><MaterialIcons name="radio-button-checked" size={14} color={colors.primary} /><View style={styles.settingCopy}><Text style={[styles.settingDescription, { color: colors.foreground }]} numberOfLines={1}>{outcome.listingId} · {outcome.kind}</Text><Text style={[styles.settingDescription, { color: colors.muted }]}>{new Date(outcome.observedAt).toLocaleString()}{outcome.realizedPrice !== undefined ? ` · observed ${formatCurrency(outcome.realizedPrice, outcome.currency)}` : ""}</Text>{outcome.note ? <Text style={[styles.reviewNoteText, { color: colors.muted }]} numberOfLines={2}>“{outcome.note}”</Text> : null}</View></View>) : <Text style={[styles.dataNote, { color: colors.muted }]}>No outcome observations have been recorded yet.</Text>}
   </View>;
 }
@@ -313,6 +330,13 @@ const styles = StyleSheet.create({
   retryAllText: { fontSize: 10, fontWeight: "800" },
   pendingSyncRow: { flexDirection: "row", alignItems: "flex-start", gap: 7, marginTop: 10, paddingTop: 9, borderTopWidth: 1, borderTopColor: "rgba(128,128,128,0.18)" },
   syncErrorText: { fontSize: 10, lineHeight: 14, marginTop: 2 },
+  clearLink: { alignSelf: "flex-start", paddingVertical: 6 },
+  clearLinkText: { fontSize: 10, fontWeight: "800" },
+  clearNoteInput: { minHeight: 36, borderWidth: 1, borderRadius: 8, paddingHorizontal: 9, paddingVertical: 7, fontSize: 10, marginTop: 7 },
+  clearActionRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 7 },
+  clearConfirmButton: { borderRadius: 8, paddingHorizontal: 9, paddingVertical: 7 },
+  clearConfirmText: { fontSize: 9, fontWeight: "800" },
+  clearCancelButton: { paddingHorizontal: 5, paddingVertical: 6 },
   readinessHeader: { flexDirection: "row", alignItems: "center", gap: 10 },
   readinessItem: { minHeight: 58, flexDirection: "row", alignItems: "center", gap: 8, position: "relative" },
   followUpRow: { minHeight: 58, flexDirection: "row", alignItems: "center", gap: 9, position: "relative" },

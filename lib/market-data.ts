@@ -186,6 +186,7 @@ export const NOTIFICATIONS_STORAGE_KEY = "topCherry.notifications";
 export const ECONOMICS_STORAGE_KEY = "topCherry.economics";
 export const OUTCOME_STORAGE_KEY = "topCherry.listingOutcomes.v1";
 export const OUTCOME_SYNC_QUEUE_STORAGE_KEY = "topCherry.listingOutcomes.syncQueue.v1";
+export const OUTCOME_SYNC_DISMISSAL_STORAGE_KEY = "topCherry.listingOutcomes.syncDismissals.v1";
 export const OBSERVATION_SCHEDULE_STORAGE_KEY = "topCherry.observationSchedules.v1";
 
 export type EconomicsAssumptions = {
