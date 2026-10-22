@@ -17,7 +17,7 @@ import { mergeObservationReviews, normalizeObservationReview, type ObservationRe
 import { mergeListingOutcomes } from "@/shared/listing-outcomes";
 
 type PendingOutcomeRecord = ListingOutcome & { syncError?: string; lastAttemptAt?: string };
-type OutcomeSyncDismissal = { outcomeId: string; clearedAt: string; note: string };
+type OutcomeSyncDismissal = { outcomeId: string; clearedAt: string; note: string; restoredAt?: string; restoreNote?: string };
 
 const EBAY_READINESS_KEY = "topCherry.ebayReadiness";
 const OBSERVATION_REVIEW_STORAGE_KEY = "topCherry.observationReviews";
@@ -150,6 +150,20 @@ export default function ProfileScreen() {
     await AsyncStorage.setItem(OUTCOME_SYNC_DISMISSAL_STORAGE_KEY, JSON.stringify(dismissals.slice(0, 50)));
   };
 
+  const restoreDismissedOutcome = async (outcomeId: string, note: string) => {
+    const trimmed = note.trim();
+    const outcome = followUpOutcomes.find((item) => item.id === outcomeId);
+    if (!trimmed || !outcome || pendingOutcomeRecords.some((item) => item.id === outcomeId)) return;
+    const restored: PendingOutcomeRecord = { ...outcome, syncError: "Restored after an intentional dismissal; retry required." };
+    const nextPending = [...pendingOutcomeRecords, restored];
+    const nextDismissals = dismissedOutcomeRecords.map((record) => record.outcomeId === outcomeId ? { ...record, restoredAt: new Date().toISOString(), restoreNote: trimmed } : record);
+    setPendingOutcomeRecords(nextPending);
+    setPendingOutcomeSyncs(nextPending.length);
+    setDismissedOutcomeRecords(nextDismissals);
+    await AsyncStorage.setItem(OUTCOME_SYNC_QUEUE_STORAGE_KEY, JSON.stringify(nextPending));
+    await AsyncStorage.setItem(OUTCOME_SYNC_DISMISSAL_STORAGE_KEY, JSON.stringify(nextDismissals));
+  };
+
   useEffect(() => {
     if (!isAuthenticated || autoRetryAttempted || !pendingOutcomeRecords.length) return;
     setAutoRetryAttempted(true);
@@ -182,7 +196,7 @@ export default function ProfileScreen() {
             } catch { return undefined; }
           });
         }} />
-        <SyncedOutcomeHistory colors={colors} outcomes={followUpOutcomes} authenticated={isAuthenticated} pendingSyncs={pendingOutcomeSyncs} pendingRecords={pendingOutcomeRecords} dismissedRecords={dismissedOutcomeRecords} onRetryPending={() => void retryPendingOutcomeSync()} onClearPending={(outcomeId, note) => void clearPendingOutcome(outcomeId, note)} retrying={syncOutcome.isPending} />
+        <SyncedOutcomeHistory colors={colors} outcomes={followUpOutcomes} authenticated={isAuthenticated} pendingSyncs={pendingOutcomeSyncs} pendingRecords={pendingOutcomeRecords} dismissedRecords={dismissedOutcomeRecords} onRetryPending={() => void retryPendingOutcomeSync()} onClearPending={(outcomeId, note) => void clearPendingOutcome(outcomeId, note)} onRestorePending={(outcomeId, note) => void restoreDismissedOutcome(outcomeId, note)} retrying={syncOutcome.isPending} />
         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>eBay authorization readiness</Text>
         <EbayReadinessChecklist colors={colors} completed={ebayReadiness} onToggle={(id) => {
           const next = { ...ebayReadiness, [id]: !ebayReadiness[id] };
@@ -263,9 +277,11 @@ function ObservationFollowUpQueue({ colors, followUps, outcomes, recentReviews, 
   </View>;
 }
 
-function SyncedOutcomeHistory({ colors, outcomes, authenticated, pendingSyncs, pendingRecords, dismissedRecords, onRetryPending, onClearPending, retrying }: { colors: ReturnType<typeof useColors>; outcomes: ListingOutcome[]; authenticated: boolean; pendingSyncs: number; pendingRecords: PendingOutcomeRecord[]; dismissedRecords: OutcomeSyncDismissal[]; onRetryPending: () => void; onClearPending: (outcomeId: string, note: string) => void; retrying: boolean }) {
+function SyncedOutcomeHistory({ colors, outcomes, authenticated, pendingSyncs, pendingRecords, dismissedRecords, onRetryPending, onClearPending, onRestorePending, retrying }: { colors: ReturnType<typeof useColors>; outcomes: ListingOutcome[]; authenticated: boolean; pendingSyncs: number; pendingRecords: PendingOutcomeRecord[]; dismissedRecords: OutcomeSyncDismissal[]; onRetryPending: () => void; onClearPending: (outcomeId: string, note: string) => void; onRestorePending: (outcomeId: string, note: string) => void; retrying: boolean }) {
   const [clearTarget, setClearTarget] = useState<string | null>(null);
   const [clearNote, setClearNote] = useState("");
+  const [restoreTarget, setRestoreTarget] = useState<string | null>(null);
+  const [restoreNote, setRestoreNote] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "synced" | "dismissed">("all");
   const visiblePending = statusFilter === "all" || statusFilter === "pending" ? pendingRecords : [];
   const visibleOutcomes = statusFilter === "all" || statusFilter === "synced" ? outcomes : [];
@@ -276,7 +292,7 @@ function SyncedOutcomeHistory({ colors, outcomes, authenticated, pendingSyncs, p
     <View style={styles.filterRow}>{(["all", "pending", "synced", "dismissed"] as const).map((option) => <Pressable key={option} onPress={() => setStatusFilter(option)} style={({ pressed }) => [styles.filterChip, { backgroundColor: statusFilter === option ? colors.foreground : colors.background, borderColor: colors.border }, pressed && styles.pressed]}><Text style={[styles.filterChipText, { color: statusFilter === option ? colors.background : colors.muted }]}>{option === "all" ? `All (${outcomes.length + pendingRecords.length + dismissedRecords.length})` : option === "pending" ? `Pending (${pendingRecords.length})` : option === "synced" ? `Synced (${outcomes.length})` : `Dismissed (${dismissedRecords.length})`}</Text></Pressable>)}</View>
     {authenticated && visiblePending.length ? <Pressable onPress={onRetryPending} disabled={retrying} style={({ pressed }) => [styles.retryAllButton, { backgroundColor: colors.primary }, pressed && styles.pressed]}><Text style={[styles.retryAllText, { color: colors.onPrimary }]}>{retrying ? "Retrying pending syncs…" : `Retry all pending (${visiblePending.length})`}</Text></Pressable> : null}
     {visiblePending.map((record) => <View key={`pending-${record.id}`} style={styles.pendingSyncRow}><MaterialIcons name="cloud-off" size={14} color={colors.warning} /><View style={styles.settingCopy}><Text style={[styles.settingDescription, { color: colors.foreground }]} numberOfLines={1}>{record.listingId} · pending synchronization</Text><Text style={[styles.settingDescription, { color: colors.muted }]}>{record.lastAttemptAt ? `Last attempt ${new Date(record.lastAttemptAt).toLocaleString()}` : "Not attempted yet"}</Text>{record.syncError ? <Text style={[styles.syncErrorText, { color: colors.warning }]} numberOfLines={2}>Reason: {record.syncError}</Text> : null}{clearTarget === record.id ? <><TextInput value={clearNote} onChangeText={setClearNote} placeholder="Required audit note" placeholderTextColor={colors.muted} style={[styles.clearNoteInput, { color: colors.foreground, backgroundColor: colors.background, borderColor: colors.border }]} /><View style={styles.clearActionRow}><Pressable onPress={() => { onClearPending(record.id, clearNote); setClearTarget(null); setClearNote(""); }} disabled={!clearNote.trim()} style={({ pressed }) => [styles.clearConfirmButton, { backgroundColor: clearNote.trim() ? colors.warning : colors.border }, pressed && styles.pressed]}><Text style={[styles.clearConfirmText, { color: colors.foreground }]}>Clear with note</Text></Pressable><Pressable onPress={() => { setClearTarget(null); setClearNote(""); }} style={({ pressed }) => [styles.clearCancelButton, pressed && styles.pressed]}><Text style={[styles.reviewButtonText, { color: colors.muted }]}>Cancel</Text></Pressable></View></> : <Pressable onPress={() => setClearTarget(record.id)} style={({ pressed }) => [styles.clearLink, pressed && styles.pressed]}><Text style={[styles.clearLinkText, { color: colors.warning }]}>Clear failed record</Text></Pressable>}</View></View>)}
-    {visibleDismissals.length ? <View style={styles.dismissalHistory}><Text style={[styles.dismissalTitle, { color: colors.muted }]}>Dismissed sync records · audit history</Text>{visibleDismissals.slice(0, 8).map((record) => <View key={`${record.outcomeId}-${record.clearedAt}`} style={styles.dismissalRow}><MaterialIcons name="do-not-disturb-on" size={14} color={colors.muted} /><View style={styles.settingCopy}><Text style={[styles.settingDescription, { color: colors.foreground }]} numberOfLines={1}>{record.outcomeId} · intentionally cleared</Text><Text style={[styles.settingDescription, { color: colors.muted }]}>{new Date(record.clearedAt).toLocaleString()}</Text><Text style={[styles.reviewNoteText, { color: colors.muted }]} numberOfLines={2}>Audit note: “{record.note}”</Text></View></View>)}</View> : null}
+    {visibleDismissals.length ? <View style={styles.dismissalHistory}><Text style={[styles.dismissalTitle, { color: colors.muted }]}>Dismissed sync records · audit history</Text>{visibleDismissals.slice(0, 8).map((record) => <View key={`${record.outcomeId}-${record.clearedAt}`} style={styles.dismissalRow}><MaterialIcons name="do-not-disturb-on" size={14} color={colors.muted} /><View style={styles.settingCopy}><Text style={[styles.settingDescription, { color: colors.foreground }]} numberOfLines={1}>{record.outcomeId} · intentionally cleared</Text><Text style={[styles.settingDescription, { color: colors.muted }]}>{new Date(record.clearedAt).toLocaleString()}</Text><Text style={[styles.reviewNoteText, { color: colors.muted }]} numberOfLines={2}>Audit note: “{record.note}”</Text>{record.restoredAt ? <Text style={[styles.reviewNoteText, { color: colors.warning }]} numberOfLines={2}>Restored to pending {new Date(record.restoredAt).toLocaleString()} · “{record.restoreNote}”</Text> : restoreTarget === record.outcomeId ? <><TextInput value={restoreNote} onChangeText={setRestoreNote} placeholder="Required restore note" placeholderTextColor={colors.muted} style={[styles.clearNoteInput, { color: colors.foreground, backgroundColor: colors.background, borderColor: colors.border }]} /><View style={styles.clearActionRow}><Pressable onPress={() => { onRestorePending(record.outcomeId, restoreNote); setRestoreTarget(null); setRestoreNote(""); }} disabled={!restoreNote.trim()} style={({ pressed }) => [styles.clearConfirmButton, { backgroundColor: restoreNote.trim() ? colors.warning : colors.border }, pressed && styles.pressed]}><Text style={[styles.clearConfirmText, { color: colors.foreground }]}>Restore to pending</Text></Pressable><Pressable onPress={() => { setRestoreTarget(null); setRestoreNote(""); }} style={({ pressed }) => [styles.clearCancelButton, pressed && styles.pressed]}><Text style={[styles.reviewButtonText, { color: colors.muted }]}>Cancel</Text></Pressable></View></> : <Pressable onPress={() => setRestoreTarget(record.outcomeId)} style={({ pressed }) => [styles.clearLink, pressed && styles.pressed]}><Text style={[styles.clearLinkText, { color: colors.warning }]}>Restore to pending</Text></Pressable>}</View></View>)}</View> : null}
     {visibleOutcomes.length ? visibleOutcomes.slice(0, 8).map((outcome) => <View key={outcome.id} style={styles.outcomeHistoryRow}><MaterialIcons name="radio-button-checked" size={14} color={colors.primary} /><View style={styles.settingCopy}><Text style={[styles.settingDescription, { color: colors.foreground }]} numberOfLines={1}>{outcome.listingId} · {outcome.kind}</Text><Text style={[styles.settingDescription, { color: colors.muted }]}>{new Date(outcome.observedAt).toLocaleString()}{outcome.realizedPrice !== undefined ? ` · observed ${formatCurrency(outcome.realizedPrice, outcome.currency)}` : ""}</Text>{outcome.note ? <Text style={[styles.reviewNoteText, { color: colors.muted }]} numberOfLines={2}>“{outcome.note}”</Text> : null}</View></View>) : !visiblePending.length && !visibleDismissals.length ? <Text style={[styles.dataNote, { color: colors.muted }]}>{statusFilter === "all" ? "No outcome records have been recorded yet." : `No ${statusFilter} records.`}</Text> : null}
   </View>;
 }
