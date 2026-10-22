@@ -14,6 +14,7 @@ import { MARKETPLACE_SOURCES, PHASE_ONE_EBAY_TASKS, SOURCE_SYNC_SNAPSHOT } from 
 import { EbayMonitor } from "@/components/ebay-monitor";
 import { ThesisDraftEditor } from "@/components/thesis-draft-editor";
 import { mergeObservationReviews, normalizeObservationReview, type ObservationReview } from "@/shared/observation-reviews";
+import { mergeListingOutcomes } from "@/shared/listing-outcomes";
 
 const EBAY_READINESS_KEY = "topCherry.ebayReadiness";
 const OBSERVATION_REVIEW_STORAGE_KEY = "topCherry.observationReviews";
@@ -32,6 +33,7 @@ export default function ProfileScreen() {
   const preferencesQuery = trpc.preferences.get.useQuery(undefined, { enabled: isAuthenticated });
   const updatePreferences = trpc.preferences.update.useMutation({ onSuccess: () => void preferencesQuery.refetch() });
   const remoteReviews = trpc.observationReviews.list.useQuery(undefined, { enabled: isAuthenticated });
+  const remoteOutcomes = trpc.listingOutcomes.list.useQuery(undefined, { enabled: isAuthenticated });
   const syncReview = trpc.observationReviews.upsert.useMutation();
   const [alerts, setAlerts] = useState(true);
   const [dailyDigest, setDailyDigest] = useState(false);
@@ -84,6 +86,16 @@ export default function ProfileScreen() {
     }
   }, [isAuthenticated, remoteReviews.data, recentReviews]);
 
+  useEffect(() => {
+    if (!isAuthenticated || !remoteOutcomes.data?.length) return;
+    const remote = remoteOutcomes.data.map((outcome) => ({ id: outcome.outcomeId, listingId: outcome.listingId, kind: outcome.kind, observedAt: new Date(outcome.observedAt).toISOString(), ...(outcome.realizedPrice === null ? {} : { realizedPrice: outcome.realizedPrice }), ...(outcome.currency ? { currency: outcome.currency } : {}), ...(outcome.note ? { note: outcome.note } : {}) })) as ListingOutcome[];
+    const merged = mergeListingOutcomes(followUpOutcomes, remote);
+    if (JSON.stringify(merged) !== JSON.stringify(followUpOutcomes)) {
+      setFollowUpOutcomes(merged);
+      void AsyncStorage.setItem(OUTCOME_STORAGE_KEY, JSON.stringify(merged));
+    }
+  }, [isAuthenticated, remoteOutcomes.data, followUpOutcomes]);
+
   const updateEconomics = (patch: Partial<EconomicsAssumptions>) => {
     const next = { ...economics, ...patch };
     setEconomics(next);
@@ -123,6 +135,7 @@ export default function ProfileScreen() {
             } catch { return undefined; }
           });
         }} />
+        <SyncedOutcomeHistory colors={colors} outcomes={followUpOutcomes} authenticated={isAuthenticated} />
         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>eBay authorization readiness</Text>
         <EbayReadinessChecklist colors={colors} completed={ebayReadiness} onToggle={(id) => {
           const next = { ...ebayReadiness, [id]: !ebayReadiness[id] };
@@ -203,6 +216,14 @@ function ObservationFollowUpQueue({ colors, followUps, outcomes, recentReviews, 
   </View>;
 }
 
+function SyncedOutcomeHistory({ colors, outcomes, authenticated }: { colors: ReturnType<typeof useColors>; outcomes: ListingOutcome[]; authenticated: boolean }) {
+  return <View style={[styles.outcomeHistoryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+    <View style={styles.readinessHeader}><View style={styles.settingCopy}><Text style={[styles.settingTitle, { color: colors.foreground }]}>Outcome evidence history</Text><Text style={[styles.settingDescription, { color: colors.muted }]}>{authenticated ? `${outcomes.length} local/server observations reconciled` : `${outcomes.length} local observations`}</Text></View><MaterialIcons name="fact-check" size={20} color={colors.primary} /></View>
+    <Text style={[styles.dataNote, { color: colors.muted }]}>These are recorded observations, not verified market value, forecasts, or execution instructions. A realized price is evidence attached to an event, not an automatic benchmark.</Text>
+    {outcomes.length ? outcomes.slice(0, 8).map((outcome) => <View key={outcome.id} style={styles.outcomeHistoryRow}><MaterialIcons name="radio-button-checked" size={14} color={colors.primary} /><View style={styles.settingCopy}><Text style={[styles.settingDescription, { color: colors.foreground }]} numberOfLines={1}>{outcome.listingId} · {outcome.kind}</Text><Text style={[styles.settingDescription, { color: colors.muted }]}>{new Date(outcome.observedAt).toLocaleString()}{outcome.realizedPrice !== undefined ? ` · observed ${formatCurrency(outcome.realizedPrice, outcome.currency)}` : ""}</Text>{outcome.note ? <Text style={[styles.reviewNoteText, { color: colors.muted }]} numberOfLines={2}>“{outcome.note}”</Text> : null}</View></View>) : <Text style={[styles.dataNote, { color: colors.muted }]}>No outcome observations have been recorded yet.</Text>}
+  </View>;
+}
+
 function EbayReadinessChecklist({ colors, completed, onToggle }: { colors: ReturnType<typeof useColors>; completed: Record<string, boolean>; onToggle: (id: string) => void }) {
   const doneCount = EBAY_READINESS_ITEMS.filter((item) => item.state === "DONE" || completed[item.id]).length;
   return <View style={[styles.readinessCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -256,6 +277,7 @@ const styles = StyleSheet.create({
   dataCard: { borderRadius: 19, borderWidth: 1, padding: 14, marginBottom: 27 },
   readinessCard: { borderRadius: 19, borderWidth: 1, padding: 14, marginBottom: 27 },
   followUpCard: { borderRadius: 19, borderWidth: 1, padding: 14, marginBottom: 27 },
+  outcomeHistoryCard: { borderRadius: 19, borderWidth: 1, padding: 14, marginBottom: 27 },
   readinessHeader: { flexDirection: "row", alignItems: "center", gap: 10 },
   readinessItem: { minHeight: 58, flexDirection: "row", alignItems: "center", gap: 8, position: "relative" },
   followUpRow: { minHeight: 58, flexDirection: "row", alignItems: "center", gap: 9, position: "relative" },
@@ -265,6 +287,7 @@ const styles = StyleSheet.create({
   reviewHistory: { marginTop: 12, paddingTop: 11, borderTopWidth: 1, borderTopColor: "rgba(128,128,128,0.18)" },
   reviewHistoryTitle: { fontSize: 11, fontWeight: "800", marginBottom: 7 },
   reviewHistoryRow: { flexDirection: "row", alignItems: "center", gap: 6, minHeight: 24 },
+  outcomeHistoryRow: { flexDirection: "row", alignItems: "flex-start", gap: 7, minHeight: 38, marginTop: 9 },
   reviewNoteInput: { minHeight: 38, borderWidth: 1, borderRadius: 9, paddingHorizontal: 10, paddingVertical: 8, fontSize: 11, marginTop: 11 },
   reviewNoteText: { fontSize: 10, lineHeight: 14, marginTop: 2 },
   filterRow: { flexDirection: "row", gap: 6, marginTop: 12, marginBottom: 4 },

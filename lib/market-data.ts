@@ -90,6 +90,7 @@ export type ListingOutcome = {
   kind: ListingOutcomeKind;
   observedAt: string;
   realizedPrice?: number;
+  currency?: string;
   note?: string;
 };
 
