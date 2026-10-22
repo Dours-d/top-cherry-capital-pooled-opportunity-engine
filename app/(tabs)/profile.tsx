@@ -35,6 +35,7 @@ export default function ProfileScreen() {
   const remoteReviews = trpc.observationReviews.list.useQuery(undefined, { enabled: isAuthenticated });
   const remoteOutcomes = trpc.listingOutcomes.list.useQuery(undefined, { enabled: isAuthenticated });
   const syncReview = trpc.observationReviews.upsert.useMutation();
+  const syncOutcome = trpc.listingOutcomes.upsert.useMutation();
   const [alerts, setAlerts] = useState(true);
   const [dailyDigest, setDailyDigest] = useState(false);
   const [economics, setEconomics] = useState(DEFAULT_ECONOMICS);
@@ -43,6 +44,7 @@ export default function ProfileScreen() {
   const [followUpOutcomes, setFollowUpOutcomes] = useState<ListingOutcome[]>([]);
   const [recentReviews, setRecentReviews] = useState<ObservationReview[]>([]);
   const [pendingOutcomeSyncs, setPendingOutcomeSyncs] = useState(0);
+  const [pendingOutcomeRecords, setPendingOutcomeRecords] = useState<ListingOutcome[]>([]);
 
   useEffect(() => {
     if (preferencesQuery.data) {
@@ -70,7 +72,7 @@ export default function ProfileScreen() {
         setFollowUps(Object.entries(schedules).map(([listingId, value]) => typeof value === "string" ? { listingId, nextObserveAt: value } : { listingId, ...value }).filter((item) => item.nextObserveAt).sort((a, b) => new Date(a.nextObserveAt).getTime() - new Date(b.nextObserveAt).getTime()));
       } catch { setFollowUps([]); }
       try { setFollowUpOutcomes(outcomesRaw ? JSON.parse(outcomesRaw) as ListingOutcome[] : []); } catch { setFollowUpOutcomes([]); }
-      try { setPendingOutcomeSyncs(pendingRaw ? (JSON.parse(pendingRaw) as ListingOutcome[]).length : 0); } catch { setPendingOutcomeSyncs(0); }
+      try { const pending = pendingRaw ? JSON.parse(pendingRaw) as ListingOutcome[] : []; setPendingOutcomeRecords(pending); setPendingOutcomeSyncs(pending.length); } catch { setPendingOutcomeRecords([]); setPendingOutcomeSyncs(0); }
       try {
         const parsed = reviewsRaw ? JSON.parse(reviewsRaw) as Partial<ObservationReview>[] : [];
         setRecentReviews(parsed.filter((review): review is Partial<ObservationReview> & Pick<ObservationReview, "listingId" | "reviewedAt"> => typeof review.listingId === "string" && typeof review.reviewedAt === "string").map(normalizeObservationReview).sort((a, b) => b.reviewedAt.localeCompare(a.reviewedAt)).slice(0, 20));
@@ -111,6 +113,21 @@ export default function ProfileScreen() {
     if (isAuthenticated) updatePreferences.mutate({ [key]: next });
   };
 
+  const retryPendingOutcomeSync = async () => {
+    if (!isAuthenticated || !pendingOutcomeRecords.length) return;
+    const remaining: ListingOutcome[] = [];
+    for (const outcome of pendingOutcomeRecords) {
+      try {
+        await syncOutcome.mutateAsync({ outcomeId: outcome.id, listingId: outcome.listingId, kind: outcome.kind, observedAt: outcome.observedAt, ...(outcome.realizedPrice === undefined ? {} : { realizedPrice: outcome.realizedPrice }), ...(outcome.currency ? { currency: outcome.currency } : {}), ...(outcome.note ? { note: outcome.note } : {}) });
+      } catch {
+        remaining.push(outcome);
+      }
+    }
+    setPendingOutcomeRecords(remaining);
+    setPendingOutcomeSyncs(remaining.length);
+    await AsyncStorage.setItem(OUTCOME_SYNC_QUEUE_STORAGE_KEY, JSON.stringify(remaining));
+  };
+
   return (
     <ScreenContainer className="px-5" containerClassName="bg-background">
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
@@ -137,7 +154,7 @@ export default function ProfileScreen() {
             } catch { return undefined; }
           });
         }} />
-        <SyncedOutcomeHistory colors={colors} outcomes={followUpOutcomes} authenticated={isAuthenticated} pendingSyncs={pendingOutcomeSyncs} />
+        <SyncedOutcomeHistory colors={colors} outcomes={followUpOutcomes} authenticated={isAuthenticated} pendingSyncs={pendingOutcomeSyncs} onRetryPending={() => void retryPendingOutcomeSync()} retrying={syncOutcome.isPending} />
         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>eBay authorization readiness</Text>
         <EbayReadinessChecklist colors={colors} completed={ebayReadiness} onToggle={(id) => {
           const next = { ...ebayReadiness, [id]: !ebayReadiness[id] };
@@ -218,10 +235,11 @@ function ObservationFollowUpQueue({ colors, followUps, outcomes, recentReviews, 
   </View>;
 }
 
-function SyncedOutcomeHistory({ colors, outcomes, authenticated, pendingSyncs }: { colors: ReturnType<typeof useColors>; outcomes: ListingOutcome[]; authenticated: boolean; pendingSyncs: number }) {
+function SyncedOutcomeHistory({ colors, outcomes, authenticated, pendingSyncs, onRetryPending, retrying }: { colors: ReturnType<typeof useColors>; outcomes: ListingOutcome[]; authenticated: boolean; pendingSyncs: number; onRetryPending: () => void; retrying: boolean }) {
   return <View style={[styles.outcomeHistoryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
     <View style={styles.readinessHeader}><View style={styles.settingCopy}><Text style={[styles.settingTitle, { color: colors.foreground }]}>Outcome evidence history</Text><Text style={[styles.settingDescription, { color: colors.muted }]}>{authenticated ? `${outcomes.length} local/server observations reconciled` : `${outcomes.length} local observations`}{pendingSyncs ? ` · ${pendingSyncs} pending sync` : ""}</Text></View><MaterialIcons name="fact-check" size={20} color={colors.primary} /></View>
     <Text style={[styles.dataNote, { color: colors.muted }]}>These are recorded observations, not verified market value, forecasts, or execution instructions. A realized price is evidence attached to an event, not an automatic benchmark.</Text>
+    {authenticated && pendingSyncs ? <Pressable onPress={onRetryPending} disabled={retrying} style={({ pressed }) => [styles.retryAllButton, { backgroundColor: colors.primary }, pressed && styles.pressed]}><Text style={[styles.retryAllText, { color: colors.onPrimary }]}>{retrying ? "Retrying pending syncs…" : `Retry all pending (${pendingSyncs})`}</Text></Pressable> : null}
     {outcomes.length ? outcomes.slice(0, 8).map((outcome) => <View key={outcome.id} style={styles.outcomeHistoryRow}><MaterialIcons name="radio-button-checked" size={14} color={colors.primary} /><View style={styles.settingCopy}><Text style={[styles.settingDescription, { color: colors.foreground }]} numberOfLines={1}>{outcome.listingId} · {outcome.kind}</Text><Text style={[styles.settingDescription, { color: colors.muted }]}>{new Date(outcome.observedAt).toLocaleString()}{outcome.realizedPrice !== undefined ? ` · observed ${formatCurrency(outcome.realizedPrice, outcome.currency)}` : ""}</Text>{outcome.note ? <Text style={[styles.reviewNoteText, { color: colors.muted }]} numberOfLines={2}>“{outcome.note}”</Text> : null}</View></View>) : <Text style={[styles.dataNote, { color: colors.muted }]}>No outcome observations have been recorded yet.</Text>}
   </View>;
 }
@@ -280,6 +298,8 @@ const styles = StyleSheet.create({
   readinessCard: { borderRadius: 19, borderWidth: 1, padding: 14, marginBottom: 27 },
   followUpCard: { borderRadius: 19, borderWidth: 1, padding: 14, marginBottom: 27 },
   outcomeHistoryCard: { borderRadius: 19, borderWidth: 1, padding: 14, marginBottom: 27 },
+  retryAllButton: { alignSelf: "flex-start", borderRadius: 9, paddingHorizontal: 10, paddingVertical: 8, marginTop: 10 },
+  retryAllText: { fontSize: 10, fontWeight: "800" },
   readinessHeader: { flexDirection: "row", alignItems: "center", gap: 10 },
   readinessItem: { minHeight: 58, flexDirection: "row", alignItems: "center", gap: 8, position: "relative" },
   followUpRow: { minHeight: 58, flexDirection: "row", alignItems: "center", gap: 9, position: "relative" },
