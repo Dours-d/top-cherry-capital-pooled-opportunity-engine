@@ -16,6 +16,8 @@ import { ThesisDraftEditor } from "@/components/thesis-draft-editor";
 import { mergeObservationReviews, normalizeObservationReview, type ObservationReview } from "@/shared/observation-reviews";
 import { mergeListingOutcomes } from "@/shared/listing-outcomes";
 
+type PendingOutcomeRecord = ListingOutcome & { syncError?: string; lastAttemptAt?: string };
+
 const EBAY_READINESS_KEY = "topCherry.ebayReadiness";
 const OBSERVATION_REVIEW_STORAGE_KEY = "topCherry.observationReviews";
 const EBAY_READINESS_ITEMS = [
@@ -44,7 +46,7 @@ export default function ProfileScreen() {
   const [followUpOutcomes, setFollowUpOutcomes] = useState<ListingOutcome[]>([]);
   const [recentReviews, setRecentReviews] = useState<ObservationReview[]>([]);
   const [pendingOutcomeSyncs, setPendingOutcomeSyncs] = useState(0);
-  const [pendingOutcomeRecords, setPendingOutcomeRecords] = useState<ListingOutcome[]>([]);
+  const [pendingOutcomeRecords, setPendingOutcomeRecords] = useState<PendingOutcomeRecord[]>([]);
   const [autoRetryAttempted, setAutoRetryAttempted] = useState(false);
 
   useEffect(() => {
@@ -73,7 +75,7 @@ export default function ProfileScreen() {
         setFollowUps(Object.entries(schedules).map(([listingId, value]) => typeof value === "string" ? { listingId, nextObserveAt: value } : { listingId, ...value }).filter((item) => item.nextObserveAt).sort((a, b) => new Date(a.nextObserveAt).getTime() - new Date(b.nextObserveAt).getTime()));
       } catch { setFollowUps([]); }
       try { setFollowUpOutcomes(outcomesRaw ? JSON.parse(outcomesRaw) as ListingOutcome[] : []); } catch { setFollowUpOutcomes([]); }
-      try { const pending = pendingRaw ? JSON.parse(pendingRaw) as ListingOutcome[] : []; setPendingOutcomeRecords(pending); setPendingOutcomeSyncs(pending.length); } catch { setPendingOutcomeRecords([]); setPendingOutcomeSyncs(0); }
+      try { const pending = pendingRaw ? JSON.parse(pendingRaw) as PendingOutcomeRecord[] : []; setPendingOutcomeRecords(pending.filter((item) => typeof item.id === "string" && typeof item.listingId === "string")); setPendingOutcomeSyncs(pending.length); } catch { setPendingOutcomeRecords([]); setPendingOutcomeSyncs(0); }
       try {
         const parsed = reviewsRaw ? JSON.parse(reviewsRaw) as Partial<ObservationReview>[] : [];
         setRecentReviews(parsed.filter((review): review is Partial<ObservationReview> & Pick<ObservationReview, "listingId" | "reviewedAt"> => typeof review.listingId === "string" && typeof review.reviewedAt === "string").map(normalizeObservationReview).sort((a, b) => b.reviewedAt.localeCompare(a.reviewedAt)).slice(0, 20));
@@ -116,12 +118,13 @@ export default function ProfileScreen() {
 
   const retryPendingOutcomeSync = async () => {
     if (!isAuthenticated || !pendingOutcomeRecords.length) return;
-    const remaining: ListingOutcome[] = [];
+    const remaining: PendingOutcomeRecord[] = [];
     for (const outcome of pendingOutcomeRecords) {
       try {
         await syncOutcome.mutateAsync({ outcomeId: outcome.id, listingId: outcome.listingId, kind: outcome.kind, observedAt: outcome.observedAt, ...(outcome.realizedPrice === undefined ? {} : { realizedPrice: outcome.realizedPrice }), ...(outcome.currency ? { currency: outcome.currency } : {}), ...(outcome.note ? { note: outcome.note } : {}) });
-      } catch {
-        remaining.push(outcome);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "The server rejected this sync attempt.";
+        remaining.push({ ...outcome, syncError: message, lastAttemptAt: new Date().toISOString() });
       }
     }
     setPendingOutcomeRecords(remaining);
@@ -161,7 +164,7 @@ export default function ProfileScreen() {
             } catch { return undefined; }
           });
         }} />
-        <SyncedOutcomeHistory colors={colors} outcomes={followUpOutcomes} authenticated={isAuthenticated} pendingSyncs={pendingOutcomeSyncs} onRetryPending={() => void retryPendingOutcomeSync()} retrying={syncOutcome.isPending} />
+        <SyncedOutcomeHistory colors={colors} outcomes={followUpOutcomes} authenticated={isAuthenticated} pendingSyncs={pendingOutcomeSyncs} pendingRecords={pendingOutcomeRecords} onRetryPending={() => void retryPendingOutcomeSync()} retrying={syncOutcome.isPending} />
         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>eBay authorization readiness</Text>
         <EbayReadinessChecklist colors={colors} completed={ebayReadiness} onToggle={(id) => {
           const next = { ...ebayReadiness, [id]: !ebayReadiness[id] };
@@ -242,11 +245,12 @@ function ObservationFollowUpQueue({ colors, followUps, outcomes, recentReviews, 
   </View>;
 }
 
-function SyncedOutcomeHistory({ colors, outcomes, authenticated, pendingSyncs, onRetryPending, retrying }: { colors: ReturnType<typeof useColors>; outcomes: ListingOutcome[]; authenticated: boolean; pendingSyncs: number; onRetryPending: () => void; retrying: boolean }) {
+function SyncedOutcomeHistory({ colors, outcomes, authenticated, pendingSyncs, pendingRecords, onRetryPending, retrying }: { colors: ReturnType<typeof useColors>; outcomes: ListingOutcome[]; authenticated: boolean; pendingSyncs: number; pendingRecords: PendingOutcomeRecord[]; onRetryPending: () => void; retrying: boolean }) {
   return <View style={[styles.outcomeHistoryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
     <View style={styles.readinessHeader}><View style={styles.settingCopy}><Text style={[styles.settingTitle, { color: colors.foreground }]}>Outcome evidence history</Text><Text style={[styles.settingDescription, { color: colors.muted }]}>{authenticated ? `${outcomes.length} local/server observations reconciled` : `${outcomes.length} local observations`}{pendingSyncs ? ` · ${pendingSyncs} pending sync` : ""}</Text></View><MaterialIcons name="fact-check" size={20} color={colors.primary} /></View>
     <Text style={[styles.dataNote, { color: colors.muted }]}>These are recorded observations, not verified market value, forecasts, or execution instructions. A realized price is evidence attached to an event, not an automatic benchmark.</Text>
     {authenticated && pendingSyncs ? <Pressable onPress={onRetryPending} disabled={retrying} style={({ pressed }) => [styles.retryAllButton, { backgroundColor: colors.primary }, pressed && styles.pressed]}><Text style={[styles.retryAllText, { color: colors.onPrimary }]}>{retrying ? "Retrying pending syncs…" : `Retry all pending (${pendingSyncs})`}</Text></Pressable> : null}
+    {pendingRecords.map((record) => <View key={`pending-${record.id}`} style={styles.pendingSyncRow}><MaterialIcons name="cloud-off" size={14} color={colors.warning} /><View style={styles.settingCopy}><Text style={[styles.settingDescription, { color: colors.foreground }]} numberOfLines={1}>{record.listingId} · pending synchronization</Text><Text style={[styles.settingDescription, { color: colors.muted }]}>{record.lastAttemptAt ? `Last attempt ${new Date(record.lastAttemptAt).toLocaleString()}` : "Not attempted yet"}</Text>{record.syncError ? <Text style={[styles.syncErrorText, { color: colors.warning }]} numberOfLines={2}>Reason: {record.syncError}</Text> : null}</View></View>)}
     {outcomes.length ? outcomes.slice(0, 8).map((outcome) => <View key={outcome.id} style={styles.outcomeHistoryRow}><MaterialIcons name="radio-button-checked" size={14} color={colors.primary} /><View style={styles.settingCopy}><Text style={[styles.settingDescription, { color: colors.foreground }]} numberOfLines={1}>{outcome.listingId} · {outcome.kind}</Text><Text style={[styles.settingDescription, { color: colors.muted }]}>{new Date(outcome.observedAt).toLocaleString()}{outcome.realizedPrice !== undefined ? ` · observed ${formatCurrency(outcome.realizedPrice, outcome.currency)}` : ""}</Text>{outcome.note ? <Text style={[styles.reviewNoteText, { color: colors.muted }]} numberOfLines={2}>“{outcome.note}”</Text> : null}</View></View>) : <Text style={[styles.dataNote, { color: colors.muted }]}>No outcome observations have been recorded yet.</Text>}
   </View>;
 }
@@ -307,6 +311,8 @@ const styles = StyleSheet.create({
   outcomeHistoryCard: { borderRadius: 19, borderWidth: 1, padding: 14, marginBottom: 27 },
   retryAllButton: { alignSelf: "flex-start", borderRadius: 9, paddingHorizontal: 10, paddingVertical: 8, marginTop: 10 },
   retryAllText: { fontSize: 10, fontWeight: "800" },
+  pendingSyncRow: { flexDirection: "row", alignItems: "flex-start", gap: 7, marginTop: 10, paddingTop: 9, borderTopWidth: 1, borderTopColor: "rgba(128,128,128,0.18)" },
+  syncErrorText: { fontSize: 10, lineHeight: 14, marginTop: 2 },
   readinessHeader: { flexDirection: "row", alignItems: "center", gap: 10 },
   readinessItem: { minHeight: 58, flexDirection: "row", alignItems: "center", gap: 8, position: "relative" },
   followUpRow: { minHeight: 58, flexDirection: "row", alignItems: "center", gap: 9, position: "relative" },
