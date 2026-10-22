@@ -73,6 +73,7 @@ Direction accepted on 14 October 2026, clarified as a multi-mechanism architectu
 - [x] R1.8e Workspace outcome history: authenticated server outcomes reconcile into a bounded review panel alongside local observations, with explicit evidence-only wording and no valuation or allocation interpretation.
 - [x] R1.8f Durable outcome retry queue: failed authenticated writes persist locally across app restarts; Workspace reports the pending-sync count while the device remains the source of truth until retry succeeds.
 - [x] R1.8g Workspace retry-all: authenticated users can replay all durable pending outcome writes sequentially; only records confirmed by the server are removed from the queue, while failures remain visible.
+- [x] R1.8h Auth-restored retry: Workspace performs one bounded automatic retry pass when authentication becomes available and pending evidence writes exist; remaining failures stay queued without a background retry loop.
 - [ ] R1.8 End-to-end acceptance.
 
 ## Later phases — paused

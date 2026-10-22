@@ -45,6 +45,7 @@ export default function ProfileScreen() {
   const [recentReviews, setRecentReviews] = useState<ObservationReview[]>([]);
   const [pendingOutcomeSyncs, setPendingOutcomeSyncs] = useState(0);
   const [pendingOutcomeRecords, setPendingOutcomeRecords] = useState<ListingOutcome[]>([]);
+  const [autoRetryAttempted, setAutoRetryAttempted] = useState(false);
 
   useEffect(() => {
     if (preferencesQuery.data) {
@@ -127,6 +128,12 @@ export default function ProfileScreen() {
     setPendingOutcomeSyncs(remaining.length);
     await AsyncStorage.setItem(OUTCOME_SYNC_QUEUE_STORAGE_KEY, JSON.stringify(remaining));
   };
+
+  useEffect(() => {
+    if (!isAuthenticated || autoRetryAttempted || !pendingOutcomeRecords.length) return;
+    setAutoRetryAttempted(true);
+    void retryPendingOutcomeSync();
+  }, [isAuthenticated, pendingOutcomeRecords.length, autoRetryAttempted]);
 
   return (
     <ScreenContainer className="px-5" containerClassName="bg-background">
