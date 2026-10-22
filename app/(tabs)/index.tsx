@@ -40,6 +40,7 @@ import {
   getObservationScheduleState,
   OBSERVATION_SCHEDULE_STORAGE_KEY,
   OUTCOME_STORAGE_KEY,
+  OUTCOME_SYNC_QUEUE_STORAGE_KEY,
   getEbaySearchTerm,
   mapLiveEbayListings,
   type LiveEbayItemDetail,
@@ -608,9 +609,17 @@ function ListingOutcomeLedger({ listing, colors }: { listing: Listing; colors: R
     setSyncState("syncing");
     try {
       await syncOutcome.mutateAsync({ outcomeId: record.id, listingId: record.listingId, kind: record.kind, observedAt: record.observedAt, ...(record.realizedPrice === undefined ? {} : { realizedPrice: record.realizedPrice }), currency: listing.currency, ...(record.note ? { note: record.note } : {}) });
+      const queuedRaw = await AsyncStorage.getItem(OUTCOME_SYNC_QUEUE_STORAGE_KEY);
+      let queued: ListingOutcome[] = [];
+      try { queued = queuedRaw ? JSON.parse(queuedRaw) as ListingOutcome[] : []; } catch { queued = []; }
+      await AsyncStorage.setItem(OUTCOME_SYNC_QUEUE_STORAGE_KEY, JSON.stringify(queued.filter((item) => item.id !== record.id)));
       setUnsyncedOutcome(null);
       setSyncState("idle");
     } catch {
+      const queuedRaw = await AsyncStorage.getItem(OUTCOME_SYNC_QUEUE_STORAGE_KEY);
+      let queued: ListingOutcome[] = [];
+      try { queued = queuedRaw ? JSON.parse(queuedRaw) as ListingOutcome[] : []; } catch { queued = []; }
+      await AsyncStorage.setItem(OUTCOME_SYNC_QUEUE_STORAGE_KEY, JSON.stringify(mergeListingOutcomes([record, ...queued], [])));
       setUnsyncedOutcome(record);
       setSyncState("failed");
     }
