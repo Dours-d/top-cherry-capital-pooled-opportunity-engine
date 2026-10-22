@@ -76,6 +76,7 @@ Direction accepted on 14 October 2026, clarified as a multi-mechanism architectu
 - [x] R1.8h Auth-restored retry: Workspace performs one bounded automatic retry pass when authentication becomes available and pending evidence writes exist; remaining failures stay queued without a background retry loop.
 - [x] R1.8i Retry diagnostics: each durable pending outcome records its last attempt time and the latest sync failure reason, displayed per record in Workspace without changing the underlying evidence semantics.
 - [x] R1.8j Audited dismissal: a failed pending outcome can be cleared only after entering a required local audit note; the dismissal record is stored separately from outcome evidence and does not imply successful synchronization.
+- [x] R1.8k Dismissal history: Workspace visibly lists recent intentionally cleared sync records with outcome ID, timestamp and audit note, clearly distinct from synchronized outcomes.
 - [ ] R1.8 End-to-end acceptance.
 
 ## Later phases — paused
