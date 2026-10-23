@@ -15,13 +15,14 @@ import { EbayMonitor } from "@/components/ebay-monitor";
 import { ThesisDraftEditor } from "@/components/thesis-draft-editor";
 import { mergeObservationReviews, normalizeObservationReview, type ObservationReview } from "@/shared/observation-reviews";
 import { mergeListingOutcomes } from "@/shared/listing-outcomes";
-import { compareSnapshotToPrior, getSnapshotFreshness } from "@/shared/reconciliation-snapshots";
+import { compareSnapshotToPrior, getSnapshotFreshness, nextSnapshotFreshnessThreshold, type SnapshotFreshnessThreshold } from "@/shared/reconciliation-snapshots";
 import { dismissalsFromOutcomeSyncAudits, dismissPendingOutcome, mergeOutcomeSyncAudits, queueOutcomeSyncAudit, resolveOutcomeSyncAudit, restoreDismissedOutcome as restoreDismissedOutcomeTransition, type OutcomeSyncAuditRecord, type OutcomeSyncDismissal, type PendingOutcomeRecord, type PendingOutcomeSyncAudit } from "@/shared/outcome-sync-queue";
 
 const EBAY_READINESS_KEY = "topCherry.ebayReadiness";
 const OBSERVATION_REVIEW_STORAGE_KEY = "topCherry.observationReviews";
 const OUTCOME_SYNC_AUDIT_STORAGE_KEY = "topCherry.outcomeSyncAudits";
 const OUTCOME_SYNC_AUDIT_QUEUE_STORAGE_KEY = "topCherry.outcomeSyncAuditQueue";
+const SNAPSHOT_FRESHNESS_THRESHOLDS_STORAGE_KEY = "topCherry.snapshotFreshnessThresholds";
 const EBAY_READINESS_ITEMS = [
   { id: "browse", label: "Verify read-only Browse access", detail: "Application-token search is verified for EBAY_GB.", state: "DONE" },
   { id: "details", label: "Verify item-detail characteristics", detail: "getItem PRODUCT details are requested when a live listing opens.", state: "DONE" },
@@ -57,6 +58,7 @@ export default function ProfileScreen() {
   const [outcomeSyncAudits, setOutcomeSyncAudits] = useState<OutcomeSyncAuditRecord[]>([]);
   const [pendingOutcomeAuditRecords, setPendingOutcomeAuditRecords] = useState<PendingOutcomeSyncAudit[]>([]);
   const [autoRetryAttempted, setAutoRetryAttempted] = useState(false);
+  const [snapshotFreshnessThresholds, setSnapshotFreshnessThresholds] = useState<Record<string, SnapshotFreshnessThreshold>>({});
 
   const markSnapshotReviewed = async (snapshotId: string, reconciliationStatus: "reviewed" | "superseded", reviewNote: string) => {
     await reviewSnapshot.mutateAsync({ snapshotId, reconciliationStatus, reviewNote });
@@ -88,6 +90,20 @@ export default function ProfileScreen() {
       if (raw) setEbayReadiness(JSON.parse(raw) as Record<string, boolean>);
     }).catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    void AsyncStorage.getItem(SNAPSHOT_FRESHNESS_THRESHOLDS_STORAGE_KEY).then((raw) => {
+      if (!raw) return;
+      try { setSnapshotFreshnessThresholds(JSON.parse(raw) as Record<string, SnapshotFreshnessThreshold>); } catch { setSnapshotFreshnessThresholds({}); }
+    });
+  }, []);
+
+  const cycleSnapshotFreshnessThreshold = (marketplaceId: string) => {
+    const next = nextSnapshotFreshnessThreshold(snapshotFreshnessThresholds[marketplaceId]);
+    const updated = { ...snapshotFreshnessThresholds, [marketplaceId]: next };
+    setSnapshotFreshnessThresholds(updated);
+    void AsyncStorage.setItem(SNAPSHOT_FRESHNESS_THRESHOLDS_STORAGE_KEY, JSON.stringify(updated));
+  };
 
   useEffect(() => {
     void Promise.all([AsyncStorage.getItem(OBSERVATION_SCHEDULE_STORAGE_KEY), AsyncStorage.getItem(OUTCOME_STORAGE_KEY), AsyncStorage.getItem(OBSERVATION_REVIEW_STORAGE_KEY), AsyncStorage.getItem(OUTCOME_SYNC_QUEUE_STORAGE_KEY), AsyncStorage.getItem(OUTCOME_SYNC_DISMISSAL_STORAGE_KEY), AsyncStorage.getItem(OUTCOME_SYNC_AUDIT_STORAGE_KEY), AsyncStorage.getItem(OUTCOME_SYNC_AUDIT_QUEUE_STORAGE_KEY)]).then(([scheduleRaw, outcomesRaw, reviewsRaw, pendingRaw, dismissalRaw, auditRaw, auditQueueRaw]) => {
@@ -268,7 +284,7 @@ export default function ProfileScreen() {
             } catch { return undefined; }
           });
         }} />
-        <ReconciliationSnapshotQueue colors={colors} authenticated={isAuthenticated} snapshots={remoteSnapshots.data ?? []} reviewing={reviewSnapshot.isPending} onReview={(snapshotId, status, note) => void markSnapshotReviewed(snapshotId, status, note)} onReviewMany={(snapshotIds, note) => markSnapshotsReviewed(snapshotIds, note)} />
+        <ReconciliationSnapshotQueue colors={colors} authenticated={isAuthenticated} snapshots={remoteSnapshots.data ?? []} reviewing={reviewSnapshot.isPending} freshnessThresholds={snapshotFreshnessThresholds} onCycleFreshnessThreshold={cycleSnapshotFreshnessThreshold} onReview={(snapshotId, status, note) => void markSnapshotReviewed(snapshotId, status, note)} onReviewMany={(snapshotIds, note) => markSnapshotsReviewed(snapshotIds, note)} />
         <SyncedOutcomeHistory colors={colors} outcomes={followUpOutcomes} authenticated={isAuthenticated} auditCount={outcomeSyncAudits.length} pendingAuditSyncs={pendingOutcomeAuditRecords.length} pendingSyncs={pendingOutcomeSyncs} pendingRecords={pendingOutcomeRecords} dismissedRecords={dismissedOutcomeRecords} onRetryPending={() => void retryPendingOutcomeSync()} onRetryAudit={() => void retryPendingOutcomeAuditSync()} onClearPending={(outcomeId, note) => void clearPendingOutcome(outcomeId, note)} onRestorePending={(outcomeId, note) => void restoreDismissedOutcome(outcomeId, note)} retrying={syncOutcome.isPending} retryingAudit={syncOutcomeAudit.isPending} />
         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>eBay authorization readiness</Text>
         <EbayReadinessChecklist colors={colors} completed={ebayReadiness} onToggle={(id) => {
@@ -351,21 +367,21 @@ type WorkspaceSnapshot = {
   reviewedAt: Date | string | null;
 };
 
-function ReconciliationSnapshotQueue({ colors, authenticated, snapshots, reviewing, onReview, onReviewMany }: { colors: ReturnType<typeof useColors>; authenticated: boolean; snapshots: WorkspaceSnapshot[]; reviewing: boolean; onReview: (snapshotId: string, status: "reviewed" | "superseded", note: string) => void; onReviewMany: (snapshotIds: string[], note: string) => Promise<void> }) {
+function ReconciliationSnapshotQueue({ colors, authenticated, snapshots, reviewing, freshnessThresholds, onCycleFreshnessThreshold, onReview, onReviewMany }: { colors: ReturnType<typeof useColors>; authenticated: boolean; snapshots: WorkspaceSnapshot[]; reviewing: boolean; freshnessThresholds: Record<string, SnapshotFreshnessThreshold>; onCycleFreshnessThreshold: (marketplaceId: string) => void; onReview: (snapshotId: string, status: "reviewed" | "superseded", note: string) => void; onReviewMany: (snapshotIds: string[], note: string) => Promise<void> }) {
   const [filter, setFilter] = useState<"observed" | "reviewed" | "superseded">("observed");
   const [reviewNote, setReviewNote] = useState("");
   const counts = { observed: snapshots.filter((item) => item.reconciliationStatus === "observed").length, reviewed: snapshots.filter((item) => item.reconciliationStatus === "reviewed").length, superseded: snapshots.filter((item) => item.reconciliationStatus === "superseded").length };
   const visible = snapshots.filter((item) => item.reconciliationStatus === filter).slice(0, 8);
   return <View style={[styles.snapshotQueueCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
     <View style={styles.readinessHeader}><View style={styles.settingCopy}><Text style={[styles.settingTitle, { color: colors.foreground }]}>Persisted source observations</Text><Text style={[styles.settingDescription, { color: colors.muted }]}>{authenticated ? `${counts.observed} awaiting review · ${snapshots.length} stored` : "Sign in to review persisted provider observations"}</Text></View><View style={[styles.statusBadge, { backgroundColor: counts.observed ? colors.warning : colors.background }]}><Text style={[styles.statusBadgeText, { color: counts.observed ? colors.foreground : colors.muted }]}>{counts.observed ? "REVIEW" : "CLEAR"}</Text></View></View>
-    <Text style={[styles.dataNote, { color: colors.muted }]}>Reviewing confirms only how this provider observation should be retained. It does not establish stock, fair value, demand, a sale, or allocation eligibility. A note is required for every status change.</Text>
+    <Text style={[styles.dataNote, { color: colors.muted }]}>Reviewing confirms only how this provider observation should be retained. It does not establish stock, fair value, demand, a sale, or allocation eligibility. A note is required for every status change. Freshness settings only change the age prompt.</Text>
     <View style={styles.filterRow}>{(["observed", "reviewed", "superseded"] as const).map((option) => <Pressable key={option} onPress={() => setFilter(option)} style={({ pressed }) => [styles.filterChip, { backgroundColor: filter === option ? colors.foreground : colors.background, borderColor: colors.border }, pressed && styles.pressed]}><Text style={[styles.filterChipText, { color: filter === option ? colors.background : colors.muted }]}>{option === "observed" ? `Observed (${counts.observed})` : option === "reviewed" ? `Reviewed (${counts.reviewed})` : `Superseded (${counts.superseded})`}</Text></Pressable>)}</View>
     {!authenticated ? <Text style={[styles.dataNote, { color: colors.muted }]}>The current device has no account session, so no remote snapshot records are shown.</Text> : !visible.length ? <Text style={[styles.dataNote, { color: colors.muted }]}>No {filter} snapshots.</Text> : <>
       <TextInput value={reviewNote} onChangeText={setReviewNote} placeholder="Required status-change note" placeholderTextColor={colors.muted} style={[styles.reviewNoteInput, { color: colors.foreground, backgroundColor: colors.background, borderColor: colors.border }]} />
       {filter === "observed" && visible.length > 1 ? <Pressable disabled={reviewing || !reviewNote.trim()} onPress={async () => { await onReviewMany(visible.map((snapshot) => snapshot.snapshotId), reviewNote.trim()); setReviewNote(""); }} style={({ pressed }) => [styles.bulkReviewButton, { backgroundColor: colors.primary }, (reviewing || !reviewNote.trim()) && styles.disabled, pressed && styles.pressed]}><Text style={[styles.bulkReviewButtonText, { color: colors.onPrimary }]}>{reviewing ? "Reviewing visible…" : `Review visible (${visible.length})`}</Text></Pressable> : null}
-      {visible.map((snapshot) => { const comparison = compareSnapshotToPrior(snapshot, snapshots); const freshness = getSnapshotFreshness(snapshot.sourceFetchedAt); return <View key={snapshot.snapshotId} style={[styles.snapshotRow, { borderTopColor: colors.border }]}>
+      {visible.map((snapshot) => { const comparison = compareSnapshotToPrior(snapshot, snapshots); const threshold = freshnessThresholds[snapshot.marketplaceId]; const freshness = getSnapshotFreshness(snapshot.sourceFetchedAt, new Date(), threshold); return <View key={snapshot.snapshotId} style={[styles.snapshotRow, { borderTopColor: colors.border }]}>
         <View style={styles.settingCopy}><Text style={[styles.settingTitle, { color: colors.foreground }]} numberOfLines={2}>{snapshot.title}</Text><Text style={[styles.settingDescription, { color: colors.muted }]} numberOfLines={1}>{snapshot.marketplaceId} · {formatCurrency(snapshot.askingPrice, snapshot.currency ?? undefined)} · {snapshot.condition}</Text><Text style={[styles.settingDescription, { color: colors.muted }]} numberOfLines={1}>{new Date(snapshot.sourceFetchedAt).toLocaleString()} · {snapshot.providerListingId}</Text><Text style={[styles.snapshotFreshness, { color: freshness.state === "stale" ? colors.warning : freshness.state === "fresh" ? colors.success : colors.muted }]}>{freshness.state === "unknown" ? "Observation age unknown" : freshness.state === "fresh" ? "Fresh observation" : freshness.state === "aging" ? "Aging observation" : "Stale observation"} · quality prompt only</Text><Text style={[styles.snapshotMovement, { color: comparison.state === "increased" ? colors.warning : comparison.state === "decreased" ? colors.success : colors.muted }]}>{comparison.state === "unknown" ? "No currency-matched prior observation" : comparison.state === "unchanged" ? "Asking price unchanged" : `${comparison.state === "increased" ? "Asking price increased" : "Asking price decreased"} by ${formatCurrency(Math.abs(comparison.delta ?? 0), comparison.currency)}`}. This is not a sale signal.</Text>{snapshot.reviewNote ? <Text style={[styles.reviewNoteText, { color: colors.foreground }]} numberOfLines={2}>“{snapshot.reviewNote}”</Text> : null}</View>
-        <View style={styles.snapshotActions}><Pressable onPress={() => router.push({ pathname: "/snapshot-history", params: { providerListingId: snapshot.providerListingId, title: snapshot.title } })} style={({ pressed }) => [styles.reviewButton, { borderColor: colors.primary }, pressed && styles.pressed]}><Text style={[styles.reviewButtonText, { color: colors.primary }]}>History</Text></Pressable>{filter === "observed" ? <><Pressable disabled={reviewing || !reviewNote.trim()} onPress={() => { onReview(snapshot.snapshotId, "reviewed", reviewNote.trim()); setReviewNote(""); }} style={({ pressed }) => [styles.reviewButton, { borderColor: colors.border }, (reviewing || !reviewNote.trim()) && styles.disabled, pressed && styles.pressed]}><Text style={[styles.reviewButtonText, { color: colors.muted }]}>Review</Text></Pressable><Pressable disabled={reviewing || !reviewNote.trim()} onPress={() => { onReview(snapshot.snapshotId, "superseded", reviewNote.trim()); setReviewNote(""); }} style={({ pressed }) => [styles.reviewButton, { borderColor: colors.warning }, (reviewing || !reviewNote.trim()) && styles.disabled, pressed && styles.pressed]}><Text style={[styles.reviewButtonText, { color: colors.warning }]}>Supersede</Text></Pressable></> : null}</View>
+        <View style={styles.snapshotActions}><Pressable onPress={() => router.push({ pathname: "/snapshot-history", params: { providerListingId: snapshot.providerListingId, title: snapshot.title } })} style={({ pressed }) => [styles.reviewButton, { borderColor: colors.primary }, pressed && styles.pressed]}><Text style={[styles.reviewButtonText, { color: colors.primary }]}>History</Text></Pressable><Pressable onPress={() => onCycleFreshnessThreshold(snapshot.marketplaceId)} style={({ pressed }) => [styles.reviewButton, { borderColor: colors.border }, pressed && styles.pressed]}><Text style={[styles.reviewButtonText, { color: colors.muted }]}>{threshold ? `${threshold.freshHours}h / ${threshold.agingHours}h` : "24h / 7d"}</Text></Pressable>{filter === "observed" ? <><Pressable disabled={reviewing || !reviewNote.trim()} onPress={() => { onReview(snapshot.snapshotId, "reviewed", reviewNote.trim()); setReviewNote(""); }} style={({ pressed }) => [styles.reviewButton, { borderColor: colors.border }, (reviewing || !reviewNote.trim()) && styles.disabled, pressed && styles.pressed]}><Text style={[styles.reviewButtonText, { color: colors.muted }]}>Review</Text></Pressable><Pressable disabled={reviewing || !reviewNote.trim()} onPress={() => { onReview(snapshot.snapshotId, "superseded", reviewNote.trim()); setReviewNote(""); }} style={({ pressed }) => [styles.reviewButton, { borderColor: colors.warning }, (reviewing || !reviewNote.trim()) && styles.disabled, pressed && styles.pressed]}><Text style={[styles.reviewButtonText, { color: colors.warning }]}>Supersede</Text></Pressable></> : null}</View>
       </View>; })}
     </>}
   </View>;

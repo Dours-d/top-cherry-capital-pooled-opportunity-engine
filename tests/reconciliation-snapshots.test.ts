@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildEbayReconciliationSnapshot, compareSnapshotToPrior, getSnapshotFreshness } from "../shared/reconciliation-snapshots";
+import { buildEbayReconciliationSnapshot, compareSnapshotToPrior, getSnapshotFreshness, nextSnapshotFreshnessThreshold, normalizeSnapshotFreshnessThreshold } from "../shared/reconciliation-snapshots";
 
 const listing = {
   listingId: "v1|123456",
@@ -60,5 +60,13 @@ describe("reconciliation snapshots", () => {
     expect(getSnapshotFreshness("2026-10-22T00:00:00.000Z", now).state).toBe("aging");
     expect(getSnapshotFreshness("2026-10-01T00:00:00.000Z", now).state).toBe("stale");
     expect(getSnapshotFreshness("not-a-date", now).state).toBe("unknown");
+  });
+
+  it("supports bounded marketplace-specific freshness thresholds", () => {
+    expect(normalizeSnapshotFreshnessThreshold({ freshHours: 6, agingHours: 48 })).toEqual({ freshHours: 6, agingHours: 48 });
+    expect(normalizeSnapshotFreshnessThreshold({ freshHours: 200, agingHours: 10 })).toEqual({ freshHours: 200, agingHours: 201 });
+    expect(getSnapshotFreshness("2026-10-22T12:00:00.000Z", "2026-10-23T12:00:00.000Z", { freshHours: 12, agingHours: 72 }).state).toBe("aging");
+    expect(getSnapshotFreshness("2026-10-20T11:00:00.000Z", "2026-10-23T12:00:00.000Z", { freshHours: 12, agingHours: 72 }).state).toBe("stale");
+    expect(nextSnapshotFreshnessThreshold({ freshHours: 24, agingHours: 168 })).toEqual({ freshHours: 48, agingHours: 336 });
   });
 });
