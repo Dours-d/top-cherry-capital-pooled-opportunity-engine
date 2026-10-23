@@ -192,6 +192,14 @@ export async function reviewReconciliationSnapshot(userId: number, snapshotId: s
   return result[0];
 }
 
+export async function checkReconciliationSnapshotCharacteristics(userId: number, snapshotId: string, note: string, checkedAt: Date) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(reconciliationSnapshots).set({ characteristicsChecked: true, characteristicsCheckedAt: checkedAt, characteristicsCheckNote: note }).where(and(eq(reconciliationSnapshots.userId, userId), eq(reconciliationSnapshots.snapshotId, snapshotId)));
+  const result = await db.select().from(reconciliationSnapshots).where(and(eq(reconciliationSnapshots.userId, userId), eq(reconciliationSnapshots.snapshotId, snapshotId))).limit(1);
+  return result[0];
+}
+
 export async function insertEbayNotificationEvent(event: InsertEbayNotificationEvent) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");

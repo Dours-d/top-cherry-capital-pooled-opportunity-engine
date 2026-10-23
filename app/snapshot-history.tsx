@@ -24,6 +24,9 @@ type Snapshot = {
   reconciliationStatus: "observed" | "reviewed" | "superseded";
   reviewNote: string | null;
   reviewedAt: Date | string | null;
+  characteristicsChecked: boolean;
+  characteristicsCheckedAt: Date | string | null;
+  characteristicsCheckNote: string | null;
 };
 
 export default function SnapshotHistoryScreen() {
@@ -61,6 +64,7 @@ export default function SnapshotHistoryScreen() {
           </View>
           <Text style={[styles.qualitySummary, { color: attentionCount ? colors.warning : colors.success }]}>{attentionCount ? `${attentionCount} observation${attentionCount === 1 ? "" : "s"} need provider-field attention.` : "Provider-required fields are present for every stored observation."} This is a data-quality check only.</Text>
           <Text style={[styles.qualitySummary, { color: colors.muted }]}>{profileSlug ? `Profile characteristic prompts: ${characteristicCoverage.recommendedMissing.join(", ") || "none recorded"}.` : "No profile context was stored for this history route; profile-specific characteristic prompts remain unknown."} These prompts do not establish authenticity, value, stock or allocation eligibility.</Text>
+          <Text style={[styles.qualitySummary, { color: snapshots.every((snapshot) => snapshot.characteristicsChecked) ? colors.success : colors.warning }]}>{snapshots.filter((snapshot) => snapshot.characteristicsChecked).length} of {snapshots.length} observations marked characteristics checked. This is an operator acknowledgment, not provider verification.</Text>
           {snapshots.map((snapshot, index) => {
             const freshness = getSnapshotFreshness(snapshot.sourceFetchedAt);
             const movement = compareSnapshotToPrior(snapshot, snapshots);
@@ -73,7 +77,9 @@ export default function SnapshotHistoryScreen() {
                 <Text style={[styles.meta, { color: colors.muted }]}>{snapshot.marketplaceId} · {snapshot.condition}{snapshot.location ? ` · ${snapshot.location}` : ""}</Text>
                 <Text style={[styles.freshness, { color: freshness.state === "stale" ? colors.warning : freshness.state === "fresh" ? colors.success : colors.muted }]}>{freshness.state === "unknown" ? "Age unknown" : `${freshness.state} observation`} · quality prompt only</Text>
                 <Text style={[styles.quality, { color: reconciliation.state === "ready" ? colors.success : colors.warning }]}>{reconciliation.state === "ready" ? "Provider fields ready" : `Provider fields need attention: ${reconciliation.requiredMissing.join(", ")}`}{reconciliation.recommendedMissing.length ? ` · recommended missing: ${reconciliation.recommendedMissing.join(", ")}` : ""}</Text>
+                <Text style={[styles.quality, { color: snapshot.characteristicsChecked ? colors.success : colors.warning }]}>{snapshot.characteristicsChecked ? `Characteristics checked${snapshot.characteristicsCheckedAt ? ` · ${new Date(snapshot.characteristicsCheckedAt).toLocaleString()}` : ""}` : "Characteristics not checked"} · acknowledgment only</Text>
                 <Text style={[styles.movement, { color: movement.state === "increased" ? colors.warning : movement.state === "decreased" ? colors.success : colors.muted }]}>{movement.state === "unknown" ? "No currency-matched prior observation" : movement.state === "unchanged" ? "No asking-price movement" : `${movement.state === "increased" ? "Increased" : "Decreased"} by ${formatCurrency(Math.abs(movement.delta ?? 0), movement.currency)}`}. Not a sale signal.</Text>
+                {snapshot.characteristicsCheckNote ? <Text style={[styles.note, { color: colors.foreground }]}>Characteristic note: “{snapshot.characteristicsCheckNote}”</Text> : null}
                 {snapshot.reviewNote ? <Text style={[styles.note, { color: colors.foreground }]}>“{snapshot.reviewNote}”</Text> : null}
               </View>
             </View>;

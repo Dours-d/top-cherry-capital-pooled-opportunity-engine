@@ -195,6 +195,9 @@ export const reconciliationSnapshots = mysqlTable(
     reconciliationStatus: mysqlEnum("reconciliationStatus", ["observed", "reviewed", "superseded"]).default("observed").notNull(),
     reviewNote: text("reviewNote"),
     reviewedAt: timestamp("reviewedAt"),
+    characteristicsChecked: boolean("characteristicsChecked").default(false).notNull(),
+    characteristicsCheckedAt: timestamp("characteristicsCheckedAt"),
+    characteristicsCheckNote: text("characteristicsCheckNote"),
     capturedAt: timestamp("capturedAt").defaultNow().notNull(),
   },
   (table) => ({
