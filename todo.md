@@ -99,6 +99,7 @@ R2 full real-data ingestion, R3 response estimation, R4 network feedback and R5 
 - [x] R2.0k eBay item-detail coverage: Discover classifies the item-detail response as unavailable, partial, or present based on core response fields and seller-provided aspects; characteristic presence is explicitly non-blocking and non-valuational.
 - [x] R2.0l Profile-aware characteristics: eBay detail views recommend market-specific seller fields for watches, cameras, cars, audio, instruments and jewellery; missing recommendations remain non-blocking research prompts.
 - [x] R2.0m History parity: persisted listing-history routes carry stored profile context and repeat the same market-specific characteristic prompts, while explicitly treating absent profile context as unknown rather than guessing.
+- [x] R2.0n Reconciliation guidance: the R2 screen and each normalized provider row surface profile-specific characteristic prompts before snapshot persistence; prompts remain separate from required provenance fields and do not affect storage, valuation or allocation.
 
 ## Existing boundaries
 - eBay account-deletion delivery does not establish Browse search or listing-stream permissions.

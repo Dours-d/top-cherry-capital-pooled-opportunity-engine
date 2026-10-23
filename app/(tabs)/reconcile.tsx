@@ -8,7 +8,7 @@ import { useColors } from "@/hooks/use-colors";
 import { trpc } from "@/lib/trpc";
 import { formatCurrency, getEbaySearchTerm, getListingRedundancySummary, mapLiveEbayListings, PROFILES } from "@/lib/market-data";
 import type { Listing } from "@/lib/market-data";
-import { buildEbayReconciliationSnapshot } from "@/shared/reconciliation-snapshots";
+import { buildEbayReconciliationSnapshot, evaluateEbayItemDetailCoverage } from "@/shared/reconciliation-snapshots";
 
 export default function ReconcileScreen() {
   const colors = useColors();
@@ -86,6 +86,7 @@ export default function ReconcileScreen() {
               <View style={styles.boundaryTitle}><MaterialIcons name="fact-check" size={18} color={colors.primary} /><Text style={[styles.boundaryHeading, { color: colors.foreground }]}>What reconciliation means here</Text></View>
               <Text style={[styles.boundaryText, { color: colors.muted }]}>This pass records what the provider returned, when it returned it, and how rows provisionally cluster. It does not establish stock, fair value, demand, realized resale, or an allocation decision.</Text>
               <Text style={[styles.boundaryText, { color: colors.muted }]}>Source: eBay Browse · marketplace: EBAY_GB · query: {searchTerm}</Text>
+              <Text style={[styles.boundaryText, { color: colors.muted }]}>Profile characteristic prompts: {evaluateEbayItemDetailCoverage({ profileSlug: activeSlug, localizedAspects: [] }).recommendedMissing.join(", ") || "none configured"}. These fields are research prompts only and are stored separately from provider-required reconciliation fields.</Text>
             </View>
 
             <View style={styles.metricRow}>
@@ -107,7 +108,7 @@ export default function ReconcileScreen() {
             <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Normalized provider rows</Text>
           </View>
         }
-        renderItem={({ item }) => <ReconciliationRow listing={item} colors={colors} />}
+        renderItem={({ item }) => <ReconciliationRow listing={item} profileSlug={activeSlug} colors={colors} />}
         ListFooterComponent={
           <View style={styles.footer}>
             <Pressable onPress={() => void browse.refetch()} disabled={browse.isFetching} style={({ pressed }) => [styles.footerButton, { backgroundColor: colors.primary }, pressed && styles.pressed]}><Text style={[styles.footerButtonText, { color: colors.onPrimary }]}>{browse.isFetching ? "Refreshing…" : "Refresh source"}</Text></Pressable>
@@ -124,11 +125,13 @@ function Metric({ label, value, colors }: { label: string; value: string; colors
   return <View style={[styles.metric, { backgroundColor: colors.surface, borderColor: colors.border }]}><Text style={[styles.metricValue, { color: colors.foreground }]}>{value}</Text><Text style={[styles.metricLabel, { color: colors.muted }]}>{label}</Text></View>;
 }
 
-function ReconciliationRow({ listing, colors }: { listing: Listing; colors: ReturnType<typeof useColors> }) {
+function ReconciliationRow({ listing, profileSlug, colors }: { listing: Listing; profileSlug: string; colors: ReturnType<typeof useColors> }) {
+  const characteristicPrompts = evaluateEbayItemDetailCoverage({ profileSlug, localizedAspects: [] }).recommendedMissing;
   return <View style={[styles.row, { backgroundColor: colors.surface, borderColor: colors.border }]}>
     <View style={styles.rowTop}><Text style={[styles.rowTitle, { color: colors.foreground }]} numberOfLines={2}>{listing.model}</Text><Text style={[styles.rowPrice, { color: colors.foreground }]}>{formatCurrency(listing.askingPrice, listing.currency)}</Text></View>
     <Text style={[styles.rowMeta, { color: colors.muted }]}>{listing.condition} · {listing.location} · seller {listing.sellerId ?? "unavailable"}</Text>
     <View style={styles.rowTags}><Text style={[styles.tag, { color: colors.primary }]}>ASK OBSERVATION</Text><Text style={[styles.tag, { color: colors.muted }]}>eBay Browse</Text></View>
+    {characteristicPrompts.length ? <Text style={[styles.rowPrompt, { color: colors.muted }]}>Inspect seller aspects: {characteristicPrompts.join(", ")}</Text> : null}
     <Text style={[styles.rowDisclaimer, { color: colors.muted }]}>No market value, stock confirmation, or resale outcome inferred.</Text>
   </View>;
 }
@@ -177,6 +180,7 @@ const styles = StyleSheet.create({
   rowMeta: { fontSize: 11, marginTop: 8 },
   rowTags: { flexDirection: "row", gap: 10, marginTop: 12 },
   tag: { fontSize: 10, fontWeight: "800", letterSpacing: 0.5 },
+  rowPrompt: { fontSize: 11, lineHeight: 16, marginTop: 9 },
   rowDisclaimer: { fontSize: 11, marginTop: 10, lineHeight: 16 },
   footer: { paddingTop: 8 },
   footerButton: { alignItems: "center", borderRadius: 14, paddingVertical: 13 },
