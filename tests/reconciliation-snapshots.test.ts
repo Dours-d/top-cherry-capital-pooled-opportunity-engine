@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildEbayReconciliationSnapshot } from "../shared/reconciliation-snapshots";
+import { buildEbayReconciliationSnapshot, compareSnapshotToPrior } from "../shared/reconciliation-snapshots";
 
 const listing = {
   listingId: "v1|123456",
@@ -39,5 +39,18 @@ describe("reconciliation snapshots", () => {
     const snapshot = buildEbayReconciliationSnapshot({ listing: { ...listing, sellerId: undefined, url: undefined }, marketplaceId: "EBAY_GB", query: "luxury watch", profileSlug: "luxury_watches", sourceFetchedAt: "2026-10-23T10:00:00.000Z" });
     expect(snapshot).not.toHaveProperty("sellerId");
     expect(snapshot).not.toHaveProperty("sourceUrl");
+  });
+
+  it("reports only currency-matched movement from an earlier provider observation", () => {
+    const current = { providerListingId: "v1|123456", askingPrice: 8800, currency: "GBP", sourceFetchedAt: "2026-10-23T10:00:00.000Z" };
+    const prior = { providerListingId: "v1|123456", askingPrice: 8500, currency: "GBP", sourceFetchedAt: "2026-10-22T10:00:00.000Z" };
+    expect(compareSnapshotToPrior(current, [prior])).toMatchObject({ state: "increased", priorPrice: 8500, delta: 300, comparableObservationCount: 1 });
+  });
+
+  it("keeps movement unknown when currency is absent or mismatched", () => {
+    const current = { providerListingId: "v1|123456", askingPrice: 8800, currency: "GBP", sourceFetchedAt: "2026-10-23T10:00:00.000Z" };
+    const prior = { providerListingId: "v1|123456", askingPrice: 8500, currency: "EUR", sourceFetchedAt: "2026-10-22T10:00:00.000Z" };
+    expect(compareSnapshotToPrior(current, [prior])).toMatchObject({ state: "unknown", comparableObservationCount: 0 });
+    expect(compareSnapshotToPrior({ ...current, currency: undefined as string | undefined }, [prior]).state).toBe("unknown");
   });
 });
