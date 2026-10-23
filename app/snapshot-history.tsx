@@ -7,7 +7,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useColors } from "@/hooks/use-colors";
 import { formatCurrency } from "@/lib/market-data";
 import { trpc } from "@/lib/trpc";
-import { compareSnapshotToPrior, getSnapshotFreshness } from "@/shared/reconciliation-snapshots";
+import { compareSnapshotToPrior, evaluateSnapshotReconciliation, getSnapshotFreshness } from "@/shared/reconciliation-snapshots";
 
 type Snapshot = {
   snapshotId: string;
@@ -35,6 +35,7 @@ export default function SnapshotHistoryScreen() {
     .sort((a, b) => new Date(b.sourceFetchedAt).getTime() - new Date(a.sourceFetchedAt).getTime());
   const current = snapshots[0];
   const comparison = current ? compareSnapshotToPrior(current, snapshots) : null;
+  const attentionCount = snapshots.filter((snapshot) => evaluateSnapshotReconciliation(snapshot).state === "needs-attention").length;
 
   return (
     <ScreenContainer edges={["top", "bottom", "left", "right"]}>
@@ -56,9 +57,11 @@ export default function SnapshotHistoryScreen() {
             <View style={[styles.metric, { backgroundColor: colors.surface, borderColor: colors.border }]}><Text style={[styles.metricValue, { color: comparison?.state === "increased" ? colors.warning : comparison?.state === "decreased" ? colors.success : colors.foreground }]}>{comparison?.state === "unknown" ? "—" : comparison?.state === "unchanged" ? "=" : comparison?.state === "increased" ? "↑" : "↓"}</Text><Text style={[styles.metricLabel, { color: colors.muted }]}>Ask movement</Text></View>
             <View style={[styles.metric, { backgroundColor: colors.surface, borderColor: colors.border }]}><Text style={[styles.metricValue, { color: colors.foreground }]}>{current ? getSnapshotFreshness(current.sourceFetchedAt).state : "—"}</Text><Text style={[styles.metricLabel, { color: colors.muted }]}>Freshness</Text></View>
           </View>
+          <Text style={[styles.qualitySummary, { color: attentionCount ? colors.warning : colors.success }]}>{attentionCount ? `${attentionCount} observation${attentionCount === 1 ? "" : "s"} need provider-field attention.` : "Provider-required fields are present for every stored observation."} This is a data-quality check only.</Text>
           {snapshots.map((snapshot, index) => {
             const freshness = getSnapshotFreshness(snapshot.sourceFetchedAt);
             const movement = compareSnapshotToPrior(snapshot, snapshots);
+            const reconciliation = evaluateSnapshotReconciliation(snapshot);
             return <View key={snapshot.snapshotId} style={[styles.historyRow, { borderTopColor: colors.border }]}>
               <View style={styles.historyMarker}><View style={[styles.dot, { backgroundColor: index === 0 ? colors.primary : colors.border }]} />{index < snapshots.length - 1 ? <View style={[styles.line, { backgroundColor: colors.border }]} /> : null}</View>
               <View style={styles.historyBody}>
@@ -66,6 +69,7 @@ export default function SnapshotHistoryScreen() {
                 <Text style={[styles.price, { color: colors.foreground }]}>{formatCurrency(snapshot.askingPrice, snapshot.currency ?? undefined)}</Text>
                 <Text style={[styles.meta, { color: colors.muted }]}>{snapshot.marketplaceId} · {snapshot.condition}{snapshot.location ? ` · ${snapshot.location}` : ""}</Text>
                 <Text style={[styles.freshness, { color: freshness.state === "stale" ? colors.warning : freshness.state === "fresh" ? colors.success : colors.muted }]}>{freshness.state === "unknown" ? "Age unknown" : `${freshness.state} observation`} · quality prompt only</Text>
+                <Text style={[styles.quality, { color: reconciliation.state === "ready" ? colors.success : colors.warning }]}>{reconciliation.state === "ready" ? "Provider fields ready" : `Provider fields need attention: ${reconciliation.requiredMissing.join(", ")}`}{reconciliation.recommendedMissing.length ? ` · recommended missing: ${reconciliation.recommendedMissing.join(", ")}` : ""}</Text>
                 <Text style={[styles.movement, { color: movement.state === "increased" ? colors.warning : movement.state === "decreased" ? colors.success : colors.muted }]}>{movement.state === "unknown" ? "No currency-matched prior observation" : movement.state === "unchanged" ? "No asking-price movement" : `${movement.state === "increased" ? "Increased" : "Decreased"} by ${formatCurrency(Math.abs(movement.delta ?? 0), movement.currency)}`}. Not a sale signal.</Text>
                 {snapshot.reviewNote ? <Text style={[styles.note, { color: colors.foreground }]}>“{snapshot.reviewNote}”</Text> : null}
               </View>
@@ -93,6 +97,7 @@ const styles = StyleSheet.create({
   metric: { flex: 1, minHeight: 74, borderWidth: 1, borderRadius: 14, padding: 12 },
   metricValue: { fontSize: 19, fontWeight: "900" },
   metricLabel: { fontSize: 10, marginTop: 5 },
+  qualitySummary: { fontSize: 11, lineHeight: 16, marginTop: 12 },
   historyRow: { flexDirection: "row", gap: 12, paddingTop: 16, marginTop: 4, borderTopWidth: 1 },
   historyMarker: { width: 12, alignItems: "center" },
   dot: { width: 10, height: 10, borderRadius: 5, marginTop: 5 },
@@ -104,6 +109,7 @@ const styles = StyleSheet.create({
   price: { fontSize: 22, fontWeight: "900", marginTop: 8 },
   meta: { fontSize: 11, lineHeight: 16, marginTop: 4 },
   freshness: { fontSize: 11, fontWeight: "700", marginTop: 7 },
+  quality: { fontSize: 11, lineHeight: 16, marginTop: 4, fontWeight: "700" },
   movement: { fontSize: 11, lineHeight: 16, marginTop: 4 },
   note: { fontSize: 12, lineHeight: 17, marginTop: 7 },
 });
