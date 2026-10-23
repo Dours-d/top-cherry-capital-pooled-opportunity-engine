@@ -92,6 +92,7 @@ R2 full real-data ingestion, R3 response estimation, R4 network feedback and R5 
 - [x] R2.0d Cross-fetch comparison: Workspace compares the same provider listing against earlier persisted observations only when currency matches, reports unchanged/increased/decreased/unknown state, and labels movement as asking-price evidence rather than a sale or market-value signal.
 - [x] R2.0e Observation aging: persisted source observations display fresh/aging/stale/unknown quality prompts from source fetch time using coarse 24-hour/7-day thresholds; age never infers availability, sale, stock or value.
 - [x] R2.0f Listing history view: Workspace snapshot rows open a focused history screen for one provider listing, showing every persisted fetch, review status, currency-matched movement, freshness and provenance; the screen remains evidence-only and has no allocation or valuation action.
+- [x] R2.0g Bulk snapshot review: the visible observed set can be marked reviewed sequentially with one required shared note; the UI waits for server confirmation per row and leaves the note/review state intact if a write fails.
 
 ## Existing boundaries
 - eBay account-deletion delivery does not establish Browse search or listing-stream permissions.
