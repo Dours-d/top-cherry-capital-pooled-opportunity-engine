@@ -64,6 +64,13 @@
       "when": 1792747544336,
       "tag": "0008_famous_randall",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "5",
+      "when": 1792751878438,
+      "tag": "0009_daffy_sprite",
+      "breakpoints": true
     }
   ]
 }

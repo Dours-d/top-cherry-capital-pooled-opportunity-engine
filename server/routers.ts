@@ -66,6 +66,24 @@ const outcomeSyncAuditInput = z.object({
   note: z.string().min(1).max(1000),
 });
 
+const reconciliationSnapshotInput = z.object({
+  snapshotId: z.string().min(1).max(160),
+  sourceSlug: z.string().min(1).max(64),
+  marketplaceId: z.string().regex(/^EBAY_[A-Z]{2}$/),
+  query: z.string().min(2).max(255),
+  providerListingId: z.string().min(1).max(255),
+  profileSlug: z.string().min(1).max(64),
+  title: z.string().min(1).max(255),
+  askingPrice: z.number().nonnegative(),
+  currency: z.string().regex(/^[A-Z]{3}$/).optional(),
+  condition: z.string().min(1).max(128),
+  location: z.string().max(255).optional(),
+  sellerId: z.string().max(255).optional(),
+  sourceUrl: z.string().url().optional(),
+  sourceFetchedAt: z.string().datetime(),
+  reconciliationStatus: z.enum(["observed", "reviewed", "superseded"]).default("observed"),
+});
+
 export const appRouter = router({
   system: systemRouter,
   auth: router({
@@ -126,6 +144,10 @@ export const appRouter = router({
   outcomeSyncAudits: router({
     list: protectedProcedure.query(({ ctx }) => db.listOutcomeSyncAudits(ctx.user.id)),
     upsert: protectedProcedure.input(outcomeSyncAuditInput).mutation(({ ctx, input }) => db.upsertOutcomeSyncAudit({ userId: ctx.user.id, ...input, occurredAt: new Date(input.occurredAt) })),
+  }),
+  reconciliationSnapshots: router({
+    list: protectedProcedure.query(({ ctx }) => db.listReconciliationSnapshots(ctx.user.id)),
+    upsert: protectedProcedure.input(reconciliationSnapshotInput).mutation(({ ctx, input }) => db.upsertReconciliationSnapshot({ userId: ctx.user.id, ...input, sourceFetchedAt: new Date(input.sourceFetchedAt) })),
   }),
   monitoring: router({
     ebay: publicProcedure.query(async () => {

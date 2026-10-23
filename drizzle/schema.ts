@@ -173,6 +173,38 @@ export const outcomeSyncAudits = mysqlTable(
 export type OutcomeSyncAudit = typeof outcomeSyncAudits.$inferSelect;
 export type InsertOutcomeSyncAudit = typeof outcomeSyncAudits.$inferInsert;
 
+export const reconciliationSnapshots = mysqlTable(
+  "reconciliation_snapshots",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    snapshotId: varchar("snapshotId", { length: 160 }).notNull(),
+    sourceSlug: varchar("sourceSlug", { length: 64 }).notNull(),
+    marketplaceId: varchar("marketplaceId", { length: 64 }).notNull(),
+    query: varchar("query", { length: 255 }).notNull(),
+    providerListingId: varchar("providerListingId", { length: 255 }).notNull(),
+    profileSlug: varchar("profileSlug", { length: 64 }).notNull(),
+    title: varchar("title", { length: 255 }).notNull(),
+    askingPrice: double("askingPrice").notNull(),
+    currency: varchar("currency", { length: 3 }),
+    condition: varchar("condition", { length: 128 }).notNull(),
+    location: varchar("location", { length: 255 }),
+    sellerId: varchar("sellerId", { length: 255 }),
+    sourceUrl: text("sourceUrl"),
+    sourceFetchedAt: timestamp("sourceFetchedAt").notNull(),
+    reconciliationStatus: mysqlEnum("reconciliationStatus", ["observed", "reviewed", "superseded"]).default("observed").notNull(),
+    capturedAt: timestamp("capturedAt").defaultNow().notNull(),
+  },
+  (table) => ({
+    snapshotKeyIdx: uniqueIndex("reconciliation_snapshots_user_snapshot_idx").on(table.userId, table.snapshotId),
+    userCapturedIdx: index("reconciliation_snapshots_user_captured_idx").on(table.userId, table.capturedAt),
+    providerListingIdx: index("reconciliation_snapshots_user_provider_listing_idx").on(table.userId, table.providerListingId),
+  }),
+);
+
+export type ReconciliationSnapshot = typeof reconciliationSnapshots.$inferSelect;
+export type InsertReconciliationSnapshot = typeof reconciliationSnapshots.$inferInsert;
+
 export const ingestionRuns = mysqlTable("ingestion_runs", {
   id: int("id").autoincrement().primaryKey(),
   sourceSlug: varchar("sourceSlug", { length: 64 }).notNull(),

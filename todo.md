@@ -87,6 +87,7 @@ Direction accepted on 14 October 2026, clarified as a multi-mechanism architectu
 ## Later phases — paused
 R2 full real-data ingestion, R3 response estimation, R4 network feedback and R5 operational readiness remain gated. The eBay Browse application-token path is verified server-side and surfaced in Discover as a public, bounded read-only asking-price feed, but it is not yet reconciled into the persistent listing store or a recurring collector.
 - [x] R2.0a Bounded reconciliation screen: a dedicated mobile view records the provider, marketplace, query, fetch timestamp, raw rows, provisional candidate clusters, seller-identity availability, pagination and per-row asking-price provenance; no valuation, stock confirmation, outcome inference or allocation action is exposed.
+- [x] R2.0b Normalized snapshot persistence: authenticated users can save the current eBay Browse page as user-scoped normalized observation rows with idempotent snapshot keys, source provenance, asking price/currency, seller/location when available, source fetch time and explicit `observed` reconciliation status; no market-value or allocation fields are stored.
 
 ## Existing boundaries
 - eBay account-deletion delivery does not establish Browse search or listing-stream permissions.

@@ -3,13 +3,16 @@ import { useMemo, useState } from "react";
 import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { ScreenContainer } from "@/components/screen-container";
+import { useAuth } from "@/hooks/use-auth";
 import { useColors } from "@/hooks/use-colors";
 import { trpc } from "@/lib/trpc";
 import { formatCurrency, getEbaySearchTerm, getListingRedundancySummary, mapLiveEbayListings, PROFILES } from "@/lib/market-data";
 import type { Listing } from "@/lib/market-data";
+import { buildEbayReconciliationSnapshot } from "@/shared/reconciliation-snapshots";
 
 export default function ReconcileScreen() {
   const colors = useColors();
+  const { isAuthenticated } = useAuth();
   const [activeSlug, setActiveSlug] = useState(PROFILES[0].slug);
   const [query, setQuery] = useState("");
   const [offset, setOffset] = useState(0);
@@ -18,6 +21,9 @@ export default function ReconcileScreen() {
     { query: searchTerm, marketplaceId: "EBAY_GB", limit: 20, offset },
     { staleTime: 60_000, refetchOnWindowFocus: false, retry: 1 },
   );
+  const snapshots = trpc.reconciliationSnapshots.list.useQuery(undefined, { enabled: isAuthenticated, staleTime: 30_000 });
+  const saveSnapshot = trpc.reconciliationSnapshots.upsert.useMutation();
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const listings = useMemo(
     () => mapLiveEbayListings((browse.data?.listings ?? []).map((listing) => ({ ...listing, profileSlug: activeSlug }))),
     [activeSlug, browse.data?.listings],
@@ -28,6 +34,20 @@ export default function ReconcileScreen() {
     setActiveSlug(slug);
     setOffset(0);
     setQuery("");
+  };
+
+  const saveCurrentSnapshot = async () => {
+    if (!isAuthenticated || !browse.data?.listings.length) return;
+    setSaveState("saving");
+    try {
+      for (const listing of browse.data.listings) {
+        await saveSnapshot.mutateAsync(buildEbayReconciliationSnapshot({ listing, marketplaceId: browse.data.marketplaceId, query: searchTerm, profileSlug: activeSlug, sourceFetchedAt: browse.data.fetchedAt }));
+      }
+      await snapshots.refetch();
+      setSaveState("saved");
+    } catch {
+      setSaveState("error");
+    }
   };
 
   return (
@@ -73,6 +93,11 @@ export default function ReconcileScreen() {
               <Metric label="Candidates" value={String(redundancy.candidateItemCount)} colors={colors} />
               <Metric label="Redundant" value={String(redundancy.redundantRows)} colors={colors} />
             </View>
+            <View style={[styles.persistenceCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <View style={styles.persistenceCopy}><Text style={[styles.persistenceTitle, { color: colors.foreground }]}>Observation snapshot</Text><Text style={[styles.persistenceText, { color: colors.muted }]}>{isAuthenticated ? `${snapshots.data?.length ?? 0} snapshots in your account` : "Sign in to persist this provider page for review"}</Text></View>
+              {isAuthenticated ? <Pressable onPress={() => void saveCurrentSnapshot()} disabled={saveState === "saving" || !listings.length} style={({ pressed }) => [styles.saveButton, { backgroundColor: colors.primary }, (!listings.length || saveState === "saving") && styles.disabled, pressed && styles.pressed]}><Text style={[styles.saveButtonText, { color: colors.onPrimary }]}>{saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : "Save page"}</Text></Pressable> : null}
+            </View>
+            {saveState === "error" ? <Text style={[styles.saveError, { color: colors.error }]}>Some rows could not be persisted. The provider page remains available for retry.</Text> : null}
 
             <View style={styles.metaRow}><Text style={[styles.metaText, { color: colors.muted }]}>{browse.data ? `Fetched ${new Date(browse.data.fetchedAt).toLocaleString()}` : "Waiting for provider response"}</Text><Text style={[styles.metaText, { color: colors.muted }]}>{browse.data ? `Rows ${offset + 1}–${offset + listings.length} of ${browse.data.total}` : ""}</Text></View>
             <Text style={[styles.identityMeta, { color: colors.muted }]}>Seller identity: {redundancy.sellerIdentity === "known" ? `${redundancy.sellerCount} seller IDs returned` : "unavailable in provider rows"}. Concentration is not inferred when identity is unavailable.</Text>
@@ -131,6 +156,13 @@ const styles = StyleSheet.create({
   metaRow: { flexDirection: "row", justifyContent: "space-between", gap: 12, marginBottom: 22 },
   metaText: { fontSize: 10, flex: 1 },
   identityMeta: { fontSize: 11, lineHeight: 16, marginTop: -12, marginBottom: 20 },
+  persistenceCard: { borderWidth: 1, borderRadius: 16, padding: 13, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 18 },
+  persistenceCopy: { flex: 1 },
+  persistenceTitle: { fontSize: 13, fontWeight: "800" },
+  persistenceText: { fontSize: 11, lineHeight: 16, marginTop: 4 },
+  saveButton: { borderRadius: 11, paddingHorizontal: 13, paddingVertical: 10 },
+  saveButtonText: { fontSize: 12, fontWeight: "800" },
+  saveError: { fontSize: 11, lineHeight: 16, marginTop: -8, marginBottom: 16 },
   errorCard: { borderWidth: 1, borderRadius: 16, padding: 14, marginBottom: 14 },
   errorText: { fontSize: 12, lineHeight: 18, marginBottom: 10 },
   retryButton: { alignSelf: "flex-start", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 9 },

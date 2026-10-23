@@ -1,6 +1,6 @@
 import { and, count, desc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { ebayListingEvents, ebayNotificationEvents, InsertEbayListingEvent, InsertEbayNotificationEvent, InsertListingOutcome, InsertObservationReview, InsertOutcomeSyncAudit, InsertSavedDeal, InsertThesisContradictionReview, InsertThesisDraftRevision, InsertUser, listingOutcomes, observationReviews, outcomeSyncAudits, savedDeals, thesisContradictionReviews, thesisDraftRevisions, userPreferences, users } from "../drizzle/schema";
+import { ebayListingEvents, ebayNotificationEvents, InsertEbayListingEvent, InsertEbayNotificationEvent, InsertListingOutcome, InsertObservationReview, InsertOutcomeSyncAudit, InsertReconciliationSnapshot, InsertSavedDeal, InsertThesisContradictionReview, InsertThesisDraftRevision, InsertUser, listingOutcomes, observationReviews, outcomeSyncAudits, reconciliationSnapshots, savedDeals, thesisContradictionReviews, thesisDraftRevisions, userPreferences, users } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import { buildEbayMarketSignals } from "../shared/ebay-signals";
 
@@ -168,6 +168,20 @@ export async function listOutcomeSyncAudits(userId: number, limit = 100) {
   const db = await getDb();
   if (!db) return [];
   return db.select().from(outcomeSyncAudits).where(eq(outcomeSyncAudits.userId, userId)).orderBy(desc(outcomeSyncAudits.occurredAt)).limit(limit);
+}
+
+export async function upsertReconciliationSnapshot(snapshot: InsertReconciliationSnapshot) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.insert(reconciliationSnapshots).values(snapshot).onDuplicateKeyUpdate({ set: { sourceSlug: snapshot.sourceSlug, marketplaceId: snapshot.marketplaceId, query: snapshot.query, providerListingId: snapshot.providerListingId, profileSlug: snapshot.profileSlug, title: snapshot.title, askingPrice: snapshot.askingPrice, currency: snapshot.currency ?? null, condition: snapshot.condition, location: snapshot.location ?? null, sellerId: snapshot.sellerId ?? null, sourceUrl: snapshot.sourceUrl ?? null, sourceFetchedAt: snapshot.sourceFetchedAt, reconciliationStatus: snapshot.reconciliationStatus } });
+  const result = await db.select().from(reconciliationSnapshots).where(and(eq(reconciliationSnapshots.userId, snapshot.userId), eq(reconciliationSnapshots.snapshotId, snapshot.snapshotId))).limit(1);
+  return result[0];
+}
+
+export async function listReconciliationSnapshots(userId: number, limit = 100) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(reconciliationSnapshots).where(eq(reconciliationSnapshots.userId, userId)).orderBy(desc(reconciliationSnapshots.capturedAt)).limit(limit);
 }
 
 export async function insertEbayNotificationEvent(event: InsertEbayNotificationEvent) {
