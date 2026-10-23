@@ -15,7 +15,7 @@ import { EbayMonitor } from "@/components/ebay-monitor";
 import { ThesisDraftEditor } from "@/components/thesis-draft-editor";
 import { mergeObservationReviews, normalizeObservationReview, type ObservationReview } from "@/shared/observation-reviews";
 import { mergeListingOutcomes } from "@/shared/listing-outcomes";
-import { dismissalsFromOutcomeSyncAudits, dismissPendingOutcome, mergeOutcomeSyncAudits, restoreDismissedOutcome as restoreDismissedOutcomeTransition, type OutcomeSyncAuditRecord, type OutcomeSyncDismissal, type PendingOutcomeRecord, type PendingOutcomeSyncAudit } from "@/shared/outcome-sync-queue";
+import { dismissalsFromOutcomeSyncAudits, dismissPendingOutcome, mergeOutcomeSyncAudits, queueOutcomeSyncAudit, resolveOutcomeSyncAudit, restoreDismissedOutcome as restoreDismissedOutcomeTransition, type OutcomeSyncAuditRecord, type OutcomeSyncDismissal, type PendingOutcomeRecord, type PendingOutcomeSyncAudit } from "@/shared/outcome-sync-queue";
 
 const EBAY_READINESS_KEY = "topCherry.ebayReadiness";
 const OBSERVATION_REVIEW_STORAGE_KEY = "topCherry.observationReviews";
@@ -163,19 +163,19 @@ export default function ProfileScreen() {
     const merged = mergeOutcomeSyncAudits(outcomeSyncAudits, [audit]);
     setOutcomeSyncAudits(merged);
     await AsyncStorage.setItem(OUTCOME_SYNC_AUDIT_STORAGE_KEY, JSON.stringify(merged));
-    const queued: PendingOutcomeSyncAudit = { ...audit, lastAttemptAt: new Date().toISOString() };
-    const nextQueue = [...pendingOutcomeAuditRecords.filter((item) => item.auditId !== audit.auditId), queued].slice(0, 100);
+    const attemptedAt = new Date().toISOString();
+    const nextQueue = queueOutcomeSyncAudit(pendingOutcomeAuditRecords, audit, attemptedAt);
     setPendingOutcomeAuditRecords(nextQueue);
     await AsyncStorage.setItem(OUTCOME_SYNC_AUDIT_QUEUE_STORAGE_KEY, JSON.stringify(nextQueue));
     if (!isAuthenticated) return;
     try {
       await syncOutcomeAudit.mutateAsync(audit);
-      const remaining = nextQueue.filter((item) => item.auditId !== audit.auditId);
+      const remaining = resolveOutcomeSyncAudit(nextQueue, audit.auditId, { ok: true }, new Date().toISOString());
       setPendingOutcomeAuditRecords(remaining);
       await AsyncStorage.setItem(OUTCOME_SYNC_AUDIT_QUEUE_STORAGE_KEY, JSON.stringify(remaining));
     } catch (error) {
       const syncError = error instanceof Error ? error.message : "The audit server rejected this sync attempt.";
-      const failed = nextQueue.map((item) => item.auditId === audit.auditId ? { ...item, syncError, lastAttemptAt: new Date().toISOString() } : item);
+      const failed = resolveOutcomeSyncAudit(nextQueue, audit.auditId, { ok: false, error: syncError }, new Date().toISOString());
       setPendingOutcomeAuditRecords(failed);
       await AsyncStorage.setItem(OUTCOME_SYNC_AUDIT_QUEUE_STORAGE_KEY, JSON.stringify(failed));
     }
@@ -189,7 +189,8 @@ export default function ProfileScreen() {
         const { syncError: _syncError, lastAttemptAt: _lastAttemptAt, ...payload } = audit;
         await syncOutcomeAudit.mutateAsync(payload);
       } catch (error) {
-        remaining.push({ ...audit, syncError: error instanceof Error ? error.message : "The audit server rejected this sync attempt.", lastAttemptAt: new Date().toISOString() });
+        const failed = resolveOutcomeSyncAudit([audit], audit.auditId, { ok: false, error: error instanceof Error ? error.message : "The audit server rejected this sync attempt." }, new Date().toISOString());
+        remaining.push(...failed);
       }
     }
     setPendingOutcomeAuditRecords(remaining);

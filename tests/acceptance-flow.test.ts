@@ -6,6 +6,7 @@ import { canAllocateCandidate, reconcileThesisDrafts } from "../shared/reconcile
 import { createThesisDraft, reviseThesisDraft } from "../shared/versioned-drafts";
 import { mergeObservationReviews, normalizeObservationReview } from "../shared/observation-reviews";
 import { mergeListingOutcomes } from "../shared/listing-outcomes";
+import { dismissalsFromOutcomeSyncAudits, dismissPendingOutcome, mergeOutcomeSyncAudits, queueOutcomeSyncAudit, resolveOutcomeSyncAudit, restoreDismissedOutcome } from "../shared/outcome-sync-queue";
 
 const listing = LISTINGS[0];
 
@@ -65,5 +66,25 @@ describe("thesis acceptance flow", () => {
     expect(merged[0]).not.toHaveProperty("marketValue");
     expect(merged[0]).not.toHaveProperty("score");
     expect(merged[0]).not.toHaveProperty("marginPercentage");
+  });
+
+  it("keeps a failed audit local, restores it after retry, and completes the evidence-only path", () => {
+    const outcome = { id: "acceptance-outcome", listingId: listing.id, kind: "price-revised" as const, observedAt: "2026-10-20T12:00:00.000Z", realizedPrice: 12000, currency: "GBP" };
+    const pending = [{ ...outcome, syncError: "Network unavailable", lastAttemptAt: "2026-10-20T12:01:00.000Z" }];
+    const dismissed = dismissPendingOutcome(pending, [], outcome.id, "Provider was unavailable", "2026-10-20T12:02:00.000Z");
+    expect(dismissed?.pending).toEqual([]);
+    const audit = { auditId: "dismissed:acceptance-outcome:1", outcomeId: outcome.id, action: "dismissed" as const, occurredAt: "2026-10-20T12:02:00.000Z", note: "Provider was unavailable" };
+    const queued = queueOutcomeSyncAudit([], audit, "2026-10-20T12:02:01.000Z");
+    const failed = resolveOutcomeSyncAudit(queued, audit.auditId, { ok: false, error: "Unauthorized" }, "2026-10-20T12:02:02.000Z");
+    expect(failed[0]).toMatchObject({ auditId: audit.auditId, syncError: "Unauthorized" });
+    const restored = restoreDismissedOutcome([], dismissed?.dismissals ?? [], [outcome], outcome.id, "Retry after sign-in", "2026-10-20T12:03:00.000Z");
+    expect(restored?.pending[0]).toMatchObject({ id: outcome.id, syncError: expect.stringContaining("retry required") });
+    const restoreAudit = { auditId: "restored:acceptance-outcome:2", outcomeId: outcome.id, action: "restored" as const, occurredAt: "2026-10-20T12:03:00.000Z", note: "Retry after sign-in" };
+    const confirmed = resolveOutcomeSyncAudit(failed, audit.auditId, { ok: true }, "2026-10-20T12:04:00.000Z");
+    const remote = mergeOutcomeSyncAudits([], [audit, restoreAudit]);
+    expect(confirmed).toEqual([]);
+    expect(dismissalsFromOutcomeSyncAudits(remote)[0]).toMatchObject({ outcomeId: outcome.id, restoredAt: restoreAudit.occurredAt, restoreNote: restoreAudit.note });
+    expect(remote[0]).not.toHaveProperty("marketValue");
+    expect(remote[0]).not.toHaveProperty("marginPercentage");
   });
 });

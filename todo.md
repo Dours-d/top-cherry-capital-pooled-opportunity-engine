@@ -82,7 +82,7 @@ Direction accepted on 14 October 2026, clarified as a multi-mechanism architectu
 - [x] R1.8n Queue transition hardening: dismissal and restoration rules are pure shared helpers with regression coverage for required notes, duplicate prevention, preserved audit context, and retry-required state.
 - [x] R1.8o Account-scoped audit history: dismissal/restoration events have an additive user-scoped table, protected list/upsert procedures, deterministic local/remote merge, and visible Workspace sync status; anonymous users retain local fallback.
 - [x] R1.8p Audit-sync resilience: failed dismissal/restoration audit writes persist locally with attempt time and error context, retry sequentially from Workspace, clear only after server confirmation, and receive one bounded retry pass after authentication restoration.
-- [ ] R1.8 End-to-end acceptance.
+- [x] R1.8 End-to-end acceptance: the acceptance suite now covers raw-row to candidate clustering, observed outcomes, allocation gating, review reconciliation, evidence-only outcome merge, audited dismissal/restoration, durable audit retry failure, server-confirmed cleanup, and restored audit history without valuation or execution side effects.
 
 ## Later phases — paused
 R2 full real-data ingestion, R3 response estimation, R4 network feedback and R5 operational readiness remain gated. The eBay Browse application-token path is verified server-side and surfaced in Discover as a public, bounded read-only asking-price feed, but it is not yet reconciled into the persistent listing store or a recurring collector.

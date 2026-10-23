@@ -51,6 +51,15 @@ export function dismissalsFromOutcomeSyncAudits(audits: OutcomeSyncAuditRecord[]
   return [...byOutcome.values()].sort((a, b) => (b.restoredAt ?? b.clearedAt).localeCompare(a.restoredAt ?? a.clearedAt)).slice(0, 50);
 }
 
+export function queueOutcomeSyncAudit(pending: PendingOutcomeSyncAudit[], audit: OutcomeSyncAuditRecord, attemptedAt: string): PendingOutcomeSyncAudit[] {
+  return [...pending.filter((item) => item.auditId !== audit.auditId), { ...audit, lastAttemptAt: attemptedAt }].slice(0, 100);
+}
+
+export function resolveOutcomeSyncAudit(pending: PendingOutcomeSyncAudit[], auditId: string, result: { ok: true } | { ok: false; error: string }, attemptedAt: string): PendingOutcomeSyncAudit[] {
+  if (result.ok) return pending.filter((item) => item.auditId !== auditId);
+  return pending.map((item) => item.auditId === auditId ? { ...item, syncError: result.error, lastAttemptAt: attemptedAt } : item);
+}
+
 export function dismissPendingOutcome(
   pending: PendingOutcomeRecord[],
   dismissals: OutcomeSyncDismissal[],
