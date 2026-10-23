@@ -43,6 +43,12 @@ export type SnapshotReconciliationResult = {
   recommendedMissing: string[];
 };
 
+export type ItemDetailCharacteristicCoverage = {
+  state: "unavailable" | "partial" | "present";
+  aspectCount: number;
+  requiredMissing: string[];
+};
+
 export const DEFAULT_SNAPSHOT_FRESHNESS_THRESHOLD: SnapshotFreshnessThreshold = { freshHours: 24, agingHours: 168 };
 export const SNAPSHOT_FRESHNESS_PRESETS: SnapshotFreshnessThreshold[] = [
   { freshHours: 12, agingHours: 72 },
@@ -76,6 +82,16 @@ export function evaluateSnapshotReconciliation(snapshot: Record<string, unknown>
   };
   const requiredMissing = required.filter(missing);
   return { state: requiredMissing.length ? "needs-attention" : "ready", requiredMissing, recommendedMissing: recommended.filter(missing) };
+}
+
+export function evaluateEbayItemDetailCoverage(detail?: { itemId?: string; title?: string; askingPrice?: number; condition?: string; fetchedAt?: string; localizedAspects?: { name?: string; value?: string }[] | null } | null): ItemDetailCharacteristicCoverage {
+  if (!detail) return { state: "unavailable", aspectCount: 0, requiredMissing: ["item detail response"] };
+  const requiredMissing = ["itemId", "title", "askingPrice", "condition", "fetchedAt"].filter((field) => {
+    const value = detail[field as keyof typeof detail];
+    return value === undefined || value === null || (typeof value === "string" && value.trim().length === 0) || (field === "askingPrice" && (!Number.isFinite(value as number) || (value as number) < 0));
+  });
+  const aspectCount = (detail.localizedAspects ?? []).filter((aspect) => aspect.name?.trim() && aspect.value?.trim()).length;
+  return { state: requiredMissing.length || aspectCount === 0 ? "partial" : "present", aspectCount, requiredMissing };
 }
 
 /**

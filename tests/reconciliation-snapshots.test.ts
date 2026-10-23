@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildEbayReconciliationSnapshot, compareSnapshotToPrior, evaluateSnapshotReconciliation, getSnapshotFreshness, nextSnapshotFreshnessThreshold, normalizeSnapshotFreshnessThreshold } from "../shared/reconciliation-snapshots";
+import { buildEbayReconciliationSnapshot, compareSnapshotToPrior, evaluateEbayItemDetailCoverage, evaluateSnapshotReconciliation, getSnapshotFreshness, nextSnapshotFreshnessThreshold, normalizeSnapshotFreshnessThreshold } from "../shared/reconciliation-snapshots";
 
 const listing = {
   listingId: "v1|123456",
@@ -74,5 +74,11 @@ describe("reconciliation snapshots", () => {
     expect(evaluateSnapshotReconciliation({ marketplaceId: "EBAY_GB", providerListingId: "v1|123456", title: "Watch", askingPrice: 8500, condition: "Used", sourceFetchedAt: "2026-10-23T10:00:00.000Z" })).toEqual({ state: "ready", requiredMissing: [], recommendedMissing: ["currency", "location", "sellerId", "sourceUrl"] });
     expect(evaluateSnapshotReconciliation({ marketplaceId: "EBAY_GB", title: "Watch", askingPrice: 8500, condition: "Used", sourceFetchedAt: "2026-10-23T10:00:00.000Z" })).toMatchObject({ state: "needs-attention", requiredMissing: ["providerListingId"] });
     expect(evaluateSnapshotReconciliation({ marketplaceId: "OTHER", providerListingId: "item-1", title: "Item", askingPrice: 10, sourceFetchedAt: "2026-10-23T10:00:00.000Z" }).state).toBe("ready");
+  });
+
+  it("treats eBay item characteristics as seller-supplied coverage, not completeness", () => {
+    expect(evaluateEbayItemDetailCoverage().state).toBe("unavailable");
+    expect(evaluateEbayItemDetailCoverage({ itemId: "v1|123456", title: "Watch", askingPrice: 8500, condition: "Used", fetchedAt: "2026-10-23T10:00:00.000Z", localizedAspects: [] })).toMatchObject({ state: "partial", aspectCount: 0 });
+    expect(evaluateEbayItemDetailCoverage({ itemId: "v1|123456", title: "Watch", askingPrice: 8500, condition: "Used", fetchedAt: "2026-10-23T10:00:00.000Z", localizedAspects: [{ name: "Brand", value: "Rolex" }] })).toMatchObject({ state: "present", aspectCount: 1, requiredMissing: [] });
   });
 });
