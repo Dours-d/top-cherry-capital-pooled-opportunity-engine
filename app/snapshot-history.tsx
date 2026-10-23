@@ -7,12 +7,13 @@ import { useAuth } from "@/hooks/use-auth";
 import { useColors } from "@/hooks/use-colors";
 import { formatCurrency } from "@/lib/market-data";
 import { trpc } from "@/lib/trpc";
-import { compareSnapshotToPrior, evaluateSnapshotReconciliation, getSnapshotFreshness } from "@/shared/reconciliation-snapshots";
+import { compareSnapshotToPrior, evaluateEbayItemDetailCoverage, evaluateSnapshotReconciliation, getSnapshotFreshness } from "@/shared/reconciliation-snapshots";
 
 type Snapshot = {
   snapshotId: string;
   marketplaceId: string;
   providerListingId: string;
+  profileSlug: string;
   title: string;
   askingPrice: number;
   currency: string | null;
@@ -28,7 +29,7 @@ type Snapshot = {
 export default function SnapshotHistoryScreen() {
   const colors = useColors();
   const { isAuthenticated } = useAuth();
-  const { providerListingId, title } = useLocalSearchParams<{ providerListingId?: string; title?: string }>();
+  const { providerListingId, title, profileSlug } = useLocalSearchParams<{ providerListingId?: string; title?: string; profileSlug?: string }>();
   const snapshotsQuery = trpc.reconciliationSnapshots.list.useQuery(undefined, { enabled: isAuthenticated });
   const snapshots = ((snapshotsQuery.data ?? []) as Snapshot[])
     .filter((snapshot) => snapshot.providerListingId === providerListingId)
@@ -36,6 +37,7 @@ export default function SnapshotHistoryScreen() {
   const current = snapshots[0];
   const comparison = current ? compareSnapshotToPrior(current, snapshots) : null;
   const attentionCount = snapshots.filter((snapshot) => evaluateSnapshotReconciliation(snapshot).state === "needs-attention").length;
+  const characteristicCoverage = evaluateEbayItemDetailCoverage(current ? { itemId: current.providerListingId, title: current.title, askingPrice: current.askingPrice, condition: current.condition, fetchedAt: String(current.sourceFetchedAt), profileSlug, localizedAspects: [] } : null);
 
   return (
     <ScreenContainer edges={["top", "bottom", "left", "right"]}>
@@ -58,6 +60,7 @@ export default function SnapshotHistoryScreen() {
             <View style={[styles.metric, { backgroundColor: colors.surface, borderColor: colors.border }]}><Text style={[styles.metricValue, { color: colors.foreground }]}>{current ? getSnapshotFreshness(current.sourceFetchedAt).state : "—"}</Text><Text style={[styles.metricLabel, { color: colors.muted }]}>Freshness</Text></View>
           </View>
           <Text style={[styles.qualitySummary, { color: attentionCount ? colors.warning : colors.success }]}>{attentionCount ? `${attentionCount} observation${attentionCount === 1 ? "" : "s"} need provider-field attention.` : "Provider-required fields are present for every stored observation."} This is a data-quality check only.</Text>
+          <Text style={[styles.qualitySummary, { color: colors.muted }]}>{profileSlug ? `Profile characteristic prompts: ${characteristicCoverage.recommendedMissing.join(", ") || "none recorded"}.` : "No profile context was stored for this history route; profile-specific characteristic prompts remain unknown."} These prompts do not establish authenticity, value, stock or allocation eligibility.</Text>
           {snapshots.map((snapshot, index) => {
             const freshness = getSnapshotFreshness(snapshot.sourceFetchedAt);
             const movement = compareSnapshotToPrior(snapshot, snapshots);
