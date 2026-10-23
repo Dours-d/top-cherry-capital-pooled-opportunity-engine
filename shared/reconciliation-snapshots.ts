@@ -37,6 +37,12 @@ export type SnapshotFreshnessThreshold = {
   agingHours: number;
 };
 
+export type SnapshotReconciliationResult = {
+  state: "ready" | "needs-attention";
+  requiredMissing: string[];
+  recommendedMissing: string[];
+};
+
 export const DEFAULT_SNAPSHOT_FRESHNESS_THRESHOLD: SnapshotFreshnessThreshold = { freshHours: 24, agingHours: 168 };
 export const SNAPSHOT_FRESHNESS_PRESETS: SnapshotFreshnessThreshold[] = [
   { freshHours: 12, agingHours: 72 },
@@ -54,6 +60,22 @@ export function nextSnapshotFreshnessThreshold(current?: SnapshotFreshnessThresh
   const normalized = normalizeSnapshotFreshnessThreshold(current);
   const index = SNAPSHOT_FRESHNESS_PRESETS.findIndex((preset) => preset.freshHours === normalized.freshHours && preset.agingHours === normalized.agingHours);
   return SNAPSHOT_FRESHNESS_PRESETS[(index + 1) % SNAPSHOT_FRESHNESS_PRESETS.length];
+}
+
+export function evaluateSnapshotReconciliation(snapshot: Record<string, unknown>): SnapshotReconciliationResult {
+  const marketplaceId = typeof snapshot.marketplaceId === "string" ? snapshot.marketplaceId : "";
+  const required = marketplaceId.startsWith("EBAY_")
+    ? ["providerListingId", "title", "askingPrice", "condition", "sourceFetchedAt"]
+    : ["providerListingId", "title", "askingPrice", "sourceFetchedAt"];
+  const recommended = marketplaceId.startsWith("EBAY_")
+    ? ["currency", "location", "sellerId", "sourceUrl"]
+    : ["currency", "sourceUrl"];
+  const missing = (field: string) => {
+    const value = snapshot[field as keyof ReconciliationSnapshotInput];
+    return value === undefined || value === null || (typeof value === "string" && value.trim().length === 0) || (field === "askingPrice" && (!Number.isFinite(value as number) || (value as number) < 0));
+  };
+  const requiredMissing = required.filter(missing);
+  return { state: requiredMissing.length ? "needs-attention" : "ready", requiredMissing, recommendedMissing: recommended.filter(missing) };
 }
 
 /**

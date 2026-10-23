@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildEbayReconciliationSnapshot, compareSnapshotToPrior, getSnapshotFreshness, nextSnapshotFreshnessThreshold, normalizeSnapshotFreshnessThreshold } from "../shared/reconciliation-snapshots";
+import { buildEbayReconciliationSnapshot, compareSnapshotToPrior, evaluateSnapshotReconciliation, getSnapshotFreshness, nextSnapshotFreshnessThreshold, normalizeSnapshotFreshnessThreshold } from "../shared/reconciliation-snapshots";
 
 const listing = {
   listingId: "v1|123456",
@@ -68,5 +68,11 @@ describe("reconciliation snapshots", () => {
     expect(getSnapshotFreshness("2026-10-22T12:00:00.000Z", "2026-10-23T12:00:00.000Z", { freshHours: 12, agingHours: 72 }).state).toBe("aging");
     expect(getSnapshotFreshness("2026-10-20T11:00:00.000Z", "2026-10-23T12:00:00.000Z", { freshHours: 12, agingHours: 72 }).state).toBe("stale");
     expect(nextSnapshotFreshnessThreshold({ freshHours: 24, agingHours: 168 })).toEqual({ freshHours: 48, agingHours: 336 });
+  });
+
+  it("applies provider-specific reconciliation rules without inferring value or stock", () => {
+    expect(evaluateSnapshotReconciliation({ marketplaceId: "EBAY_GB", providerListingId: "v1|123456", title: "Watch", askingPrice: 8500, condition: "Used", sourceFetchedAt: "2026-10-23T10:00:00.000Z" })).toEqual({ state: "ready", requiredMissing: [], recommendedMissing: ["currency", "location", "sellerId", "sourceUrl"] });
+    expect(evaluateSnapshotReconciliation({ marketplaceId: "EBAY_GB", title: "Watch", askingPrice: 8500, condition: "Used", sourceFetchedAt: "2026-10-23T10:00:00.000Z" })).toMatchObject({ state: "needs-attention", requiredMissing: ["providerListingId"] });
+    expect(evaluateSnapshotReconciliation({ marketplaceId: "OTHER", providerListingId: "item-1", title: "Item", askingPrice: 10, sourceFetchedAt: "2026-10-23T10:00:00.000Z" }).state).toBe("ready");
   });
 });
