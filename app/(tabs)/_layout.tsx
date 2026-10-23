@@ -23,6 +23,7 @@ export default function TabLayout() {
       }}
     >
       <Tabs.Screen name="index" options={{ title: "Discover", tabBarIcon: ({ color }) => <IconSymbol size={24} name="house.fill" color={color} /> }} />
+      <Tabs.Screen name="reconcile" options={{ title: "Reconcile", tabBarIcon: ({ color }) => <IconSymbol size={24} name="arrow.triangle.2.circlepath" color={color} /> }} />
       <Tabs.Screen name="plan" options={{ title: "Plan", tabBarIcon: ({ color }) => <IconSymbol size={24} name="chart.bar.fill" color={color} /> }} />
       <Tabs.Screen name="saved" options={{ title: "Saved", tabBarIcon: ({ color }) => <IconSymbol size={24} name="paperplane.fill" color={color} /> }} />
       <Tabs.Screen name="profile" options={{ title: "Workspace", tabBarIcon: ({ color }) => <IconSymbol size={24} name="chevron.left.forwardslash.chevron.right" color={color} /> }} />

@@ -14,6 +14,7 @@ const MAPPING = {
   "chevron.left.forwardslash.chevron.right": "person",
   "chevron.right": "chevron-right",
   "chart.bar.fill": "bar-chart",
+  "arrow.triangle.2.circlepath": "sync",
 } as IconMapping;
 
 export function IconSymbol({
