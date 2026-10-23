@@ -184,6 +184,14 @@ export async function listReconciliationSnapshots(userId: number, limit = 100) {
   return db.select().from(reconciliationSnapshots).where(eq(reconciliationSnapshots.userId, userId)).orderBy(desc(reconciliationSnapshots.capturedAt)).limit(limit);
 }
 
+export async function reviewReconciliationSnapshot(userId: number, snapshotId: string, reconciliationStatus: "reviewed" | "superseded", reviewNote: string, reviewedAt: Date) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(reconciliationSnapshots).set({ reconciliationStatus, reviewNote, reviewedAt }).where(and(eq(reconciliationSnapshots.userId, userId), eq(reconciliationSnapshots.snapshotId, snapshotId)));
+  const result = await db.select().from(reconciliationSnapshots).where(and(eq(reconciliationSnapshots.userId, userId), eq(reconciliationSnapshots.snapshotId, snapshotId))).limit(1);
+  return result[0];
+}
+
 export async function insertEbayNotificationEvent(event: InsertEbayNotificationEvent) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");

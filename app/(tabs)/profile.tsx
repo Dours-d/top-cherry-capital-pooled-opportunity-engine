@@ -38,9 +38,11 @@ export default function ProfileScreen() {
   const remoteReviews = trpc.observationReviews.list.useQuery(undefined, { enabled: isAuthenticated });
   const remoteOutcomes = trpc.listingOutcomes.list.useQuery(undefined, { enabled: isAuthenticated });
   const remoteOutcomeAudits = trpc.outcomeSyncAudits.list.useQuery(undefined, { enabled: isAuthenticated });
+  const remoteSnapshots = trpc.reconciliationSnapshots.list.useQuery(undefined, { enabled: isAuthenticated });
   const syncReview = trpc.observationReviews.upsert.useMutation();
   const syncOutcome = trpc.listingOutcomes.upsert.useMutation();
   const syncOutcomeAudit = trpc.outcomeSyncAudits.upsert.useMutation();
+  const reviewSnapshot = trpc.reconciliationSnapshots.review.useMutation();
   const [alerts, setAlerts] = useState(true);
   const [dailyDigest, setDailyDigest] = useState(false);
   const [economics, setEconomics] = useState(DEFAULT_ECONOMICS);
@@ -54,6 +56,11 @@ export default function ProfileScreen() {
   const [outcomeSyncAudits, setOutcomeSyncAudits] = useState<OutcomeSyncAuditRecord[]>([]);
   const [pendingOutcomeAuditRecords, setPendingOutcomeAuditRecords] = useState<PendingOutcomeSyncAudit[]>([]);
   const [autoRetryAttempted, setAutoRetryAttempted] = useState(false);
+
+  const markSnapshotReviewed = async (snapshotId: string, reconciliationStatus: "reviewed" | "superseded", reviewNote: string) => {
+    await reviewSnapshot.mutateAsync({ snapshotId, reconciliationStatus, reviewNote });
+    await remoteSnapshots.refetch();
+  };
 
   useEffect(() => {
     if (preferencesQuery.data) {
@@ -253,6 +260,7 @@ export default function ProfileScreen() {
             } catch { return undefined; }
           });
         }} />
+        <ReconciliationSnapshotQueue colors={colors} authenticated={isAuthenticated} snapshots={remoteSnapshots.data ?? []} reviewing={reviewSnapshot.isPending} onReview={(snapshotId, status, note) => void markSnapshotReviewed(snapshotId, status, note)} />
         <SyncedOutcomeHistory colors={colors} outcomes={followUpOutcomes} authenticated={isAuthenticated} auditCount={outcomeSyncAudits.length} pendingAuditSyncs={pendingOutcomeAuditRecords.length} pendingSyncs={pendingOutcomeSyncs} pendingRecords={pendingOutcomeRecords} dismissedRecords={dismissedOutcomeRecords} onRetryPending={() => void retryPendingOutcomeSync()} onRetryAudit={() => void retryPendingOutcomeAuditSync()} onClearPending={(outcomeId, note) => void clearPendingOutcome(outcomeId, note)} onRestorePending={(outcomeId, note) => void restoreDismissedOutcome(outcomeId, note)} retrying={syncOutcome.isPending} retryingAudit={syncOutcomeAudit.isPending} />
         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>eBay authorization readiness</Text>
         <EbayReadinessChecklist colors={colors} completed={ebayReadiness} onToggle={(id) => {
@@ -315,6 +323,43 @@ export default function ProfileScreen() {
       </ScrollView>
     </ScreenContainer>
   );
+}
+
+type WorkspaceSnapshot = {
+  snapshotId: string;
+  marketplaceId: string;
+  query: string;
+  providerListingId: string;
+  profileSlug: string;
+  title: string;
+  askingPrice: number;
+  currency: string | null;
+  condition: string;
+  location: string | null;
+  sellerId: string | null;
+  sourceFetchedAt: Date | string;
+  reconciliationStatus: "observed" | "reviewed" | "superseded";
+  reviewNote: string | null;
+  reviewedAt: Date | string | null;
+};
+
+function ReconciliationSnapshotQueue({ colors, authenticated, snapshots, reviewing, onReview }: { colors: ReturnType<typeof useColors>; authenticated: boolean; snapshots: WorkspaceSnapshot[]; reviewing: boolean; onReview: (snapshotId: string, status: "reviewed" | "superseded", note: string) => void }) {
+  const [filter, setFilter] = useState<"observed" | "reviewed" | "superseded">("observed");
+  const [reviewNote, setReviewNote] = useState("");
+  const counts = { observed: snapshots.filter((item) => item.reconciliationStatus === "observed").length, reviewed: snapshots.filter((item) => item.reconciliationStatus === "reviewed").length, superseded: snapshots.filter((item) => item.reconciliationStatus === "superseded").length };
+  const visible = snapshots.filter((item) => item.reconciliationStatus === filter).slice(0, 8);
+  return <View style={[styles.snapshotQueueCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+    <View style={styles.readinessHeader}><View style={styles.settingCopy}><Text style={[styles.settingTitle, { color: colors.foreground }]}>Persisted source observations</Text><Text style={[styles.settingDescription, { color: colors.muted }]}>{authenticated ? `${counts.observed} awaiting review · ${snapshots.length} stored` : "Sign in to review persisted provider observations"}</Text></View><View style={[styles.statusBadge, { backgroundColor: counts.observed ? colors.warning : colors.background }]}><Text style={[styles.statusBadgeText, { color: counts.observed ? colors.foreground : colors.muted }]}>{counts.observed ? "REVIEW" : "CLEAR"}</Text></View></View>
+    <Text style={[styles.dataNote, { color: colors.muted }]}>Reviewing confirms only how this provider observation should be retained. It does not establish stock, fair value, demand, a sale, or allocation eligibility. A note is required for every status change.</Text>
+    <View style={styles.filterRow}>{(["observed", "reviewed", "superseded"] as const).map((option) => <Pressable key={option} onPress={() => setFilter(option)} style={({ pressed }) => [styles.filterChip, { backgroundColor: filter === option ? colors.foreground : colors.background, borderColor: colors.border }, pressed && styles.pressed]}><Text style={[styles.filterChipText, { color: filter === option ? colors.background : colors.muted }]}>{option === "observed" ? `Observed (${counts.observed})` : option === "reviewed" ? `Reviewed (${counts.reviewed})` : `Superseded (${counts.superseded})`}</Text></Pressable>)}</View>
+    {!authenticated ? <Text style={[styles.dataNote, { color: colors.muted }]}>The current device has no account session, so no remote snapshot records are shown.</Text> : !visible.length ? <Text style={[styles.dataNote, { color: colors.muted }]}>No {filter} snapshots.</Text> : <>
+      <TextInput value={reviewNote} onChangeText={setReviewNote} placeholder="Required status-change note" placeholderTextColor={colors.muted} style={[styles.reviewNoteInput, { color: colors.foreground, backgroundColor: colors.background, borderColor: colors.border }]} />
+      {visible.map((snapshot) => <View key={snapshot.snapshotId} style={[styles.snapshotRow, { borderTopColor: colors.border }]}>
+        <View style={styles.settingCopy}><Text style={[styles.settingTitle, { color: colors.foreground }]} numberOfLines={2}>{snapshot.title}</Text><Text style={[styles.settingDescription, { color: colors.muted }]} numberOfLines={1}>{snapshot.marketplaceId} · {formatCurrency(snapshot.askingPrice, snapshot.currency ?? undefined)} · {snapshot.condition}</Text><Text style={[styles.settingDescription, { color: colors.muted }]} numberOfLines={1}>{new Date(snapshot.sourceFetchedAt).toLocaleString()} · {snapshot.providerListingId}</Text>{snapshot.reviewNote ? <Text style={[styles.reviewNoteText, { color: colors.foreground }]} numberOfLines={2}>“{snapshot.reviewNote}”</Text> : null}</View>
+        {filter === "observed" ? <View style={styles.snapshotActions}><Pressable disabled={reviewing || !reviewNote.trim()} onPress={() => { onReview(snapshot.snapshotId, "reviewed", reviewNote.trim()); setReviewNote(""); }} style={({ pressed }) => [styles.reviewButton, { borderColor: colors.border }, (reviewing || !reviewNote.trim()) && styles.disabled, pressed && styles.pressed]}><Text style={[styles.reviewButtonText, { color: colors.muted }]}>Review</Text></Pressable><Pressable disabled={reviewing || !reviewNote.trim()} onPress={() => { onReview(snapshot.snapshotId, "superseded", reviewNote.trim()); setReviewNote(""); }} style={({ pressed }) => [styles.reviewButton, { borderColor: colors.warning }, (reviewing || !reviewNote.trim()) && styles.disabled, pressed && styles.pressed]}><Text style={[styles.reviewButtonText, { color: colors.warning }]}>Supersede</Text></Pressable></View> : null}
+      </View>)}
+    </>}
+  </View>;
 }
 
 function ObservationFollowUpQueue({ colors, followUps, outcomes, recentReviews, onMarkReviewed }: { colors: ReturnType<typeof useColors>; followUps: { listingId: string; nextObserveAt: string; listingTitle?: string; platform?: string; askingPrice?: number; currency?: string }[]; outcomes: ListingOutcome[]; recentReviews: ObservationReview[]; onMarkReviewed: (listingId: string, note?: string) => void }) {
@@ -409,6 +454,9 @@ const styles = StyleSheet.create({
   readinessCard: { borderRadius: 19, borderWidth: 1, padding: 14, marginBottom: 27 },
   followUpCard: { borderRadius: 19, borderWidth: 1, padding: 14, marginBottom: 27 },
   outcomeHistoryCard: { borderRadius: 19, borderWidth: 1, padding: 14, marginBottom: 27 },
+  snapshotQueueCard: { borderRadius: 19, borderWidth: 1, padding: 14, marginBottom: 27 },
+  snapshotRow: { flexDirection: "row", alignItems: "flex-start", gap: 8, minHeight: 66, paddingTop: 10, marginTop: 8, borderTopWidth: 1 },
+  snapshotActions: { gap: 6, alignItems: "flex-end" },
   retryAllButton: { alignSelf: "flex-start", borderRadius: 9, paddingHorizontal: 10, paddingVertical: 8, marginTop: 10 },
   retryAllText: { fontSize: 10, fontWeight: "800" },
   pendingSyncRow: { flexDirection: "row", alignItems: "flex-start", gap: 7, marginTop: 10, paddingTop: 9, borderTopWidth: 1, borderTopColor: "rgba(128,128,128,0.18)" },
@@ -435,6 +483,7 @@ const styles = StyleSheet.create({
   outcomeHistoryRow: { flexDirection: "row", alignItems: "flex-start", gap: 7, minHeight: 38, marginTop: 9 },
   reviewNoteInput: { minHeight: 38, borderWidth: 1, borderRadius: 9, paddingHorizontal: 10, paddingVertical: 8, fontSize: 11, marginTop: 11 },
   reviewNoteText: { fontSize: 10, lineHeight: 14, marginTop: 2 },
+  disabled: { opacity: 0.4 },
   filterRow: { flexDirection: "row", gap: 6, marginTop: 12, marginBottom: 4 },
   filterChip: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 6 },
   filterChipText: { fontSize: 9, fontWeight: "800" },

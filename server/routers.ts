@@ -84,6 +84,12 @@ const reconciliationSnapshotInput = z.object({
   reconciliationStatus: z.enum(["observed", "reviewed", "superseded"]).default("observed"),
 });
 
+const reconciliationSnapshotReviewInput = z.object({
+  snapshotId: z.string().min(1).max(160),
+  reconciliationStatus: z.enum(["reviewed", "superseded"]),
+  reviewNote: z.string().min(1).max(1000),
+});
+
 export const appRouter = router({
   system: systemRouter,
   auth: router({
@@ -148,6 +154,7 @@ export const appRouter = router({
   reconciliationSnapshots: router({
     list: protectedProcedure.query(({ ctx }) => db.listReconciliationSnapshots(ctx.user.id)),
     upsert: protectedProcedure.input(reconciliationSnapshotInput).mutation(({ ctx, input }) => db.upsertReconciliationSnapshot({ userId: ctx.user.id, ...input, sourceFetchedAt: new Date(input.sourceFetchedAt) })),
+    review: protectedProcedure.input(reconciliationSnapshotReviewInput).mutation(({ ctx, input }) => db.reviewReconciliationSnapshot(ctx.user.id, input.snapshotId, input.reconciliationStatus, input.reviewNote, new Date())),
   }),
   monitoring: router({
     ebay: publicProcedure.query(async () => {

@@ -71,6 +71,13 @@
       "when": 1792751878438,
       "tag": "0009_daffy_sprite",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "5",
+      "when": 1792755928393,
+      "tag": "0010_lowly_lady_bullseye",
+      "breakpoints": true
     }
   ]
 }

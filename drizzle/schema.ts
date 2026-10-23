@@ -193,6 +193,8 @@ export const reconciliationSnapshots = mysqlTable(
     sourceUrl: text("sourceUrl"),
     sourceFetchedAt: timestamp("sourceFetchedAt").notNull(),
     reconciliationStatus: mysqlEnum("reconciliationStatus", ["observed", "reviewed", "superseded"]).default("observed").notNull(),
+    reviewNote: text("reviewNote"),
+    reviewedAt: timestamp("reviewedAt"),
     capturedAt: timestamp("capturedAt").defaultNow().notNull(),
   },
   (table) => ({
