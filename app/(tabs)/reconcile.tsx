@@ -7,7 +7,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useColors } from "@/hooks/use-colors";
 import { trpc } from "@/lib/trpc";
 import { formatCurrency, getEbaySearchTerm, getListingRedundancySummary, mapLiveEbayListings, PROFILES } from "@/lib/market-data";
-import type { Listing } from "@/lib/market-data";
+import type { Listing, LiveEbayItemDetail } from "@/lib/market-data";
 import { buildEbayReconciliationSnapshot, evaluateEbayItemDetailCoverage } from "@/shared/reconciliation-snapshots";
 
 export default function ReconcileScreen() {
@@ -16,10 +16,15 @@ export default function ReconcileScreen() {
   const [activeSlug, setActiveSlug] = useState(PROFILES[0].slug);
   const [query, setQuery] = useState("");
   const [offset, setOffset] = useState(0);
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const searchTerm = query.trim() || getEbaySearchTerm(activeSlug);
   const browse = trpc.marketplace.searchEbay.useQuery(
     { query: searchTerm, marketplaceId: "EBAY_GB", limit: 20, offset },
     { staleTime: 60_000, refetchOnWindowFocus: false, retry: 1 },
+  );
+  const itemDetail = trpc.marketplace.getEbayItem.useQuery(
+    { itemId: selectedItemId ?? "disabled-item", marketplaceId: "EBAY_GB" },
+    { enabled: Boolean(selectedItemId), staleTime: 60_000, refetchOnWindowFocus: false, retry: 1 },
   );
   const snapshots = trpc.reconciliationSnapshots.list.useQuery(undefined, { enabled: isAuthenticated, staleTime: 30_000 });
   const saveSnapshot = trpc.reconciliationSnapshots.upsert.useMutation();
@@ -99,6 +104,7 @@ export default function ReconcileScreen() {
               {isAuthenticated ? <Pressable onPress={() => void saveCurrentSnapshot()} disabled={saveState === "saving" || !listings.length} style={({ pressed }) => [styles.saveButton, { backgroundColor: colors.primary }, (!listings.length || saveState === "saving") && styles.disabled, pressed && styles.pressed]}><Text style={[styles.saveButtonText, { color: colors.onPrimary }]}>{saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : "Save page"}</Text></Pressable> : null}
             </View>
             {saveState === "error" ? <Text style={[styles.saveError, { color: colors.error }]}>Some rows could not be persisted. The provider page remains available for retry.</Text> : null}
+            {selectedItemId ? <ItemDetailCard detail={(itemDetail.data ?? null) as LiveEbayItemDetail | null} loading={itemDetail.isLoading} error={Boolean(itemDetail.error)} profileSlug={activeSlug} colors={colors} onClose={() => setSelectedItemId(null)} /> : null}
 
             <View style={styles.metaRow}><Text style={[styles.metaText, { color: colors.muted }]}>{browse.data ? `Fetched ${new Date(browse.data.fetchedAt).toLocaleString()}` : "Waiting for provider response"}</Text><Text style={[styles.metaText, { color: colors.muted }]}>{browse.data ? `Rows ${offset + 1}–${offset + listings.length} of ${browse.data.total}` : ""}</Text></View>
             <Text style={[styles.identityMeta, { color: colors.muted }]}>Seller identity: {redundancy.sellerIdentity === "known" ? `${redundancy.sellerCount} seller IDs returned` : "unavailable in provider rows"}. Concentration is not inferred when identity is unavailable.</Text>
@@ -108,7 +114,7 @@ export default function ReconcileScreen() {
             <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Normalized provider rows</Text>
           </View>
         }
-        renderItem={({ item }) => <ReconciliationRow listing={item} profileSlug={activeSlug} colors={colors} />}
+        renderItem={({ item }) => <ReconciliationRow listing={item} profileSlug={activeSlug} colors={colors} onInspect={() => setSelectedItemId(item.id.replace(/^ebay:/, ""))} />}
         ListFooterComponent={
           <View style={styles.footer}>
             <Pressable onPress={() => void browse.refetch()} disabled={browse.isFetching} style={({ pressed }) => [styles.footerButton, { backgroundColor: colors.primary }, pressed && styles.pressed]}><Text style={[styles.footerButtonText, { color: colors.onPrimary }]}>{browse.isFetching ? "Refreshing…" : "Refresh source"}</Text></Pressable>
@@ -125,7 +131,7 @@ function Metric({ label, value, colors }: { label: string; value: string; colors
   return <View style={[styles.metric, { backgroundColor: colors.surface, borderColor: colors.border }]}><Text style={[styles.metricValue, { color: colors.foreground }]}>{value}</Text><Text style={[styles.metricLabel, { color: colors.muted }]}>{label}</Text></View>;
 }
 
-function ReconciliationRow({ listing, profileSlug, colors }: { listing: Listing; profileSlug: string; colors: ReturnType<typeof useColors> }) {
+function ReconciliationRow({ listing, profileSlug, colors, onInspect }: { listing: Listing; profileSlug: string; colors: ReturnType<typeof useColors>; onInspect: () => void }) {
   const characteristicPrompts = evaluateEbayItemDetailCoverage({ profileSlug, localizedAspects: [] }).recommendedMissing;
   return <View style={[styles.row, { backgroundColor: colors.surface, borderColor: colors.border }]}>
     <View style={styles.rowTop}><Text style={[styles.rowTitle, { color: colors.foreground }]} numberOfLines={2}>{listing.model}</Text><Text style={[styles.rowPrice, { color: colors.foreground }]}>{formatCurrency(listing.askingPrice, listing.currency)}</Text></View>
@@ -133,6 +139,20 @@ function ReconciliationRow({ listing, profileSlug, colors }: { listing: Listing;
     <View style={styles.rowTags}><Text style={[styles.tag, { color: colors.primary }]}>ASK OBSERVATION</Text><Text style={[styles.tag, { color: colors.muted }]}>eBay Browse</Text></View>
     {characteristicPrompts.length ? <Text style={[styles.rowPrompt, { color: colors.muted }]}>Inspect seller aspects: {characteristicPrompts.join(", ")}</Text> : null}
     <Text style={[styles.rowDisclaimer, { color: colors.muted }]}>No market value, stock confirmation, or resale outcome inferred.</Text>
+    <Pressable onPress={onInspect} style={({ pressed }) => [styles.inspectButton, { borderColor: colors.primary }, pressed && styles.pressed]}><Text style={[styles.inspectButtonText, { color: colors.primary }]}>Fetch item characteristics</Text></Pressable>
+  </View>;
+}
+
+function ItemDetailCard({ detail, loading, error, profileSlug, colors, onClose }: { detail: LiveEbayItemDetail | null; loading: boolean; error: boolean; profileSlug: string; colors: ReturnType<typeof useColors>; onClose: () => void }) {
+  const coverage = evaluateEbayItemDetailCoverage(detail ? { ...detail, profileSlug } : null);
+  return <View style={[styles.detailCard, { backgroundColor: colors.surface, borderColor: colors.primary }]}>
+    <View style={styles.detailHeader}><Text style={[styles.detailTitle, { color: colors.foreground }]}>Provider item detail</Text><Pressable onPress={onClose}><MaterialIcons name="close" size={19} color={colors.muted} /></Pressable></View>
+    {loading ? <Text style={[styles.detailText, { color: colors.muted }]}>Fetching seller-provided characteristics…</Text> : error ? <Text style={[styles.detailText, { color: colors.error }]}>Item detail unavailable. No substitute characteristics are shown.</Text> : detail ? <>
+      <Text style={[styles.detailText, { color: colors.muted }]}>Fetched {new Date(detail.fetchedAt).toLocaleString()} · {detail.itemId}</Text>
+      <Text style={[styles.detailCoverage, { color: coverage.state === "present" ? colors.success : colors.warning }]}>{coverage.state === "present" ? "Characteristic coverage present" : coverage.state === "partial" ? "Characteristic coverage partial" : "Characteristic coverage unavailable"}</Text>
+      {detail.localizedAspects.length ? detail.localizedAspects.slice(0, 8).map((aspect) => <Text key={`${aspect.name}-${aspect.value}`} style={[styles.detailAspect, { color: colors.foreground }]}>{aspect.name}: {aspect.value}</Text>) : <Text style={[styles.detailText, { color: colors.muted }]}>The provider returned no localized aspects for this item.</Text>}
+      <Text style={[styles.detailText, { color: colors.muted }]}>These are seller/provider fields only. They do not establish authenticity, value, stock or allocation eligibility.</Text>
+    </> : null}
   </View>;
 }
 
@@ -182,6 +202,14 @@ const styles = StyleSheet.create({
   tag: { fontSize: 10, fontWeight: "800", letterSpacing: 0.5 },
   rowPrompt: { fontSize: 11, lineHeight: 16, marginTop: 9 },
   rowDisclaimer: { fontSize: 11, marginTop: 10, lineHeight: 16 },
+  inspectButton: { alignSelf: "flex-start", borderWidth: 1, borderRadius: 10, paddingHorizontal: 11, paddingVertical: 8, marginTop: 12 },
+  inspectButtonText: { fontSize: 11, fontWeight: "800" },
+  detailCard: { borderWidth: 1, borderRadius: 16, padding: 14, marginBottom: 14 },
+  detailHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  detailTitle: { fontSize: 14, fontWeight: "800" },
+  detailText: { fontSize: 11, lineHeight: 16, marginTop: 8 },
+  detailCoverage: { fontSize: 11, fontWeight: "800", marginTop: 9 },
+  detailAspect: { fontSize: 12, lineHeight: 17, marginTop: 5 },
   footer: { paddingTop: 8 },
   footerButton: { alignItems: "center", borderRadius: 14, paddingVertical: 13 },
   footerButtonText: { fontSize: 13, fontWeight: "800" },
