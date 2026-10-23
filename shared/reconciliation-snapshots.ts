@@ -27,6 +27,23 @@ export type SnapshotComparison = {
   comparableObservationCount: number;
 };
 
+export type SnapshotFreshness = {
+  state: "unknown" | "fresh" | "aging" | "stale";
+  ageHours?: number;
+};
+
+/**
+ * Age is a data-quality prompt only. It is not an availability, sale, value,
+ * or stock inference. Thresholds are intentionally coarse and visible to the UI.
+ */
+export function getSnapshotFreshness(sourceFetchedAt: string | Date, now: string | Date = new Date()): SnapshotFreshness {
+  const fetchedMs = new Date(sourceFetchedAt).getTime();
+  const nowMs = new Date(now).getTime();
+  if (!Number.isFinite(fetchedMs) || !Number.isFinite(nowMs)) return { state: "unknown" };
+  const ageHours = Math.max(0, (nowMs - fetchedMs) / 3_600_000);
+  return { state: ageHours <= 24 ? "fresh" : ageHours <= 168 ? "aging" : "stale", ageHours };
+}
+
 export function compareSnapshotToPrior<T extends { providerListingId: string; askingPrice: number; currency?: string | null; sourceFetchedAt: string | Date }>(current: T, history: T[]): SnapshotComparison {
   const currency = current.currency ?? undefined;
   const comparable = history

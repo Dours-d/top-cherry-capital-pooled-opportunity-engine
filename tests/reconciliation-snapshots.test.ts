@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildEbayReconciliationSnapshot, compareSnapshotToPrior } from "../shared/reconciliation-snapshots";
+import { buildEbayReconciliationSnapshot, compareSnapshotToPrior, getSnapshotFreshness } from "../shared/reconciliation-snapshots";
 
 const listing = {
   listingId: "v1|123456",
@@ -52,5 +52,13 @@ describe("reconciliation snapshots", () => {
     const prior = { providerListingId: "v1|123456", askingPrice: 8500, currency: "EUR", sourceFetchedAt: "2026-10-22T10:00:00.000Z" };
     expect(compareSnapshotToPrior(current, [prior])).toMatchObject({ state: "unknown", comparableObservationCount: 0 });
     expect(compareSnapshotToPrior({ ...current, currency: undefined as string | undefined }, [prior]).state).toBe("unknown");
+  });
+
+  it("classifies observation age as a data-quality prompt only", () => {
+    const now = "2026-10-23T12:00:00.000Z";
+    expect(getSnapshotFreshness("2026-10-23T11:00:00.000Z", now).state).toBe("fresh");
+    expect(getSnapshotFreshness("2026-10-22T00:00:00.000Z", now).state).toBe("aging");
+    expect(getSnapshotFreshness("2026-10-01T00:00:00.000Z", now).state).toBe("stale");
+    expect(getSnapshotFreshness("not-a-date", now).state).toBe("unknown");
   });
 });

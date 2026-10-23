@@ -90,6 +90,7 @@ R2 full real-data ingestion, R3 response estimation, R4 network feedback and R5 
 - [x] R2.0b Normalized snapshot persistence: authenticated users can save the current eBay Browse page as user-scoped normalized observation rows with idempotent snapshot keys, source provenance, asking price/currency, seller/location when available, source fetch time and explicit `observed` reconciliation status; no market-value or allocation fields are stored.
 - [x] R2.0c Snapshot review queue: Workspace lists authenticated persisted observations with observed/reviewed/superseded filters; changing status requires a note and reviewer timestamp, and the UI states that review is evidence curation only—not stock, valuation, outcome or allocation approval.
 - [x] R2.0d Cross-fetch comparison: Workspace compares the same provider listing against earlier persisted observations only when currency matches, reports unchanged/increased/decreased/unknown state, and labels movement as asking-price evidence rather than a sale or market-value signal.
+- [x] R2.0e Observation aging: persisted source observations display fresh/aging/stale/unknown quality prompts from source fetch time using coarse 24-hour/7-day thresholds; age never infers availability, sale, stock or value.
 
 ## Existing boundaries
 - eBay account-deletion delivery does not establish Browse search or listing-stream permissions.
