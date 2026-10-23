@@ -21,6 +21,11 @@ export type OutcomeSyncAuditRecord = {
   note: string;
 };
 
+export type PendingOutcomeSyncAudit = OutcomeSyncAuditRecord & {
+  syncError?: string;
+  lastAttemptAt?: string;
+};
+
 export function mergeOutcomeSyncAudits(local: OutcomeSyncAuditRecord[], remote: OutcomeSyncAuditRecord[], limit = 100): OutcomeSyncAuditRecord[] {
   const byId = new Map<string, OutcomeSyncAuditRecord>();
   for (const audit of [...local, ...remote]) {
