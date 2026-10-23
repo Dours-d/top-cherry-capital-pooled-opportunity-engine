@@ -47,6 +47,16 @@ export type ItemDetailCharacteristicCoverage = {
   state: "unavailable" | "partial" | "present";
   aspectCount: number;
   requiredMissing: string[];
+  recommendedMissing: string[];
+};
+
+export const EBAY_PROFILE_CHARACTERISTIC_RECOMMENDATIONS: Record<string, string[]> = {
+  luxury_watches: ["Brand", "Model", "Reference Number", "Condition"],
+  cameras: ["Brand", "Model", "Megapixels", "Condition"],
+  cars: ["Make", "Model", "Year", "Mileage"],
+  audio: ["Brand", "Model", "Connectivity", "Condition"],
+  instruments: ["Brand", "Model", "Instrument Family", "Condition"],
+  jewellery: ["Brand", "Material", "Main Stone", "Condition"],
 };
 
 export const DEFAULT_SNAPSHOT_FRESHNESS_THRESHOLD: SnapshotFreshnessThreshold = { freshHours: 24, agingHours: 168 };
@@ -84,14 +94,16 @@ export function evaluateSnapshotReconciliation(snapshot: Record<string, unknown>
   return { state: requiredMissing.length ? "needs-attention" : "ready", requiredMissing, recommendedMissing: recommended.filter(missing) };
 }
 
-export function evaluateEbayItemDetailCoverage(detail?: { itemId?: string; title?: string; askingPrice?: number; condition?: string; fetchedAt?: string; localizedAspects?: { name?: string; value?: string }[] | null } | null): ItemDetailCharacteristicCoverage {
-  if (!detail) return { state: "unavailable", aspectCount: 0, requiredMissing: ["item detail response"] };
+export function evaluateEbayItemDetailCoverage(detail?: { itemId?: string; title?: string; askingPrice?: number; condition?: string; fetchedAt?: string; profileSlug?: string; localizedAspects?: { name?: string; value?: string }[] | null } | null): ItemDetailCharacteristicCoverage {
+  if (!detail) return { state: "unavailable", aspectCount: 0, requiredMissing: ["item detail response"], recommendedMissing: [] };
   const requiredMissing = ["itemId", "title", "askingPrice", "condition", "fetchedAt"].filter((field) => {
     const value = detail[field as keyof typeof detail];
     return value === undefined || value === null || (typeof value === "string" && value.trim().length === 0) || (field === "askingPrice" && (!Number.isFinite(value as number) || (value as number) < 0));
   });
-  const aspectCount = (detail.localizedAspects ?? []).filter((aspect) => aspect.name?.trim() && aspect.value?.trim()).length;
-  return { state: requiredMissing.length || aspectCount === 0 ? "partial" : "present", aspectCount, requiredMissing };
+  const validAspects = (detail.localizedAspects ?? []).filter((aspect) => aspect.name?.trim() && aspect.value?.trim());
+  const aspectNames = new Set(validAspects.map((aspect) => aspect.name!.trim().toLowerCase()));
+  const recommendedMissing = (EBAY_PROFILE_CHARACTERISTIC_RECOMMENDATIONS[detail.profileSlug ?? ""] ?? []).filter((name) => !aspectNames.has(name.toLowerCase()));
+  return { state: requiredMissing.length || validAspects.length === 0 ? "partial" : "present", aspectCount: validAspects.length, requiredMissing, recommendedMissing };
 }
 
 /**

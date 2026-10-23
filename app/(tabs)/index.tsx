@@ -494,7 +494,7 @@ function LiveAskingPriceLens({ listing, redundancy, colors, loading, error, focu
 
 function LiveAskingPriceDetail({ listing, colors, detail, loading }: { listing: Listing; colors: ReturnType<typeof useColors>; detail?: LiveEbayItemDetail; loading: boolean }) {
   const aspects = detail?.localizedAspects.slice(0, 8) ?? [];
-  const characteristicCoverage = evaluateEbayItemDetailCoverage(detail);
+  const characteristicCoverage = evaluateEbayItemDetailCoverage(detail ? { ...detail, profileSlug: listing.profileSlug } : null);
   const gate = getAskingPriceDecisionGate(listing);
   return (
     <View style={[styles.layerLens, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -512,6 +512,7 @@ function LiveAskingPriceDetail({ listing, colors, detail, loading }: { listing: 
       <ListingOutcomeLedger listing={listing} colors={colors} />
       <Text style={[styles.detailSubheading, { color: colors.foreground }]}>Item characteristics</Text>
       <Text style={[styles.layerText, { color: characteristicCoverage.state === "present" ? colors.success : colors.warning }]}>{characteristicCoverage.state === "unavailable" ? "Seller-provided characteristics unavailable until the item-detail response returns." : `${characteristicCoverage.aspectCount} seller-provided characteristic${characteristicCoverage.aspectCount === 1 ? "" : "s"} returned.`} Characteristic coverage is not a completeness, authenticity, value or stock claim.</Text>
+      {characteristicCoverage.recommendedMissing.length ? <Text style={[styles.layerText, { color: colors.muted }]}>Profile checks still absent: {characteristicCoverage.recommendedMissing.join(", ")}. These are research prompts only.</Text> : null}
       {loading ? <Text style={[styles.layerText, { color: colors.muted }]}>Loading eBay item details…</Text> : aspects.length ? aspects.map((aspect) => <View key={`${aspect.name}-${aspect.value}`} style={styles.aspectRow}><Text style={[styles.aspectName, { color: colors.muted }]}>{aspect.name}</Text><Text style={[styles.aspectValue, { color: colors.foreground }]}>{aspect.value}</Text></View>) : <Text style={[styles.layerText, { color: colors.muted }]}>No seller-provided characteristics were returned for this listing.</Text>}
     </View>
   );

@@ -97,6 +97,7 @@ R2 full real-data ingestion, R3 response estimation, R4 network feedback and R5 
 - [x] R2.0i Provider reconciliation rules: eBay and fallback providers distinguish required identity/price/timestamp fields from recommended enrichment; Workspace shows ready/needs-attention prompts without creating valuation or stock evidence.
 - [x] R2.0j History parity: the focused per-listing history screen reuses the same provider-quality evaluator, shows required-field attention counts and recommended enrichment prompts, and keeps them separate from movement, freshness, sale, stock and valuation interpretation.
 - [x] R2.0k eBay item-detail coverage: Discover classifies the item-detail response as unavailable, partial, or present based on core response fields and seller-provided aspects; characteristic presence is explicitly non-blocking and non-valuational.
+- [x] R2.0l Profile-aware characteristics: eBay detail views recommend market-specific seller fields for watches, cameras, cars, audio, instruments and jewellery; missing recommendations remain non-blocking research prompts.
 
 ## Existing boundaries
 - eBay account-deletion delivery does not establish Browse search or listing-stream permissions.

@@ -79,6 +79,6 @@ describe("reconciliation snapshots", () => {
   it("treats eBay item characteristics as seller-supplied coverage, not completeness", () => {
     expect(evaluateEbayItemDetailCoverage().state).toBe("unavailable");
     expect(evaluateEbayItemDetailCoverage({ itemId: "v1|123456", title: "Watch", askingPrice: 8500, condition: "Used", fetchedAt: "2026-10-23T10:00:00.000Z", localizedAspects: [] })).toMatchObject({ state: "partial", aspectCount: 0 });
-    expect(evaluateEbayItemDetailCoverage({ itemId: "v1|123456", title: "Watch", askingPrice: 8500, condition: "Used", fetchedAt: "2026-10-23T10:00:00.000Z", localizedAspects: [{ name: "Brand", value: "Rolex" }] })).toMatchObject({ state: "present", aspectCount: 1, requiredMissing: [] });
+    expect(evaluateEbayItemDetailCoverage({ itemId: "v1|123456", title: "Watch", askingPrice: 8500, condition: "Used", fetchedAt: "2026-10-23T10:00:00.000Z", profileSlug: "luxury_watches", localizedAspects: [{ name: "Brand", value: "Rolex" }] })).toMatchObject({ state: "present", aspectCount: 1, requiredMissing: [], recommendedMissing: ["Model", "Reference Number", "Condition"] });
   });
 });
