@@ -15,10 +15,11 @@ import { EbayMonitor } from "@/components/ebay-monitor";
 import { ThesisDraftEditor } from "@/components/thesis-draft-editor";
 import { mergeObservationReviews, normalizeObservationReview, type ObservationReview } from "@/shared/observation-reviews";
 import { mergeListingOutcomes } from "@/shared/listing-outcomes";
-import { dismissPendingOutcome, restoreDismissedOutcome as restoreDismissedOutcomeTransition, type OutcomeSyncDismissal, type PendingOutcomeRecord } from "@/shared/outcome-sync-queue";
+import { dismissalsFromOutcomeSyncAudits, dismissPendingOutcome, mergeOutcomeSyncAudits, restoreDismissedOutcome as restoreDismissedOutcomeTransition, type OutcomeSyncAuditRecord, type OutcomeSyncDismissal, type PendingOutcomeRecord } from "@/shared/outcome-sync-queue";
 
 const EBAY_READINESS_KEY = "topCherry.ebayReadiness";
 const OBSERVATION_REVIEW_STORAGE_KEY = "topCherry.observationReviews";
+const OUTCOME_SYNC_AUDIT_STORAGE_KEY = "topCherry.outcomeSyncAudits";
 const EBAY_READINESS_ITEMS = [
   { id: "browse", label: "Verify read-only Browse access", detail: "Application-token search is verified for EBAY_GB.", state: "DONE" },
   { id: "details", label: "Verify item-detail characteristics", detail: "getItem PRODUCT details are requested when a live listing opens.", state: "DONE" },
@@ -35,8 +36,10 @@ export default function ProfileScreen() {
   const updatePreferences = trpc.preferences.update.useMutation({ onSuccess: () => void preferencesQuery.refetch() });
   const remoteReviews = trpc.observationReviews.list.useQuery(undefined, { enabled: isAuthenticated });
   const remoteOutcomes = trpc.listingOutcomes.list.useQuery(undefined, { enabled: isAuthenticated });
+  const remoteOutcomeAudits = trpc.outcomeSyncAudits.list.useQuery(undefined, { enabled: isAuthenticated });
   const syncReview = trpc.observationReviews.upsert.useMutation();
   const syncOutcome = trpc.listingOutcomes.upsert.useMutation();
+  const syncOutcomeAudit = trpc.outcomeSyncAudits.upsert.useMutation();
   const [alerts, setAlerts] = useState(true);
   const [dailyDigest, setDailyDigest] = useState(false);
   const [economics, setEconomics] = useState(DEFAULT_ECONOMICS);
@@ -47,6 +50,7 @@ export default function ProfileScreen() {
   const [pendingOutcomeSyncs, setPendingOutcomeSyncs] = useState(0);
   const [pendingOutcomeRecords, setPendingOutcomeRecords] = useState<PendingOutcomeRecord[]>([]);
   const [dismissedOutcomeRecords, setDismissedOutcomeRecords] = useState<OutcomeSyncDismissal[]>([]);
+  const [outcomeSyncAudits, setOutcomeSyncAudits] = useState<OutcomeSyncAuditRecord[]>([]);
   const [autoRetryAttempted, setAutoRetryAttempted] = useState(false);
 
   useEffect(() => {
@@ -69,7 +73,7 @@ export default function ProfileScreen() {
   }, []);
 
   useEffect(() => {
-    void Promise.all([AsyncStorage.getItem(OBSERVATION_SCHEDULE_STORAGE_KEY), AsyncStorage.getItem(OUTCOME_STORAGE_KEY), AsyncStorage.getItem(OBSERVATION_REVIEW_STORAGE_KEY), AsyncStorage.getItem(OUTCOME_SYNC_QUEUE_STORAGE_KEY), AsyncStorage.getItem(OUTCOME_SYNC_DISMISSAL_STORAGE_KEY)]).then(([scheduleRaw, outcomesRaw, reviewsRaw, pendingRaw, dismissalRaw]) => {
+    void Promise.all([AsyncStorage.getItem(OBSERVATION_SCHEDULE_STORAGE_KEY), AsyncStorage.getItem(OUTCOME_STORAGE_KEY), AsyncStorage.getItem(OBSERVATION_REVIEW_STORAGE_KEY), AsyncStorage.getItem(OUTCOME_SYNC_QUEUE_STORAGE_KEY), AsyncStorage.getItem(OUTCOME_SYNC_DISMISSAL_STORAGE_KEY), AsyncStorage.getItem(OUTCOME_SYNC_AUDIT_STORAGE_KEY)]).then(([scheduleRaw, outcomesRaw, reviewsRaw, pendingRaw, dismissalRaw, auditRaw]) => {
       try {
         const schedules = scheduleRaw ? JSON.parse(scheduleRaw) as Record<string, string | { nextObserveAt: string }> : {};
         setFollowUps(Object.entries(schedules).map(([listingId, value]) => typeof value === "string" ? { listingId, nextObserveAt: value } : { listingId, ...value }).filter((item) => item.nextObserveAt).sort((a, b) => new Date(a.nextObserveAt).getTime() - new Date(b.nextObserveAt).getTime()));
@@ -77,6 +81,7 @@ export default function ProfileScreen() {
       try { setFollowUpOutcomes(outcomesRaw ? JSON.parse(outcomesRaw) as ListingOutcome[] : []); } catch { setFollowUpOutcomes([]); }
       try { const pending = pendingRaw ? JSON.parse(pendingRaw) as PendingOutcomeRecord[] : []; setPendingOutcomeRecords(pending.filter((item) => typeof item.id === "string" && typeof item.listingId === "string")); setPendingOutcomeSyncs(pending.length); } catch { setPendingOutcomeRecords([]); setPendingOutcomeSyncs(0); }
       try { const dismissals = dismissalRaw ? JSON.parse(dismissalRaw) as OutcomeSyncDismissal[] : []; setDismissedOutcomeRecords(dismissals.filter((item) => typeof item.outcomeId === "string" && typeof item.clearedAt === "string" && typeof item.note === "string").slice(0, 50)); } catch { setDismissedOutcomeRecords([]); }
+      try { const audits = auditRaw ? JSON.parse(auditRaw) as OutcomeSyncAuditRecord[] : []; setOutcomeSyncAudits(audits.filter((item) => typeof item.auditId === "string" && typeof item.outcomeId === "string" && (item.action === "dismissed" || item.action === "restored") && typeof item.occurredAt === "string" && typeof item.note === "string").slice(0, 100)); } catch { setOutcomeSyncAudits([]); }
       try {
         const parsed = reviewsRaw ? JSON.parse(reviewsRaw) as Partial<ObservationReview>[] : [];
         setRecentReviews(parsed.filter((review): review is Partial<ObservationReview> & Pick<ObservationReview, "listingId" | "reviewedAt"> => typeof review.listingId === "string" && typeof review.reviewedAt === "string").map(normalizeObservationReview).sort((a, b) => b.reviewedAt.localeCompare(a.reviewedAt)).slice(0, 20));
@@ -103,6 +108,18 @@ export default function ProfileScreen() {
       void AsyncStorage.setItem(OUTCOME_STORAGE_KEY, JSON.stringify(merged));
     }
   }, [isAuthenticated, remoteOutcomes.data, followUpOutcomes]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !remoteOutcomeAudits.data?.length) return;
+    const remote = remoteOutcomeAudits.data.map((audit) => ({ auditId: audit.auditId, outcomeId: audit.outcomeId, action: audit.action, occurredAt: new Date(audit.occurredAt).toISOString(), note: audit.note })) as OutcomeSyncAuditRecord[];
+    const merged = mergeOutcomeSyncAudits(outcomeSyncAudits, remote);
+    if (JSON.stringify(merged) !== JSON.stringify(outcomeSyncAudits)) {
+      setOutcomeSyncAudits(merged);
+      setDismissedOutcomeRecords(dismissalsFromOutcomeSyncAudits(merged, dismissedOutcomeRecords));
+      void AsyncStorage.setItem(OUTCOME_SYNC_AUDIT_STORAGE_KEY, JSON.stringify(merged));
+      void AsyncStorage.setItem(OUTCOME_SYNC_DISMISSAL_STORAGE_KEY, JSON.stringify(dismissalsFromOutcomeSyncAudits(merged, dismissedOutcomeRecords)));
+    }
+  }, [isAuthenticated, remoteOutcomeAudits.data, outcomeSyncAudits, dismissedOutcomeRecords]);
 
   const updateEconomics = (patch: Partial<EconomicsAssumptions>) => {
     const next = { ...economics, ...patch };
@@ -133,24 +150,37 @@ export default function ProfileScreen() {
     await AsyncStorage.setItem(OUTCOME_SYNC_QUEUE_STORAGE_KEY, JSON.stringify(remaining));
   };
 
+  const recordOutcomeSyncAudit = async (audit: OutcomeSyncAuditRecord) => {
+    const merged = mergeOutcomeSyncAudits(outcomeSyncAudits, [audit]);
+    setOutcomeSyncAudits(merged);
+    await AsyncStorage.setItem(OUTCOME_SYNC_AUDIT_STORAGE_KEY, JSON.stringify(merged));
+    if (isAuthenticated) {
+      await syncOutcomeAudit.mutateAsync(audit).catch(() => undefined);
+    }
+  };
+
   const clearPendingOutcome = async (outcomeId: string, note: string) => {
-    const result = dismissPendingOutcome(pendingOutcomeRecords, dismissedOutcomeRecords, outcomeId, note, new Date().toISOString());
+    const clearedAt = new Date().toISOString();
+    const result = dismissPendingOutcome(pendingOutcomeRecords, dismissedOutcomeRecords, outcomeId, note, clearedAt);
     if (!result) return;
     setDismissedOutcomeRecords(result.dismissals);
     setPendingOutcomeRecords(result.pending);
     setPendingOutcomeSyncs(result.pending.length);
     await AsyncStorage.setItem(OUTCOME_SYNC_QUEUE_STORAGE_KEY, JSON.stringify(result.pending));
     await AsyncStorage.setItem(OUTCOME_SYNC_DISMISSAL_STORAGE_KEY, JSON.stringify(result.dismissals));
+    await recordOutcomeSyncAudit({ auditId: `dismissed:${outcomeId}:${clearedAt}`, outcomeId, action: "dismissed", occurredAt: clearedAt, note: note.trim() });
   };
 
   const restoreDismissedOutcome = async (outcomeId: string, note: string) => {
-    const result = restoreDismissedOutcomeTransition(pendingOutcomeRecords, dismissedOutcomeRecords, followUpOutcomes, outcomeId, note, new Date().toISOString());
+    const restoredAt = new Date().toISOString();
+    const result = restoreDismissedOutcomeTransition(pendingOutcomeRecords, dismissedOutcomeRecords, followUpOutcomes, outcomeId, note, restoredAt);
     if (!result) return;
     setPendingOutcomeRecords(result.pending);
     setPendingOutcomeSyncs(result.pending.length);
     setDismissedOutcomeRecords(result.dismissals);
     await AsyncStorage.setItem(OUTCOME_SYNC_QUEUE_STORAGE_KEY, JSON.stringify(result.pending));
     await AsyncStorage.setItem(OUTCOME_SYNC_DISMISSAL_STORAGE_KEY, JSON.stringify(result.dismissals));
+    await recordOutcomeSyncAudit({ auditId: `restored:${outcomeId}:${restoredAt}`, outcomeId, action: "restored", occurredAt: restoredAt, note: note.trim() });
   };
 
   useEffect(() => {
@@ -185,7 +215,7 @@ export default function ProfileScreen() {
             } catch { return undefined; }
           });
         }} />
-        <SyncedOutcomeHistory colors={colors} outcomes={followUpOutcomes} authenticated={isAuthenticated} pendingSyncs={pendingOutcomeSyncs} pendingRecords={pendingOutcomeRecords} dismissedRecords={dismissedOutcomeRecords} onRetryPending={() => void retryPendingOutcomeSync()} onClearPending={(outcomeId, note) => void clearPendingOutcome(outcomeId, note)} onRestorePending={(outcomeId, note) => void restoreDismissedOutcome(outcomeId, note)} retrying={syncOutcome.isPending} />
+        <SyncedOutcomeHistory colors={colors} outcomes={followUpOutcomes} authenticated={isAuthenticated} auditCount={outcomeSyncAudits.length} pendingSyncs={pendingOutcomeSyncs} pendingRecords={pendingOutcomeRecords} dismissedRecords={dismissedOutcomeRecords} onRetryPending={() => void retryPendingOutcomeSync()} onClearPending={(outcomeId, note) => void clearPendingOutcome(outcomeId, note)} onRestorePending={(outcomeId, note) => void restoreDismissedOutcome(outcomeId, note)} retrying={syncOutcome.isPending} />
         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>eBay authorization readiness</Text>
         <EbayReadinessChecklist colors={colors} completed={ebayReadiness} onToggle={(id) => {
           const next = { ...ebayReadiness, [id]: !ebayReadiness[id] };
@@ -266,7 +296,7 @@ function ObservationFollowUpQueue({ colors, followUps, outcomes, recentReviews, 
   </View>;
 }
 
-function SyncedOutcomeHistory({ colors, outcomes, authenticated, pendingSyncs, pendingRecords, dismissedRecords, onRetryPending, onClearPending, onRestorePending, retrying }: { colors: ReturnType<typeof useColors>; outcomes: ListingOutcome[]; authenticated: boolean; pendingSyncs: number; pendingRecords: PendingOutcomeRecord[]; dismissedRecords: OutcomeSyncDismissal[]; onRetryPending: () => void; onClearPending: (outcomeId: string, note: string) => void; onRestorePending: (outcomeId: string, note: string) => void; retrying: boolean }) {
+function SyncedOutcomeHistory({ colors, outcomes, authenticated, auditCount, pendingSyncs, pendingRecords, dismissedRecords, onRetryPending, onClearPending, onRestorePending, retrying }: { colors: ReturnType<typeof useColors>; outcomes: ListingOutcome[]; authenticated: boolean; auditCount: number; pendingSyncs: number; pendingRecords: PendingOutcomeRecord[]; dismissedRecords: OutcomeSyncDismissal[]; onRetryPending: () => void; onClearPending: (outcomeId: string, note: string) => void; onRestorePending: (outcomeId: string, note: string) => void; retrying: boolean }) {
   const [clearTarget, setClearTarget] = useState<string | null>(null);
   const [clearNote, setClearNote] = useState("");
   const [restoreTarget, setRestoreTarget] = useState<string | null>(null);
@@ -276,7 +306,7 @@ function SyncedOutcomeHistory({ colors, outcomes, authenticated, pendingSyncs, p
   const visibleOutcomes = statusFilter === "all" || statusFilter === "synced" ? outcomes : [];
   const visibleDismissals = statusFilter === "all" || statusFilter === "dismissed" ? dismissedRecords : [];
   return <View style={[styles.outcomeHistoryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-    <View style={styles.readinessHeader}><View style={styles.settingCopy}><Text style={[styles.settingTitle, { color: colors.foreground }]}>Outcome evidence history</Text><Text style={[styles.settingDescription, { color: colors.muted }]}>{authenticated ? `${outcomes.length} local/server observations reconciled` : `${outcomes.length} local observations`}{pendingSyncs ? ` · ${pendingSyncs} pending sync` : ""}</Text></View><MaterialIcons name="fact-check" size={20} color={colors.primary} /></View>
+    <View style={styles.readinessHeader}><View style={styles.settingCopy}><Text style={[styles.settingTitle, { color: colors.foreground }]}>Outcome evidence history</Text><Text style={[styles.settingDescription, { color: colors.muted }]}>{authenticated ? `${outcomes.length} local/server observations reconciled` : `${outcomes.length} local observations`}{pendingSyncs ? ` · ${pendingSyncs} pending sync` : ""}</Text><Text style={[styles.settingDescription, { color: colors.muted }]}>{authenticated ? `${auditCount} dismissal/restoration audit events account-synced` : "Dismissal/restoration audit events stay on this device until sign-in"}</Text></View><MaterialIcons name="fact-check" size={20} color={colors.primary} /></View>
     <Text style={[styles.dataNote, { color: colors.muted }]}>These are recorded observations, not verified market value, forecasts, or execution instructions. A realized price is evidence attached to an event, not an automatic benchmark.</Text>
     <View style={styles.filterRow}>{(["all", "pending", "synced", "dismissed"] as const).map((option) => <Pressable key={option} onPress={() => setStatusFilter(option)} style={({ pressed }) => [styles.filterChip, { backgroundColor: statusFilter === option ? colors.foreground : colors.background, borderColor: colors.border }, pressed && styles.pressed]}><Text style={[styles.filterChipText, { color: statusFilter === option ? colors.background : colors.muted }]}>{option === "all" ? `All (${outcomes.length + pendingRecords.length + dismissedRecords.length})` : option === "pending" ? `Pending (${pendingRecords.length})` : option === "synced" ? `Synced (${outcomes.length})` : `Dismissed (${dismissedRecords.length})`}</Text></Pressable>)}</View>
     {authenticated && visiblePending.length ? <Pressable onPress={onRetryPending} disabled={retrying} style={({ pressed }) => [styles.retryAllButton, { backgroundColor: colors.primary }, pressed && styles.pressed]}><Text style={[styles.retryAllText, { color: colors.onPrimary }]}>{retrying ? "Retrying pending syncs…" : `Retry all pending (${visiblePending.length})`}</Text></Pressable> : null}

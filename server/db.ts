@@ -1,6 +1,6 @@
 import { and, count, desc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { ebayListingEvents, ebayNotificationEvents, InsertEbayListingEvent, InsertEbayNotificationEvent, InsertListingOutcome, InsertObservationReview, InsertSavedDeal, InsertThesisContradictionReview, InsertThesisDraftRevision, InsertUser, listingOutcomes, observationReviews, savedDeals, thesisContradictionReviews, thesisDraftRevisions, userPreferences, users } from "../drizzle/schema";
+import { ebayListingEvents, ebayNotificationEvents, InsertEbayListingEvent, InsertEbayNotificationEvent, InsertListingOutcome, InsertObservationReview, InsertOutcomeSyncAudit, InsertSavedDeal, InsertThesisContradictionReview, InsertThesisDraftRevision, InsertUser, listingOutcomes, observationReviews, outcomeSyncAudits, savedDeals, thesisContradictionReviews, thesisDraftRevisions, userPreferences, users } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import { buildEbayMarketSignals } from "../shared/ebay-signals";
 
@@ -154,6 +154,20 @@ export async function listListingOutcomes(userId: number, limit = 100) {
   const db = await getDb();
   if (!db) return [];
   return db.select().from(listingOutcomes).where(eq(listingOutcomes.userId, userId)).orderBy(desc(listingOutcomes.observedAt)).limit(limit);
+}
+
+export async function upsertOutcomeSyncAudit(audit: InsertOutcomeSyncAudit) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.insert(outcomeSyncAudits).values(audit).onDuplicateKeyUpdate({ set: { outcomeId: audit.outcomeId, action: audit.action, occurredAt: audit.occurredAt, note: audit.note } });
+  const result = await db.select().from(outcomeSyncAudits).where(and(eq(outcomeSyncAudits.userId, audit.userId), eq(outcomeSyncAudits.auditId, audit.auditId))).limit(1);
+  return result[0];
+}
+
+export async function listOutcomeSyncAudits(userId: number, limit = 100) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(outcomeSyncAudits).where(eq(outcomeSyncAudits.userId, userId)).orderBy(desc(outcomeSyncAudits.occurredAt)).limit(limit);
 }
 
 export async function insertEbayNotificationEvent(event: InsertEbayNotificationEvent) {

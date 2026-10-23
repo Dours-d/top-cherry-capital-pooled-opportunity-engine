@@ -80,6 +80,7 @@ Direction accepted on 14 October 2026, clarified as a multi-mechanism architectu
 - [x] R1.8l Outcome status filters: Workspace can filter All, Pending, Synced, and Dismissed records; retry and clear controls appear only in the relevant status view.
 - [x] R1.8m Audited restoration: dismissed records can return to the pending queue only with a required restore note; original dismissal and restoration timestamps/notes remain visible and no server write is implied.
 - [x] R1.8n Queue transition hardening: dismissal and restoration rules are pure shared helpers with regression coverage for required notes, duplicate prevention, preserved audit context, and retry-required state.
+- [x] R1.8o Account-scoped audit history: dismissal/restoration events have an additive user-scoped table, protected list/upsert procedures, deterministic local/remote merge, and visible Workspace sync status; anonymous users retain local fallback.
 - [ ] R1.8 End-to-end acceptance.
 
 ## Later phases — paused

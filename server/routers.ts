@@ -58,6 +58,14 @@ const listingOutcomeInput = z.object({
   note: z.string().max(1000).optional(),
 });
 
+const outcomeSyncAuditInput = z.object({
+  auditId: z.string().min(1).max(160),
+  outcomeId: z.string().min(1).max(160),
+  action: z.enum(["dismissed", "restored"]),
+  occurredAt: z.string().datetime(),
+  note: z.string().min(1).max(1000),
+});
+
 export const appRouter = router({
   system: systemRouter,
   auth: router({
@@ -114,6 +122,10 @@ export const appRouter = router({
   listingOutcomes: router({
     list: protectedProcedure.query(({ ctx }) => db.listListingOutcomes(ctx.user.id)),
     upsert: protectedProcedure.input(listingOutcomeInput).mutation(({ ctx, input }) => db.upsertListingOutcome({ userId: ctx.user.id, ...input, observedAt: new Date(input.observedAt) })),
+  }),
+  outcomeSyncAudits: router({
+    list: protectedProcedure.query(({ ctx }) => db.listOutcomeSyncAudits(ctx.user.id)),
+    upsert: protectedProcedure.input(outcomeSyncAuditInput).mutation(({ ctx, input }) => db.upsertOutcomeSyncAudit({ userId: ctx.user.id, ...input, occurredAt: new Date(input.occurredAt) })),
   }),
   monitoring: router({
     ebay: publicProcedure.query(async () => {

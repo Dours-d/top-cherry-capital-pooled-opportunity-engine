@@ -152,6 +152,27 @@ export const listingOutcomes = mysqlTable(
 export type ListingOutcome = typeof listingOutcomes.$inferSelect;
 export type InsertListingOutcome = typeof listingOutcomes.$inferInsert;
 
+export const outcomeSyncAudits = mysqlTable(
+  "outcome_sync_audits",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    auditId: varchar("auditId", { length: 160 }).notNull(),
+    outcomeId: varchar("outcomeId", { length: 160 }).notNull(),
+    action: mysqlEnum("action", ["dismissed", "restored"]).notNull(),
+    occurredAt: timestamp("occurredAt").notNull(),
+    note: text("note").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (table) => ({
+    auditKeyIdx: uniqueIndex("outcome_sync_audits_user_audit_idx").on(table.userId, table.auditId),
+    userOccurredIdx: index("outcome_sync_audits_user_occurred_idx").on(table.userId, table.occurredAt),
+  }),
+);
+
+export type OutcomeSyncAudit = typeof outcomeSyncAudits.$inferSelect;
+export type InsertOutcomeSyncAudit = typeof outcomeSyncAudits.$inferInsert;
+
 export const ingestionRuns = mysqlTable("ingestion_runs", {
   id: int("id").autoincrement().primaryKey(),
   sourceSlug: varchar("sourceSlug", { length: 64 }).notNull(),
