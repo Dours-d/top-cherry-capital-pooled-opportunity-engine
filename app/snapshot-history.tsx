@@ -1,6 +1,6 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { router, useLocalSearchParams } from "expo-router";
-import { Pressable, ScrollView, Share, StyleSheet, Text, View } from "react-native";
+import { Modal, Pressable, ScrollView, Share, StyleSheet, Text, View } from "react-native";
 import { useState } from "react";
 
 import { ScreenContainer } from "@/components/screen-container";
@@ -51,7 +51,8 @@ export default function SnapshotHistoryScreen() {
   const sourceQuality = summarizeSnapshotSourceQuality(snapshots);
   const missingQualityFields = Object.entries(sourceQuality.missingCounts).filter(([, count]) => count > 0).map(([field, count]) => `${field} (${count})`);
   const [shareStatus, setShareStatus] = useState<string | null>(null);
-  const shareEvidencePackage = async (format: "json" | "markdown") => {
+  const [preview, setPreview] = useState<{ format: "json" | "markdown"; content: string } | null>(null);
+  const buildExportContent = (format: "json" | "markdown") => {
     const payload = buildEvidencePackage({
       exportedAt: new Date().toISOString(),
       scope: { providerListingId, title: title ?? current?.title ?? null, profileSlug: profileSlug ?? null },
@@ -60,9 +61,18 @@ export default function SnapshotHistoryScreen() {
       currentProviderRead: currentProviderDetail.data ? { itemId: currentProviderDetail.data.itemId, askingPrice: currentProviderDetail.data.askingPrice, currency: currentProviderDetail.data.currency, fetchedAt: currentProviderDetail.data.fetchedAt, localizedAspects: currentProviderDetail.data.localizedAspects } : null,
       characteristicAudits: characteristicAudits.data ?? [],
     });
+    return format === "json" ? JSON.stringify(payload, null, 2) : renderEvidencePackageMarkdown(payload);
+  };
+  const previewEvidencePackage = (format: "json" | "markdown") => {
+    setShareStatus(null);
+    setPreview({ format, content: buildExportContent(format) });
+  };
+  const shareEvidencePackage = async () => {
+    if (!preview) return;
     try {
-      await Share.share({ title: `Top Cherry evidence package (${format.toUpperCase()})`, message: format === "json" ? JSON.stringify(payload, null, 2) : renderEvidencePackageMarkdown(payload) });
-      setShareStatus(`${format.toUpperCase()} evidence package prepared for sharing.`);
+      await Share.share({ title: `Top Cherry evidence package (${preview.format.toUpperCase()})`, message: preview.content });
+      setShareStatus(`${preview.format.toUpperCase()} evidence package prepared for sharing.`);
+      setPreview(null);
     } catch {
       setShareStatus("Sharing is unavailable on this device; the persisted evidence remains unchanged.");
     }
@@ -99,7 +109,7 @@ export default function SnapshotHistoryScreen() {
             <Text style={[styles.qualityFootnote, { color: colors.muted }]}>Age and completeness are data-quality prompts only. They do not estimate availability, demand, market value, sale probability or allocation suitability.</Text>
           </View>
           <View style={[styles.exportCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <View style={styles.exportHeader}><View style={styles.refreshCopy}><Text style={[styles.auditTitle, { color: colors.foreground }]}>Evidence package</Text><Text style={[styles.auditIntro, { color: colors.muted }]}>Share snapshots, provenance, source quality, current provider read and characteristic audits as a research record. No valuation, execution or custody fields are exported.</Text></View><View style={styles.exportActions}><Pressable onPress={() => void shareEvidencePackage("json")} style={({ pressed }) => [styles.refreshButton, { borderColor: colors.primary }, pressed && styles.pressed]}><Text style={[styles.refreshButtonText, { color: colors.primary }]}>JSON</Text></Pressable><Pressable onPress={() => void shareEvidencePackage("markdown")} style={({ pressed }) => [styles.refreshButton, { borderColor: colors.primary }, pressed && styles.pressed]}><Text style={[styles.refreshButtonText, { color: colors.primary }]}>Markdown</Text></Pressable></View></View>
+            <View style={styles.exportHeader}><View style={styles.refreshCopy}><Text style={[styles.auditTitle, { color: colors.foreground }]}>Evidence package</Text><Text style={[styles.auditIntro, { color: colors.muted }]}>Share snapshots, provenance, source quality, current provider read and characteristic audits as a research record. No valuation, execution or custody fields are exported.</Text></View><View style={styles.exportActions}><Pressable onPress={() => previewEvidencePackage("json")} style={({ pressed }) => [styles.refreshButton, { borderColor: colors.primary }, pressed && styles.pressed]}><Text style={[styles.refreshButtonText, { color: colors.primary }]}>JSON</Text></Pressable><Pressable onPress={() => previewEvidencePackage("markdown")} style={({ pressed }) => [styles.refreshButton, { borderColor: colors.primary }, pressed && styles.pressed]}><Text style={[styles.refreshButtonText, { color: colors.primary }]}>Markdown</Text></Pressable></View></View>
             {shareStatus ? <Text style={[styles.qualityFootnote, { color: colors.muted }]}>{shareStatus}</Text> : null}
           </View>
           <View style={[styles.timelineCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -138,6 +148,26 @@ export default function SnapshotHistoryScreen() {
           })}
         </>}
       </ScrollView>
+      <Modal visible={Boolean(preview)} transparent animationType="slide" onRequestClose={() => setPreview(null)}>
+        <View style={[styles.previewBackdrop, { backgroundColor: `${colors.foreground}55` }]}>
+          <View style={[styles.previewCard, { backgroundColor: colors.background, borderColor: colors.border }]}>
+            <View style={styles.previewHeader}>
+              <View style={styles.refreshCopy}>
+                <Text style={[styles.auditTitle, { color: colors.foreground }]}>Review export</Text>
+                <Text style={[styles.auditIntro, { color: colors.muted }]}>{preview?.format.toUpperCase()} preview · sharing does not change persisted evidence.</Text>
+              </View>
+              <Pressable onPress={() => setPreview(null)} style={({ pressed }) => [styles.closeButton, pressed && styles.pressed]}><Text style={[styles.closeButtonText, { color: colors.muted }]}>Close</Text></Pressable>
+            </View>
+            <ScrollView style={[styles.previewBody, { backgroundColor: colors.surface, borderColor: colors.border }]} contentContainerStyle={styles.previewBodyContent}>
+              <Text selectable style={[styles.previewText, { color: colors.foreground }]}>{preview?.content ?? ""}</Text>
+            </ScrollView>
+            <View style={styles.previewActions}>
+              <Pressable onPress={() => setPreview(null)} style={({ pressed }) => [styles.previewSecondary, { borderColor: colors.border }, pressed && styles.pressed]}><Text style={[styles.refreshButtonText, { color: colors.muted }]}>Cancel</Text></Pressable>
+              <Pressable onPress={() => void shareEvidencePackage()} style={({ pressed }) => [styles.previewPrimary, { backgroundColor: colors.primary }, pressed && styles.pressed]}><Text style={[styles.refreshButtonText, { color: colors.onPrimary }]}>Share {preview?.format === "markdown" ? "Markdown" : "JSON"}</Text></Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScreenContainer>
   );
 }
@@ -204,5 +234,16 @@ const styles = StyleSheet.create({
   refreshButtonText: { fontSize: 10, fontWeight: "800" },
   refreshResult: { fontSize: 11, lineHeight: 16, marginTop: 10 },
   refreshComparison: { fontSize: 11, lineHeight: 16, marginTop: 6, fontWeight: "700" },
+  previewBackdrop: { flex: 1, justifyContent: "flex-end" },
+  previewCard: { maxHeight: "88%", borderTopWidth: 1, padding: 16, paddingBottom: 24 },
+  previewHeader: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
+  closeButton: { paddingVertical: 4, paddingHorizontal: 2 },
+  closeButtonText: { fontSize: 11, fontWeight: "800" },
+  previewBody: { maxHeight: 440, borderWidth: 1, borderRadius: 12, marginTop: 14 },
+  previewBodyContent: { padding: 12 },
+  previewText: { fontFamily: "monospace", fontSize: 10, lineHeight: 15 },
+  previewActions: { flexDirection: "row", justifyContent: "flex-end", gap: 8, marginTop: 14 },
+  previewSecondary: { borderWidth: 1, borderRadius: 9, paddingHorizontal: 12, paddingVertical: 9 },
+  previewPrimary: { borderRadius: 9, paddingHorizontal: 12, paddingVertical: 9 },
   disabled: { opacity: 0.5 },
 });

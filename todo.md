@@ -112,6 +112,7 @@ R2 full real-data ingestion, R3 response estimation, R4 network feedback and R5 
 - [x] R2.0x Evidence package export: focused history can share a versioned JSON research record containing snapshots, provenance, source-quality summary, current provider read and characteristic audits; the package explicitly excludes valuation, execution, custody and pooled-fund fields.
 - [x] R2.0y Export boundary hardening: evidence-package construction is now a pure shared allowlist builder with regression tests proving arbitrary valuation, checkout, custody and pooled-fund fields are excluded before sharing.
 - [x] R2.0z Human-readable export: the same allowlisted evidence package can be shared as Markdown with source-quality counts, persisted asking-price observations, current provider read, characteristic audits and explicit research-only boundary language; Markdown escaping is tested.
+- [x] R2.0aa Export preview: JSON and Markdown actions now open a mobile preview before sharing, with explicit cancel/close controls and a confirmation action; previewing and sharing do not mutate persisted evidence.
 
 ## Existing boundaries
 - eBay account-deletion delivery does not establish Browse search or listing-stream permissions.
