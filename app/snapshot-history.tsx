@@ -7,7 +7,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useColors } from "@/hooks/use-colors";
 import { formatCurrency } from "@/lib/market-data";
 import { trpc } from "@/lib/trpc";
-import { compareSnapshotToPrior, evaluateEbayItemDetailCoverage, evaluateSnapshotReconciliation, getSnapshotFreshness } from "@/shared/reconciliation-snapshots";
+import { compareCurrentProviderReadToSnapshot, compareSnapshotToPrior, evaluateEbayItemDetailCoverage, evaluateSnapshotReconciliation, getSnapshotFreshness } from "@/shared/reconciliation-snapshots";
 
 type Snapshot = {
   snapshotId: string;
@@ -43,6 +43,7 @@ export default function SnapshotHistoryScreen() {
   const attentionCount = snapshots.filter((snapshot) => evaluateSnapshotReconciliation(snapshot).state === "needs-attention").length;
   const characteristicCoverage = evaluateEbayItemDetailCoverage(current ? { itemId: current.providerListingId, title: current.title, askingPrice: current.askingPrice, condition: current.condition, fetchedAt: String(current.sourceFetchedAt), profileSlug, localizedAspects: [] } : null);
   const currentProviderDetail = trpc.marketplace.getEbayItem.useQuery({ itemId: current?.providerListingId ?? "pending", marketplaceId: current?.marketplaceId ?? "EBAY_GB" }, { enabled: isAuthenticated && Boolean(current), staleTime: 0 });
+  const currentReadComparison = current && currentProviderDetail.data ? compareCurrentProviderReadToSnapshot({ providerPrice: currentProviderDetail.data.askingPrice, providerCurrency: currentProviderDetail.data.currency, persistedPrice: current.askingPrice, persistedCurrency: current.currency }) : null;
 
   return (
     <ScreenContainer edges={["top", "bottom", "left", "right"]}>
@@ -69,7 +70,7 @@ export default function SnapshotHistoryScreen() {
           <Text style={[styles.qualitySummary, { color: snapshots.every((snapshot) => snapshot.characteristicsChecked) ? colors.success : colors.warning }]}>{snapshots.filter((snapshot) => snapshot.characteristicsChecked).length} of {snapshots.length} observations marked characteristics checked. This is an operator acknowledgment, not provider verification.</Text>
           <View style={[styles.refreshCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={styles.refreshHeader}><View style={styles.refreshCopy}><Text style={[styles.auditTitle, { color: colors.foreground }]}>Current provider refresh</Text><Text style={[styles.auditIntro, { color: colors.muted }]}>Optional live read of the provider item-detail endpoint. It is not written into the historical timeline until you save a new reconciliation snapshot.</Text></View><Pressable onPress={() => void currentProviderDetail.refetch()} disabled={currentProviderDetail.isFetching} style={({ pressed }) => [styles.refreshButton, { borderColor: colors.primary }, currentProviderDetail.isFetching && styles.disabled, pressed && styles.pressed]}><Text style={[styles.refreshButtonText, { color: colors.primary }]}>{currentProviderDetail.isFetching ? "Reading…" : "Refresh"}</Text></Pressable></View>
-            {currentProviderDetail.data ? <Text style={[styles.refreshResult, { color: colors.muted }]}>Provider returned {formatCurrency(currentProviderDetail.data.askingPrice, currentProviderDetail.data.currency)} · {currentProviderDetail.data.localizedAspects?.length ?? 0} characteristic groups · fetched {new Date(currentProviderDetail.data.fetchedAt).toLocaleString()}. This remains an asking-price/provider-field observation only.</Text> : currentProviderDetail.isError ? <Text style={[styles.refreshResult, { color: colors.warning }]}>Current provider read unavailable. Historical observations remain unchanged; no disappearance or error is treated as a sale or stock signal.</Text> : <Text style={[styles.refreshResult, { color: colors.muted }]}>No current provider read requested yet.</Text>}
+            {currentProviderDetail.data ? <><Text style={[styles.refreshResult, { color: colors.muted }]}>Provider returned {formatCurrency(currentProviderDetail.data.askingPrice, currentProviderDetail.data.currency)} · {currentProviderDetail.data.localizedAspects?.length ?? 0} characteristic groups · fetched {new Date(currentProviderDetail.data.fetchedAt).toLocaleString()}. This remains an asking-price/provider-field observation only.</Text>{currentReadComparison?.state === "unknown" ? <Text style={[styles.refreshComparison, { color: colors.warning }]}>{currentReadComparison.reason === "currency-mismatch" ? "Movement not comparable: provider and persisted currencies differ." : currentReadComparison.reason === "missing-currency" ? "Movement not comparable: currency is missing from one side." : "Movement not comparable: asking price is missing."} No conversion or valuation is inferred.</Text> : <Text style={[styles.refreshComparison, { color: currentReadComparison?.state === "increased" ? colors.warning : currentReadComparison?.state === "decreased" ? colors.success : colors.muted }]}>{currentReadComparison?.state === "unchanged" ? "Current provider asking price matches the persisted snapshot." : `${currentReadComparison?.state === "increased" ? "Current provider asking price increased" : "Current provider asking price decreased"} by ${formatCurrency(Math.abs(currentReadComparison?.delta ?? 0), currentReadComparison?.currency)}.`} Asking-price movement only; not a sale or market-value signal.</Text>}</> : currentProviderDetail.isError ? <Text style={[styles.refreshResult, { color: colors.warning }]}>Current provider read unavailable. Historical observations remain unchanged; no disappearance or error is treated as a sale or stock signal.</Text> : <Text style={[styles.refreshResult, { color: colors.muted }]}>No current provider read requested yet.</Text>}
           </View>
           <View style={[styles.auditCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Text style={[styles.auditTitle, { color: colors.foreground }]}>Characteristic-check audit timeline</Text>
@@ -148,5 +149,6 @@ const styles = StyleSheet.create({
   refreshButton: { borderWidth: 1, borderRadius: 9, paddingHorizontal: 10, paddingVertical: 7 },
   refreshButtonText: { fontSize: 10, fontWeight: "800" },
   refreshResult: { fontSize: 11, lineHeight: 16, marginTop: 10 },
+  refreshComparison: { fontSize: 11, lineHeight: 16, marginTop: 6, fontWeight: "700" },
   disabled: { opacity: 0.5 },
 });

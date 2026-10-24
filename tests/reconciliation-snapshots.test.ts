@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildEbayReconciliationSnapshot, compareSnapshotToPrior, evaluateEbayItemDetailCoverage, evaluateSnapshotReconciliation, getSnapshotFreshness, nextSnapshotFreshnessThreshold, normalizeSnapshotFreshnessThreshold } from "../shared/reconciliation-snapshots";
+import { buildEbayReconciliationSnapshot, compareCurrentProviderReadToSnapshot, compareSnapshotToPrior, evaluateEbayItemDetailCoverage, evaluateSnapshotReconciliation, getSnapshotFreshness, nextSnapshotFreshnessThreshold, normalizeSnapshotFreshnessThreshold } from "../shared/reconciliation-snapshots";
 
 const listing = {
   listingId: "v1|123456",
@@ -16,6 +16,16 @@ const listing = {
 };
 
 describe("reconciliation snapshots", () => {
+  it("compares a current provider read only when currencies match", () => {
+    expect(compareCurrentProviderReadToSnapshot({ providerPrice: 8750, providerCurrency: "GBP", persistedPrice: 8500, persistedCurrency: "GBP" })).toMatchObject({ state: "increased", delta: 250, currency: "GBP" });
+    expect(compareCurrentProviderReadToSnapshot({ providerPrice: 8750, providerCurrency: "USD", persistedPrice: 8500, persistedCurrency: "GBP" })).toMatchObject({ state: "unknown", reason: "currency-mismatch" });
+  });
+
+  it("does not infer movement when either price or currency is absent", () => {
+    expect(compareCurrentProviderReadToSnapshot({ providerPrice: 8750, providerCurrency: undefined, persistedPrice: 8500, persistedCurrency: "GBP" })).toMatchObject({ state: "unknown", reason: "missing-currency" });
+    expect(compareCurrentProviderReadToSnapshot({ providerPrice: undefined, providerCurrency: "GBP", persistedPrice: 8500, persistedCurrency: "GBP" })).toMatchObject({ state: "unknown", reason: "missing-price" });
+  });
+
   it("preserves provider identity, source context, and asking price without valuation fields", () => {
     const snapshot = buildEbayReconciliationSnapshot({ listing, marketplaceId: "EBAY_GB", query: "luxury watch", profileSlug: "luxury_watches", sourceFetchedAt: "2026-10-23T10:00:00.000Z" });
     expect(snapshot).toMatchObject({

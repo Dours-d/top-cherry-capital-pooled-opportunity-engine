@@ -27,6 +27,15 @@ export type SnapshotComparison = {
   comparableObservationCount: number;
 };
 
+export type ProviderReadComparison = {
+  state: "unknown" | "unchanged" | "increased" | "decreased";
+  currentPrice: number;
+  persistedPrice?: number;
+  delta?: number;
+  currency?: string;
+  reason?: "missing-currency" | "currency-mismatch" | "missing-price";
+};
+
 export type SnapshotFreshness = {
   state: "unknown" | "fresh" | "aging" | "stale";
   ageHours?: number;
@@ -128,6 +137,16 @@ export function compareSnapshotToPrior<T extends { providerListingId: string; as
   if (!prior || !currency) return { state: "unknown", currentPrice: current.askingPrice, currency, comparableObservationCount: comparable.length };
   const delta = current.askingPrice - prior.askingPrice;
   return { state: delta === 0 ? "unchanged" : delta > 0 ? "increased" : "decreased", currentPrice: current.askingPrice, priorPrice: prior.askingPrice, delta, currency, comparableObservationCount: comparable.length };
+}
+
+export function compareCurrentProviderReadToSnapshot(input: { providerPrice?: number; providerCurrency?: string | null; persistedPrice?: number; persistedCurrency?: string | null }): ProviderReadComparison {
+  const providerCurrency = input.providerCurrency ?? undefined;
+  const persistedCurrency = input.persistedCurrency ?? undefined;
+  if (!Number.isFinite(input.providerPrice) || !Number.isFinite(input.persistedPrice)) return { state: "unknown", currentPrice: input.providerPrice ?? 0, currency: providerCurrency, reason: "missing-price" };
+  if (!providerCurrency || !persistedCurrency) return { state: "unknown", currentPrice: input.providerPrice!, currency: providerCurrency, reason: "missing-currency" };
+  if (providerCurrency !== persistedCurrency) return { state: "unknown", currentPrice: input.providerPrice!, currency: providerCurrency, reason: "currency-mismatch" };
+  const delta = input.providerPrice! - input.persistedPrice!;
+  return { state: delta === 0 ? "unchanged" : delta > 0 ? "increased" : "decreased", currentPrice: input.providerPrice!, persistedPrice: input.persistedPrice, delta, currency: providerCurrency };
 }
 
 export function buildEbayReconciliationSnapshot(input: {
