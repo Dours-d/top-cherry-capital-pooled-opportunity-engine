@@ -17,6 +17,7 @@ import { mergeObservationReviews, normalizeObservationReview, type ObservationRe
 import { mergeListingOutcomes } from "@/shared/listing-outcomes";
 import { compareSnapshotToPrior, evaluateSnapshotReconciliation, getSnapshotFreshness, nextSnapshotFreshnessThreshold, type SnapshotFreshnessThreshold } from "@/shared/reconciliation-snapshots";
 import { dismissalsFromOutcomeSyncAudits, dismissPendingOutcome, mergeOutcomeSyncAudits, queueOutcomeSyncAudit, resolveOutcomeSyncAudit, restoreDismissedOutcome as restoreDismissedOutcomeTransition, type OutcomeSyncAuditRecord, type OutcomeSyncDismissal, type PendingOutcomeRecord, type PendingOutcomeSyncAudit } from "@/shared/outcome-sync-queue";
+import { CHARACTERISTIC_CHECK_AUDIT_QUEUE_STORAGE_KEY, enqueueCharacteristicCheck, normalizeCharacteristicCheckQueue, resolveCharacteristicCheck, type PendingCharacteristicCheck } from "@/shared/characteristic-check-audits";
 
 const EBAY_READINESS_KEY = "topCherry.ebayReadiness";
 const OBSERVATION_REVIEW_STORAGE_KEY = "topCherry.observationReviews";
@@ -58,6 +59,7 @@ export default function ProfileScreen() {
   const [dismissedOutcomeRecords, setDismissedOutcomeRecords] = useState<OutcomeSyncDismissal[]>([]);
   const [outcomeSyncAudits, setOutcomeSyncAudits] = useState<OutcomeSyncAuditRecord[]>([]);
   const [pendingOutcomeAuditRecords, setPendingOutcomeAuditRecords] = useState<PendingOutcomeSyncAudit[]>([]);
+  const [pendingCharacteristicChecks, setPendingCharacteristicChecks] = useState<PendingCharacteristicCheck[]>([]);
   const [autoRetryAttempted, setAutoRetryAttempted] = useState(false);
   const [snapshotFreshnessThresholds, setSnapshotFreshnessThresholds] = useState<Record<string, SnapshotFreshnessThreshold>>({});
 
@@ -74,8 +76,22 @@ export default function ProfileScreen() {
   };
 
   const markSnapshotCharacteristicsChecked = async (snapshotId: string, note: string) => {
-    await checkSnapshotCharacteristics.mutateAsync({ snapshotId, auditId: `characteristics:${snapshotId}:${Date.now()}`, note });
-    await remoteSnapshots.refetch();
+    const item = { snapshotId, auditId: `characteristics:${snapshotId}:${Date.now()}`, note: note.trim() };
+    const queued = enqueueCharacteristicCheck(pendingCharacteristicChecks, item);
+    setPendingCharacteristicChecks(queued);
+    await AsyncStorage.setItem(CHARACTERISTIC_CHECK_AUDIT_QUEUE_STORAGE_KEY, JSON.stringify(queued));
+    if (!isAuthenticated) return;
+    try {
+      await checkSnapshotCharacteristics.mutateAsync(item);
+      const remaining = resolveCharacteristicCheck(queued, item.auditId, { ok: true }, new Date().toISOString());
+      setPendingCharacteristicChecks(remaining);
+      await AsyncStorage.setItem(CHARACTERISTIC_CHECK_AUDIT_QUEUE_STORAGE_KEY, JSON.stringify(remaining));
+      await remoteSnapshots.refetch();
+    } catch (error) {
+      const failed = resolveCharacteristicCheck(queued, item.auditId, { ok: false, error: error instanceof Error ? error.message : "The characteristic audit server rejected this write." }, new Date().toISOString());
+      setPendingCharacteristicChecks(failed);
+      await AsyncStorage.setItem(CHARACTERISTIC_CHECK_AUDIT_QUEUE_STORAGE_KEY, JSON.stringify(failed));
+    }
   };
 
   const markSnapshotsCharacteristicsChecked = async (snapshotIds: string[], note: string) => {
@@ -119,7 +135,7 @@ export default function ProfileScreen() {
   };
 
   useEffect(() => {
-    void Promise.all([AsyncStorage.getItem(OBSERVATION_SCHEDULE_STORAGE_KEY), AsyncStorage.getItem(OUTCOME_STORAGE_KEY), AsyncStorage.getItem(OBSERVATION_REVIEW_STORAGE_KEY), AsyncStorage.getItem(OUTCOME_SYNC_QUEUE_STORAGE_KEY), AsyncStorage.getItem(OUTCOME_SYNC_DISMISSAL_STORAGE_KEY), AsyncStorage.getItem(OUTCOME_SYNC_AUDIT_STORAGE_KEY), AsyncStorage.getItem(OUTCOME_SYNC_AUDIT_QUEUE_STORAGE_KEY)]).then(([scheduleRaw, outcomesRaw, reviewsRaw, pendingRaw, dismissalRaw, auditRaw, auditQueueRaw]) => {
+    void Promise.all([AsyncStorage.getItem(OBSERVATION_SCHEDULE_STORAGE_KEY), AsyncStorage.getItem(OUTCOME_STORAGE_KEY), AsyncStorage.getItem(OBSERVATION_REVIEW_STORAGE_KEY), AsyncStorage.getItem(OUTCOME_SYNC_QUEUE_STORAGE_KEY), AsyncStorage.getItem(OUTCOME_SYNC_DISMISSAL_STORAGE_KEY), AsyncStorage.getItem(OUTCOME_SYNC_AUDIT_STORAGE_KEY), AsyncStorage.getItem(OUTCOME_SYNC_AUDIT_QUEUE_STORAGE_KEY), AsyncStorage.getItem(CHARACTERISTIC_CHECK_AUDIT_QUEUE_STORAGE_KEY)]).then(([scheduleRaw, outcomesRaw, reviewsRaw, pendingRaw, dismissalRaw, auditRaw, auditQueueRaw, characteristicQueueRaw]) => {
       try {
         const schedules = scheduleRaw ? JSON.parse(scheduleRaw) as Record<string, string | { nextObserveAt: string }> : {};
         setFollowUps(Object.entries(schedules).map(([listingId, value]) => typeof value === "string" ? { listingId, nextObserveAt: value } : { listingId, ...value }).filter((item) => item.nextObserveAt).sort((a, b) => new Date(a.nextObserveAt).getTime() - new Date(b.nextObserveAt).getTime()));
@@ -129,6 +145,7 @@ export default function ProfileScreen() {
       try { const dismissals = dismissalRaw ? JSON.parse(dismissalRaw) as OutcomeSyncDismissal[] : []; setDismissedOutcomeRecords(dismissals.filter((item) => typeof item.outcomeId === "string" && typeof item.clearedAt === "string" && typeof item.note === "string").slice(0, 50)); } catch { setDismissedOutcomeRecords([]); }
       try { const audits = auditRaw ? JSON.parse(auditRaw) as OutcomeSyncAuditRecord[] : []; setOutcomeSyncAudits(audits.filter((item) => typeof item.auditId === "string" && typeof item.outcomeId === "string" && (item.action === "dismissed" || item.action === "restored") && typeof item.occurredAt === "string" && typeof item.note === "string").slice(0, 100)); } catch { setOutcomeSyncAudits([]); }
       try { const queue = auditQueueRaw ? JSON.parse(auditQueueRaw) as PendingOutcomeSyncAudit[] : []; setPendingOutcomeAuditRecords(queue.filter((item) => typeof item.auditId === "string" && typeof item.outcomeId === "string" && (item.action === "dismissed" || item.action === "restored") && typeof item.occurredAt === "string" && typeof item.note === "string").slice(0, 100)); } catch { setPendingOutcomeAuditRecords([]); }
+      try { setPendingCharacteristicChecks(normalizeCharacteristicCheckQueue(characteristicQueueRaw ? JSON.parse(characteristicQueueRaw) : [])); } catch { setPendingCharacteristicChecks([]); }
       try {
         const parsed = reviewsRaw ? JSON.parse(reviewsRaw) as Partial<ObservationReview>[] : [];
         setRecentReviews(parsed.filter((review): review is Partial<ObservationReview> & Pick<ObservationReview, "listingId" | "reviewedAt"> => typeof review.listingId === "string" && typeof review.reviewedAt === "string").map(normalizeObservationReview).sort((a, b) => b.reviewedAt.localeCompare(a.reviewedAt)).slice(0, 20));
@@ -265,11 +282,27 @@ export default function ProfileScreen() {
     await recordOutcomeSyncAudit({ auditId: `restored:${outcomeId}:${restoredAt}`, outcomeId, action: "restored", occurredAt: restoredAt, note: note.trim() });
   };
 
+  const retryPendingCharacteristicChecks = async () => {
+    if (!isAuthenticated || !pendingCharacteristicChecks.length) return;
+    let remaining = [...pendingCharacteristicChecks];
+    for (const item of pendingCharacteristicChecks) {
+      try {
+        await checkSnapshotCharacteristics.mutateAsync({ snapshotId: item.snapshotId, auditId: item.auditId, note: item.note });
+        remaining = resolveCharacteristicCheck(remaining, item.auditId, { ok: true }, new Date().toISOString());
+      } catch (error) {
+        remaining = resolveCharacteristicCheck(remaining, item.auditId, { ok: false, error: error instanceof Error ? error.message : "The characteristic audit server rejected this retry." }, new Date().toISOString());
+      }
+      setPendingCharacteristicChecks(remaining);
+      await AsyncStorage.setItem(CHARACTERISTIC_CHECK_AUDIT_QUEUE_STORAGE_KEY, JSON.stringify(remaining));
+    }
+    await remoteSnapshots.refetch();
+  };
+
   useEffect(() => {
-    if (!isAuthenticated || autoRetryAttempted || (!pendingOutcomeRecords.length && !pendingOutcomeAuditRecords.length)) return;
+    if (!isAuthenticated || autoRetryAttempted || (!pendingOutcomeRecords.length && !pendingOutcomeAuditRecords.length && !pendingCharacteristicChecks.length)) return;
     setAutoRetryAttempted(true);
-    void Promise.all([retryPendingOutcomeSync(), retryPendingOutcomeAuditSync()]);
-  }, [isAuthenticated, pendingOutcomeRecords.length, pendingOutcomeAuditRecords.length, autoRetryAttempted]);
+    void Promise.all([retryPendingOutcomeSync(), retryPendingOutcomeAuditSync(), retryPendingCharacteristicChecks()]);
+  }, [isAuthenticated, pendingOutcomeRecords.length, pendingOutcomeAuditRecords.length, pendingCharacteristicChecks.length, autoRetryAttempted]);
 
   return (
     <ScreenContainer className="px-5" containerClassName="bg-background">
@@ -297,7 +330,7 @@ export default function ProfileScreen() {
             } catch { return undefined; }
           });
         }} />
-        <ReconciliationSnapshotQueue colors={colors} authenticated={isAuthenticated} snapshots={remoteSnapshots.data ?? []} reviewing={reviewSnapshot.isPending} checkingCharacteristics={checkSnapshotCharacteristics.isPending} freshnessThresholds={snapshotFreshnessThresholds} onCycleFreshnessThreshold={cycleSnapshotFreshnessThreshold} onReview={(snapshotId, status, note) => void markSnapshotReviewed(snapshotId, status, note)} onReviewMany={(snapshotIds, note) => markSnapshotsReviewed(snapshotIds, note)} onCheckCharacteristics={(snapshotId, note) => markSnapshotCharacteristicsChecked(snapshotId, note)} onCheckCharacteristicsMany={(snapshotIds, note) => markSnapshotsCharacteristicsChecked(snapshotIds, note)} />
+        <ReconciliationSnapshotQueue colors={colors} authenticated={isAuthenticated} snapshots={remoteSnapshots.data ?? []} reviewing={reviewSnapshot.isPending} checkingCharacteristics={checkSnapshotCharacteristics.isPending} pendingCharacteristicChecks={pendingCharacteristicChecks} freshnessThresholds={snapshotFreshnessThresholds} onCycleFreshnessThreshold={cycleSnapshotFreshnessThreshold} onRetryCharacteristicChecks={() => void retryPendingCharacteristicChecks()} onReview={(snapshotId, status, note) => void markSnapshotReviewed(snapshotId, status, note)} onReviewMany={(snapshotIds, note) => markSnapshotsReviewed(snapshotIds, note)} onCheckCharacteristics={(snapshotId, note) => markSnapshotCharacteristicsChecked(snapshotId, note)} onCheckCharacteristicsMany={(snapshotIds, note) => markSnapshotsCharacteristicsChecked(snapshotIds, note)} />
         <SyncedOutcomeHistory colors={colors} outcomes={followUpOutcomes} authenticated={isAuthenticated} auditCount={outcomeSyncAudits.length} pendingAuditSyncs={pendingOutcomeAuditRecords.length} pendingSyncs={pendingOutcomeSyncs} pendingRecords={pendingOutcomeRecords} dismissedRecords={dismissedOutcomeRecords} onRetryPending={() => void retryPendingOutcomeSync()} onRetryAudit={() => void retryPendingOutcomeAuditSync()} onClearPending={(outcomeId, note) => void clearPendingOutcome(outcomeId, note)} onRestorePending={(outcomeId, note) => void restoreDismissedOutcome(outcomeId, note)} retrying={syncOutcome.isPending} retryingAudit={syncOutcomeAudit.isPending} />
         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>eBay authorization readiness</Text>
         <EbayReadinessChecklist colors={colors} completed={ebayReadiness} onToggle={(id) => {
@@ -383,7 +416,7 @@ type WorkspaceSnapshot = {
   characteristicsCheckNote: string | null;
 };
 
-function ReconciliationSnapshotQueue({ colors, authenticated, snapshots, reviewing, checkingCharacteristics, freshnessThresholds, onCycleFreshnessThreshold, onReview, onReviewMany, onCheckCharacteristics, onCheckCharacteristicsMany }: { colors: ReturnType<typeof useColors>; authenticated: boolean; snapshots: WorkspaceSnapshot[]; reviewing: boolean; checkingCharacteristics: boolean; freshnessThresholds: Record<string, SnapshotFreshnessThreshold>; onCycleFreshnessThreshold: (marketplaceId: string) => void; onReview: (snapshotId: string, status: "reviewed" | "superseded", note: string) => void; onReviewMany: (snapshotIds: string[], note: string) => Promise<void>; onCheckCharacteristics: (snapshotId: string, note: string) => Promise<void>; onCheckCharacteristicsMany: (snapshotIds: string[], note: string) => Promise<void> }) {
+function ReconciliationSnapshotQueue({ colors, authenticated, snapshots, reviewing, checkingCharacteristics, pendingCharacteristicChecks, freshnessThresholds, onCycleFreshnessThreshold, onRetryCharacteristicChecks, onReview, onReviewMany, onCheckCharacteristics, onCheckCharacteristicsMany }: { colors: ReturnType<typeof useColors>; authenticated: boolean; snapshots: WorkspaceSnapshot[]; reviewing: boolean; checkingCharacteristics: boolean; pendingCharacteristicChecks: PendingCharacteristicCheck[]; freshnessThresholds: Record<string, SnapshotFreshnessThreshold>; onCycleFreshnessThreshold: (marketplaceId: string) => void; onRetryCharacteristicChecks: () => void; onReview: (snapshotId: string, status: "reviewed" | "superseded", note: string) => void; onReviewMany: (snapshotIds: string[], note: string) => Promise<void>; onCheckCharacteristics: (snapshotId: string, note: string) => Promise<void>; onCheckCharacteristicsMany: (snapshotIds: string[], note: string) => Promise<void> }) {
   const [filter, setFilter] = useState<"observed" | "reviewed" | "superseded">("observed");
   const [reviewNote, setReviewNote] = useState("");
   const counts = { observed: snapshots.filter((item) => item.reconciliationStatus === "observed").length, reviewed: snapshots.filter((item) => item.reconciliationStatus === "reviewed").length, superseded: snapshots.filter((item) => item.reconciliationStatus === "superseded").length };
@@ -391,6 +424,7 @@ function ReconciliationSnapshotQueue({ colors, authenticated, snapshots, reviewi
   return <View style={[styles.snapshotQueueCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
     <View style={styles.readinessHeader}><View style={styles.settingCopy}><Text style={[styles.settingTitle, { color: colors.foreground }]}>Persisted source observations</Text><Text style={[styles.settingDescription, { color: colors.muted }]}>{authenticated ? `${counts.observed} awaiting review · ${snapshots.length} stored` : "Sign in to review persisted provider observations"}</Text></View><View style={[styles.statusBadge, { backgroundColor: counts.observed ? colors.warning : colors.background }]}><Text style={[styles.statusBadgeText, { color: counts.observed ? colors.foreground : colors.muted }]}>{counts.observed ? "REVIEW" : "CLEAR"}</Text></View></View>
     <Text style={[styles.dataNote, { color: colors.muted }]}>Reviewing confirms only how this provider observation should be retained. A separate characteristic check records that the profile prompts were inspected. Neither action establishes stock, fair value, demand, a sale, or allocation eligibility. A note is required for every action. Freshness settings only change the age prompt.</Text>
+    {pendingCharacteristicChecks.length ? <View style={[styles.pendingSyncCard, { backgroundColor: colors.background, borderColor: colors.warning }]}><Text style={[styles.pendingSyncTitle, { color: colors.warning }]}>{pendingCharacteristicChecks.length} characteristic audit{pendingCharacteristicChecks.length === 1 ? "" : "s"} pending synchronization</Text><Text style={[styles.pendingSyncText, { color: colors.muted }]}>{pendingCharacteristicChecks[0]?.syncError ?? "The local audit is retained until the authenticated server confirms it."}</Text><Pressable onPress={onRetryCharacteristicChecks} disabled={checkingCharacteristics} style={({ pressed }) => [styles.reviewButton, { borderColor: colors.warning }, checkingCharacteristics && styles.disabled, pressed && styles.pressed]}><Text style={[styles.reviewButtonText, { color: colors.warning }]}>{checkingCharacteristics ? "Retrying…" : "Retry characteristic audits"}</Text></Pressable></View> : null}
     <View style={styles.filterRow}>{(["observed", "reviewed", "superseded"] as const).map((option) => <Pressable key={option} onPress={() => setFilter(option)} style={({ pressed }) => [styles.filterChip, { backgroundColor: filter === option ? colors.foreground : colors.background, borderColor: colors.border }, pressed && styles.pressed]}><Text style={[styles.filterChipText, { color: filter === option ? colors.background : colors.muted }]}>{option === "observed" ? `Observed (${counts.observed})` : option === "reviewed" ? `Reviewed (${counts.reviewed})` : `Superseded (${counts.superseded})`}</Text></Pressable>)}</View>
     {!authenticated ? <Text style={[styles.dataNote, { color: colors.muted }]}>The current device has no account session, so no remote snapshot records are shown.</Text> : !visible.length ? <Text style={[styles.dataNote, { color: colors.muted }]}>No {filter} snapshots.</Text> : <>
       <TextInput value={reviewNote} onChangeText={setReviewNote} placeholder="Required review or characteristic-check note" placeholderTextColor={colors.muted} style={[styles.reviewNoteInput, { color: colors.foreground, backgroundColor: colors.background, borderColor: colors.border }]} />
@@ -504,6 +538,9 @@ const styles = StyleSheet.create({
   snapshotQuality: { fontSize: 10, lineHeight: 14, marginTop: 3, fontWeight: "700" },
   retryAllButton: { alignSelf: "flex-start", borderRadius: 9, paddingHorizontal: 10, paddingVertical: 8, marginTop: 10 },
   retryAllText: { fontSize: 10, fontWeight: "800" },
+  pendingSyncCard: { borderWidth: 1, borderRadius: 12, padding: 10, marginTop: 12 },
+  pendingSyncTitle: { fontSize: 11, fontWeight: "800" },
+  pendingSyncText: { fontSize: 10, lineHeight: 14, marginTop: 4 },
   pendingSyncRow: { flexDirection: "row", alignItems: "flex-start", gap: 7, marginTop: 10, paddingTop: 9, borderTopWidth: 1, borderTopColor: "rgba(128,128,128,0.18)" },
   syncErrorText: { fontSize: 10, lineHeight: 14, marginTop: 2 },
   clearLink: { alignSelf: "flex-start", paddingVertical: 6 },
