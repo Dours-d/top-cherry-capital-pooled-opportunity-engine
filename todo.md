@@ -114,6 +114,7 @@ R2 full real-data ingestion, R3 response estimation, R4 network feedback and R5 
 - [x] R2.0z Human-readable export: the same allowlisted evidence package can be shared as Markdown with source-quality counts, persisted asking-price observations, current provider read, characteristic audits and explicit research-only boundary language; Markdown escaping is tested.
 - [x] R2.0aa Export preview: JSON and Markdown actions now open a mobile preview before sharing, with explicit cancel/close controls and a confirmation action; previewing and sharing do not mutate persisted evidence.
 - [x] R2.0ab Export transparency: the preview identifies observation count, latest fetch timestamp and whether a current provider read is included before sharing.
+- [x] R2.0ac Connectivity honesty: focused history detects browser online/offline transitions where available, disables provider refresh while offline, labels native connectivity as unprobed, and keeps historical evidence/export available without a network request.
 
 ## Existing boundaries
 - eBay account-deletion delivery does not establish Browse search or listing-stream permissions.

@@ -1,7 +1,7 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { router, useLocalSearchParams } from "expo-router";
-import { Modal, Pressable, ScrollView, Share, StyleSheet, Text, View } from "react-native";
-import { useState } from "react";
+import { Modal, Platform, Pressable, ScrollView, Share, StyleSheet, Text, View } from "react-native";
+import { useEffect, useState } from "react";
 
 import { ScreenContainer } from "@/components/screen-container";
 import { useAuth } from "@/hooks/use-auth";
@@ -46,6 +46,20 @@ export default function SnapshotHistoryScreen() {
   const characteristicCoverage = evaluateEbayItemDetailCoverage(current ? { itemId: current.providerListingId, title: current.title, askingPrice: current.askingPrice, condition: current.condition, fetchedAt: String(current.sourceFetchedAt), profileSlug, localizedAspects: [] } : null);
   const currentProviderDetail = trpc.marketplace.getEbayItem.useQuery({ itemId: current?.providerListingId ?? "pending", marketplaceId: current?.marketplaceId ?? "EBAY_GB" }, { enabled: isAuthenticated && Boolean(current), staleTime: 0 });
   const currentReadComparison = current && currentProviderDetail.data ? compareCurrentProviderReadToSnapshot({ providerPrice: currentProviderDetail.data.askingPrice, providerCurrency: currentProviderDetail.data.currency, persistedPrice: current.askingPrice, persistedCurrency: current.currency }) : null;
+  const [webOnline, setWebOnline] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    const update = () => setWebOnline(window.navigator.onLine);
+    update();
+    window.addEventListener("online", update);
+    window.addEventListener("offline", update);
+    return () => {
+      window.removeEventListener("online", update);
+      window.removeEventListener("offline", update);
+    };
+  }, []);
+  const browserOffline = webOnline === false;
+  const connectivityLabel = browserOffline ? "Browser offline" : webOnline === true ? "Browser online" : currentProviderDetail.isError ? "Provider request unavailable" : "Connectivity not checked";
   const timelineSnapshots = current?.currency ? [...snapshots].filter((snapshot) => snapshot.currency === current.currency).reverse() : [];
   const timelineMax = Math.max(...timelineSnapshots.map((snapshot) => snapshot.askingPrice), 0);
   const sourceQuality = summarizeSnapshotSourceQuality(snapshots);
@@ -119,7 +133,7 @@ export default function SnapshotHistoryScreen() {
             <Text style={[styles.timelineFootnote, { color: colors.muted }]}>This describes recorded asking-price observations only. It does not establish a sale, stock count, demand, market value or allocation recommendation.</Text>
           </View>
           <View style={[styles.refreshCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <View style={styles.refreshHeader}><View style={styles.refreshCopy}><Text style={[styles.auditTitle, { color: colors.foreground }]}>Current provider refresh</Text><Text style={[styles.auditIntro, { color: colors.muted }]}>Optional live read of the provider item-detail endpoint. It is not written into the historical timeline until you save a new reconciliation snapshot.</Text></View><Pressable onPress={() => void currentProviderDetail.refetch()} disabled={currentProviderDetail.isFetching} style={({ pressed }) => [styles.refreshButton, { borderColor: colors.primary }, currentProviderDetail.isFetching && styles.disabled, pressed && styles.pressed]}><Text style={[styles.refreshButtonText, { color: colors.primary }]}>{currentProviderDetail.isFetching ? "Reading…" : "Refresh"}</Text></Pressable></View>
+            <View style={styles.refreshHeader}><View style={styles.refreshCopy}><Text style={[styles.auditTitle, { color: colors.foreground }]}>Current provider refresh</Text><Text style={[styles.auditIntro, { color: colors.muted }]}>Optional live read of the provider item-detail endpoint. It is not written into the historical timeline until you save a new reconciliation snapshot.</Text><Text style={[styles.networkStatus, { color: browserOffline || currentProviderDetail.isError ? colors.warning : colors.muted }]}>{connectivityLabel} · historical evidence remains available offline.</Text></View><Pressable onPress={() => void currentProviderDetail.refetch()} disabled={currentProviderDetail.isFetching || browserOffline} style={({ pressed }) => [styles.refreshButton, { borderColor: colors.primary }, (currentProviderDetail.isFetching || browserOffline) && styles.disabled, pressed && styles.pressed]}><Text style={[styles.refreshButtonText, { color: colors.primary }]}>{browserOffline ? "Offline" : currentProviderDetail.isFetching ? "Reading…" : "Refresh"}</Text></Pressable></View>
             {currentProviderDetail.data ? <><Text style={[styles.refreshResult, { color: colors.muted }]}>Provider returned {formatCurrency(currentProviderDetail.data.askingPrice, currentProviderDetail.data.currency)} · {currentProviderDetail.data.localizedAspects?.length ?? 0} characteristic groups · fetched {new Date(currentProviderDetail.data.fetchedAt).toLocaleString()}. This remains an asking-price/provider-field observation only.</Text>{currentReadComparison?.state === "unknown" ? <Text style={[styles.refreshComparison, { color: colors.warning }]}>{currentReadComparison.reason === "currency-mismatch" ? "Movement not comparable: provider and persisted currencies differ." : currentReadComparison.reason === "missing-currency" ? "Movement not comparable: currency is missing from one side." : "Movement not comparable: asking price is missing."} No conversion or valuation is inferred.</Text> : <Text style={[styles.refreshComparison, { color: currentReadComparison?.state === "increased" ? colors.warning : currentReadComparison?.state === "decreased" ? colors.success : colors.muted }]}>{currentReadComparison?.state === "unchanged" ? "Current provider asking price matches the persisted snapshot." : `${currentReadComparison?.state === "increased" ? "Current provider asking price increased" : "Current provider asking price decreased"} by ${formatCurrency(Math.abs(currentReadComparison?.delta ?? 0), currentReadComparison?.currency)}.`} Asking-price movement only; not a sale or market-value signal.</Text>}</> : currentProviderDetail.isError ? <Text style={[styles.refreshResult, { color: colors.warning }]}>Current provider read unavailable. Historical observations remain unchanged; no disappearance or error is treated as a sale or stock signal.</Text> : <Text style={[styles.refreshResult, { color: colors.muted }]}>No current provider read requested yet.</Text>}
           </View>
           <View style={[styles.auditCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -235,6 +249,7 @@ const styles = StyleSheet.create({
   refreshButtonText: { fontSize: 10, fontWeight: "800" },
   refreshResult: { fontSize: 11, lineHeight: 16, marginTop: 10 },
   refreshComparison: { fontSize: 11, lineHeight: 16, marginTop: 6, fontWeight: "700" },
+  networkStatus: { fontSize: 10, lineHeight: 14, marginTop: 7, fontWeight: "700" },
   previewBackdrop: { flex: 1, justifyContent: "flex-end" },
   previewCard: { maxHeight: "88%", borderTopWidth: 1, padding: 16, paddingBottom: 24 },
   previewHeader: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
