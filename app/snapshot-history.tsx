@@ -155,6 +155,7 @@ export default function SnapshotHistoryScreen() {
               <View style={styles.refreshCopy}>
                 <Text style={[styles.auditTitle, { color: colors.foreground }]}>Review export</Text>
                 <Text style={[styles.auditIntro, { color: colors.muted }]}>{preview?.format.toUpperCase()} preview · sharing does not change persisted evidence.</Text>
+                <Text style={[styles.previewMeta, { color: colors.muted }]}>{snapshots.length} observation{snapshots.length === 1 ? "" : "s"} · latest fetch {current ? new Date(current.sourceFetchedAt).toLocaleString() : "unknown"} · current provider read {currentProviderDetail.data ? "included" : "not included"}</Text>
               </View>
               <Pressable onPress={() => setPreview(null)} style={({ pressed }) => [styles.closeButton, pressed && styles.pressed]}><Text style={[styles.closeButtonText, { color: colors.muted }]}>Close</Text></Pressable>
             </View>
@@ -239,6 +240,7 @@ const styles = StyleSheet.create({
   previewHeader: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
   closeButton: { paddingVertical: 4, paddingHorizontal: 2 },
   closeButtonText: { fontSize: 11, fontWeight: "800" },
+  previewMeta: { fontSize: 10, lineHeight: 14, marginTop: 7 },
   previewBody: { maxHeight: 440, borderWidth: 1, borderRadius: 12, marginTop: 14 },
   previewBodyContent: { padding: 12 },
   previewText: { fontFamily: "monospace", fontSize: 10, lineHeight: 15 },
