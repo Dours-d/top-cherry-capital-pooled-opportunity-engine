@@ -110,6 +110,7 @@ R2 full real-data ingestion, R3 response estimation, R4 network feedback and R5 
 - [x] R2.0v Asking-price timeline: focused listing history displays oldest-to-newest persisted observations as relative bars using only currency-matched prices; the timeline is descriptive evidence and carries no predictive, valuation or allocation interpretation.
 - [x] R2.0w Source-quality panel: focused listing history summarizes fresh/aging/stale/unknown observation ages and counts missing tracked provider fields without filling gaps; age/completeness remain data-quality prompts only.
 - [x] R2.0x Evidence package export: focused history can share a versioned JSON research record containing snapshots, provenance, source-quality summary, current provider read and characteristic audits; the package explicitly excludes valuation, execution, custody and pooled-fund fields.
+- [x] R2.0y Export boundary hardening: evidence-package construction is now a pure shared allowlist builder with regression tests proving arbitrary valuation, checkout, custody and pooled-fund fields are excluded before sharing.
 
 ## Existing boundaries
 - eBay account-deletion delivery does not establish Browse search or listing-stream permissions.

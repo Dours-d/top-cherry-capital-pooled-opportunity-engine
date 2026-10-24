@@ -8,6 +8,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useColors } from "@/hooks/use-colors";
 import { formatCurrency } from "@/lib/market-data";
 import { trpc } from "@/lib/trpc";
+import { buildEvidencePackage } from "@/shared/evidence-package";
 import { compareCurrentProviderReadToSnapshot, compareSnapshotToPrior, evaluateEbayItemDetailCoverage, evaluateSnapshotReconciliation, getSnapshotFreshness, summarizeSnapshotSourceQuality } from "@/shared/reconciliation-snapshots";
 
 type Snapshot = {
@@ -51,16 +52,14 @@ export default function SnapshotHistoryScreen() {
   const missingQualityFields = Object.entries(sourceQuality.missingCounts).filter(([, count]) => count > 0).map(([field, count]) => `${field} (${count})`);
   const [shareStatus, setShareStatus] = useState<string | null>(null);
   const shareEvidencePackage = async () => {
-    const payload = {
-      schemaVersion: "top-cherry-evidence-1",
+    const payload = buildEvidencePackage({
       exportedAt: new Date().toISOString(),
       scope: { providerListingId, title: title ?? current?.title ?? null, profileSlug: profileSlug ?? null },
-      semantics: "Research evidence only. Asking prices and provider fields do not establish sale, stock, demand, fair value, authenticity, allocation eligibility or execution authority.",
       sourceQuality,
-      snapshots: snapshots.map((snapshot) => ({ snapshotId: snapshot.snapshotId, marketplaceId: snapshot.marketplaceId, providerListingId: snapshot.providerListingId, profileSlug: snapshot.profileSlug, title: snapshot.title, askingPrice: snapshot.askingPrice, currency: snapshot.currency, condition: snapshot.condition, location: snapshot.location, sellerId: snapshot.sellerId, sourceFetchedAt: snapshot.sourceFetchedAt, reconciliationStatus: snapshot.reconciliationStatus, reviewNote: snapshot.reviewNote, reviewedAt: snapshot.reviewedAt, characteristicsChecked: snapshot.characteristicsChecked, characteristicsCheckedAt: snapshot.characteristicsCheckedAt, characteristicsCheckNote: snapshot.characteristicsCheckNote })),
-      currentProviderRead: currentProviderDetail.data ? { itemId: currentProviderDetail.data.itemId, askingPrice: currentProviderDetail.data.askingPrice, currency: currentProviderDetail.data.currency, fetchedAt: currentProviderDetail.data.fetchedAt, characteristicGroupCount: currentProviderDetail.data.localizedAspects?.length ?? 0 } : null,
+      snapshots,
+      currentProviderRead: currentProviderDetail.data ? { itemId: currentProviderDetail.data.itemId, askingPrice: currentProviderDetail.data.askingPrice, currency: currentProviderDetail.data.currency, fetchedAt: currentProviderDetail.data.fetchedAt, localizedAspects: currentProviderDetail.data.localizedAspects } : null,
       characteristicAudits: characteristicAudits.data ?? [],
-    };
+    });
     try {
       await Share.share({ title: "Top Cherry evidence package", message: JSON.stringify(payload, null, 2) });
       setShareStatus("Evidence package prepared for sharing.");
