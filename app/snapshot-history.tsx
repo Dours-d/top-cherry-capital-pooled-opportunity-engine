@@ -42,6 +42,7 @@ export default function SnapshotHistoryScreen() {
   const comparison = current ? compareSnapshotToPrior(current, snapshots) : null;
   const attentionCount = snapshots.filter((snapshot) => evaluateSnapshotReconciliation(snapshot).state === "needs-attention").length;
   const characteristicCoverage = evaluateEbayItemDetailCoverage(current ? { itemId: current.providerListingId, title: current.title, askingPrice: current.askingPrice, condition: current.condition, fetchedAt: String(current.sourceFetchedAt), profileSlug, localizedAspects: [] } : null);
+  const currentProviderDetail = trpc.marketplace.getEbayItem.useQuery({ itemId: current?.providerListingId ?? "pending", marketplaceId: current?.marketplaceId ?? "EBAY_GB" }, { enabled: isAuthenticated && Boolean(current), staleTime: 0 });
 
   return (
     <ScreenContainer edges={["top", "bottom", "left", "right"]}>
@@ -66,6 +67,10 @@ export default function SnapshotHistoryScreen() {
           <Text style={[styles.qualitySummary, { color: attentionCount ? colors.warning : colors.success }]}>{attentionCount ? `${attentionCount} observation${attentionCount === 1 ? "" : "s"} need provider-field attention.` : "Provider-required fields are present for every stored observation."} This is a data-quality check only.</Text>
           <Text style={[styles.qualitySummary, { color: colors.muted }]}>{profileSlug ? `Profile characteristic prompts: ${characteristicCoverage.recommendedMissing.join(", ") || "none recorded"}.` : "No profile context was stored for this history route; profile-specific characteristic prompts remain unknown."} These prompts do not establish authenticity, value, stock or allocation eligibility.</Text>
           <Text style={[styles.qualitySummary, { color: snapshots.every((snapshot) => snapshot.characteristicsChecked) ? colors.success : colors.warning }]}>{snapshots.filter((snapshot) => snapshot.characteristicsChecked).length} of {snapshots.length} observations marked characteristics checked. This is an operator acknowledgment, not provider verification.</Text>
+          <View style={[styles.refreshCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={styles.refreshHeader}><View style={styles.refreshCopy}><Text style={[styles.auditTitle, { color: colors.foreground }]}>Current provider refresh</Text><Text style={[styles.auditIntro, { color: colors.muted }]}>Optional live read of the provider item-detail endpoint. It is not written into the historical timeline until you save a new reconciliation snapshot.</Text></View><Pressable onPress={() => void currentProviderDetail.refetch()} disabled={currentProviderDetail.isFetching} style={({ pressed }) => [styles.refreshButton, { borderColor: colors.primary }, currentProviderDetail.isFetching && styles.disabled, pressed && styles.pressed]}><Text style={[styles.refreshButtonText, { color: colors.primary }]}>{currentProviderDetail.isFetching ? "Reading…" : "Refresh"}</Text></Pressable></View>
+            {currentProviderDetail.data ? <Text style={[styles.refreshResult, { color: colors.muted }]}>Provider returned {formatCurrency(currentProviderDetail.data.askingPrice, currentProviderDetail.data.currency)} · {currentProviderDetail.data.localizedAspects?.length ?? 0} characteristic groups · fetched {new Date(currentProviderDetail.data.fetchedAt).toLocaleString()}. This remains an asking-price/provider-field observation only.</Text> : currentProviderDetail.isError ? <Text style={[styles.refreshResult, { color: colors.warning }]}>Current provider read unavailable. Historical observations remain unchanged; no disappearance or error is treated as a sale or stock signal.</Text> : <Text style={[styles.refreshResult, { color: colors.muted }]}>No current provider read requested yet.</Text>}
+          </View>
           <View style={[styles.auditCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Text style={[styles.auditTitle, { color: colors.foreground }]}>Characteristic-check audit timeline</Text>
             <Text style={[styles.auditIntro, { color: colors.muted }]}>Every check is appended as a separate event. Earlier notes are never overwritten; repeated checks are shown as rechecks.</Text>
@@ -137,4 +142,11 @@ const styles = StyleSheet.create({
   auditDate: { fontSize: 10 },
   auditNote: { fontSize: 12, lineHeight: 17, marginTop: 5 },
   auditId: { fontSize: 9, lineHeight: 13, marginTop: 5 },
+  refreshCard: { borderWidth: 1, borderRadius: 16, padding: 14, marginTop: 16 },
+  refreshHeader: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
+  refreshCopy: { flex: 1 },
+  refreshButton: { borderWidth: 1, borderRadius: 9, paddingHorizontal: 10, paddingVertical: 7 },
+  refreshButtonText: { fontSize: 10, fontWeight: "800" },
+  refreshResult: { fontSize: 11, lineHeight: 16, marginTop: 10 },
+  disabled: { opacity: 0.5 },
 });
