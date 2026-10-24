@@ -108,6 +108,7 @@ R2 full real-data ingestion, R3 response estimation, R4 network feedback and R5 
 - [x] R2.0t Current-provider refresh: focused listing history can request the latest eBay item-detail response on demand, shows current asking price, characteristic-group count and provider fetch time separately from persisted history, and explicitly does not treat unavailable data as sale, stock, value or allocation evidence.
 - [x] R2.0u Current-read comparison: latest provider asking price is compared with the newest persisted snapshot only when both currencies match; mismatches and missing fields remain unknown, with no conversion, sale inference or market-value estimate.
 - [x] R2.0v Asking-price timeline: focused listing history displays oldest-to-newest persisted observations as relative bars using only currency-matched prices; the timeline is descriptive evidence and carries no predictive, valuation or allocation interpretation.
+- [x] R2.0w Source-quality panel: focused listing history summarizes fresh/aging/stale/unknown observation ages and counts missing tracked provider fields without filling gaps; age/completeness remain data-quality prompts only.
 
 ## Existing boundaries
 - eBay account-deletion delivery does not establish Browse search or listing-stream permissions.

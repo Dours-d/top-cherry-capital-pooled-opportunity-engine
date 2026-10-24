@@ -7,7 +7,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useColors } from "@/hooks/use-colors";
 import { formatCurrency } from "@/lib/market-data";
 import { trpc } from "@/lib/trpc";
-import { compareCurrentProviderReadToSnapshot, compareSnapshotToPrior, evaluateEbayItemDetailCoverage, evaluateSnapshotReconciliation, getSnapshotFreshness } from "@/shared/reconciliation-snapshots";
+import { compareCurrentProviderReadToSnapshot, compareSnapshotToPrior, evaluateEbayItemDetailCoverage, evaluateSnapshotReconciliation, getSnapshotFreshness, summarizeSnapshotSourceQuality } from "@/shared/reconciliation-snapshots";
 
 type Snapshot = {
   snapshotId: string;
@@ -46,6 +46,8 @@ export default function SnapshotHistoryScreen() {
   const currentReadComparison = current && currentProviderDetail.data ? compareCurrentProviderReadToSnapshot({ providerPrice: currentProviderDetail.data.askingPrice, providerCurrency: currentProviderDetail.data.currency, persistedPrice: current.askingPrice, persistedCurrency: current.currency }) : null;
   const timelineSnapshots = current?.currency ? [...snapshots].filter((snapshot) => snapshot.currency === current.currency).reverse() : [];
   const timelineMax = Math.max(...timelineSnapshots.map((snapshot) => snapshot.askingPrice), 0);
+  const sourceQuality = summarizeSnapshotSourceQuality(snapshots);
+  const missingQualityFields = Object.entries(sourceQuality.missingCounts).filter(([, count]) => count > 0).map(([field, count]) => `${field} (${count})`);
 
   return (
     <ScreenContainer edges={["top", "bottom", "left", "right"]}>
@@ -70,6 +72,13 @@ export default function SnapshotHistoryScreen() {
           <Text style={[styles.qualitySummary, { color: attentionCount ? colors.warning : colors.success }]}>{attentionCount ? `${attentionCount} observation${attentionCount === 1 ? "" : "s"} need provider-field attention.` : "Provider-required fields are present for every stored observation."} This is a data-quality check only.</Text>
           <Text style={[styles.qualitySummary, { color: colors.muted }]}>{profileSlug ? `Profile characteristic prompts: ${characteristicCoverage.recommendedMissing.join(", ") || "none recorded"}.` : "No profile context was stored for this history route; profile-specific characteristic prompts remain unknown."} These prompts do not establish authenticity, value, stock or allocation eligibility.</Text>
           <Text style={[styles.qualitySummary, { color: snapshots.every((snapshot) => snapshot.characteristicsChecked) ? colors.success : colors.warning }]}>{snapshots.filter((snapshot) => snapshot.characteristicsChecked).length} of {snapshots.length} observations marked characteristics checked. This is an operator acknowledgment, not provider verification.</Text>
+          <View style={[styles.qualityCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Text style={[styles.auditTitle, { color: colors.foreground }]}>Source quality</Text>
+            <Text style={[styles.auditIntro, { color: colors.muted }]}>A completeness and age summary of the persisted provider observations. Missing fields remain unknown; they are not reconstructed from titles, prices or assumptions.</Text>
+            <Text style={[styles.qualityLine, { color: colors.foreground }]}>Age: {sourceQuality.ageCounts.fresh} fresh · {sourceQuality.ageCounts.aging} aging · {sourceQuality.ageCounts.stale} stale · {sourceQuality.ageCounts.unknown} unknown</Text>
+            <Text style={[styles.qualityLine, { color: missingQualityFields.length ? colors.warning : colors.success }]}>{missingQualityFields.length ? `Missing fields: ${missingQualityFields.join(", ")}` : "No tracked provider fields are missing."}</Text>
+            <Text style={[styles.qualityFootnote, { color: colors.muted }]}>Age and completeness are data-quality prompts only. They do not estimate availability, demand, market value, sale probability or allocation suitability.</Text>
+          </View>
           <View style={[styles.timelineCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Text style={[styles.auditTitle, { color: colors.foreground }]}>Asking-price timeline</Text>
             <Text style={[styles.auditIntro, { color: colors.muted }]}>Persisted observations in {current?.currency ?? "an unknown currency"}, oldest first. Bar length is relative within this listing history; it is not a fair-value estimate.</Text>
@@ -127,6 +136,9 @@ const styles = StyleSheet.create({
   metricValue: { fontSize: 19, fontWeight: "900" },
   metricLabel: { fontSize: 10, marginTop: 5 },
   qualitySummary: { fontSize: 11, lineHeight: 16, marginTop: 12 },
+  qualityCard: { borderWidth: 1, borderRadius: 16, padding: 14, marginTop: 16 },
+  qualityLine: { fontSize: 11, lineHeight: 16, marginTop: 9 },
+  qualityFootnote: { fontSize: 10, lineHeight: 14, marginTop: 10 },
   timelineCard: { borderWidth: 1, borderRadius: 16, padding: 14, marginTop: 16 },
   timelineRow: { marginTop: 12 },
   timelineMeta: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },

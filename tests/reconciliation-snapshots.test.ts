@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildEbayReconciliationSnapshot, compareCurrentProviderReadToSnapshot, compareSnapshotToPrior, evaluateEbayItemDetailCoverage, evaluateSnapshotReconciliation, getSnapshotFreshness, nextSnapshotFreshnessThreshold, normalizeSnapshotFreshnessThreshold } from "../shared/reconciliation-snapshots";
+import { buildEbayReconciliationSnapshot, compareCurrentProviderReadToSnapshot, compareSnapshotToPrior, evaluateEbayItemDetailCoverage, evaluateSnapshotReconciliation, getSnapshotFreshness, nextSnapshotFreshnessThreshold, normalizeSnapshotFreshnessThreshold, summarizeSnapshotSourceQuality } from "../shared/reconciliation-snapshots";
 
 const listing = {
   listingId: "v1|123456",
@@ -24,6 +24,18 @@ describe("reconciliation snapshots", () => {
   it("does not infer movement when either price or currency is absent", () => {
     expect(compareCurrentProviderReadToSnapshot({ providerPrice: 8750, providerCurrency: undefined, persistedPrice: 8500, persistedCurrency: "GBP" })).toMatchObject({ state: "unknown", reason: "missing-currency" });
     expect(compareCurrentProviderReadToSnapshot({ providerPrice: undefined, providerCurrency: "GBP", persistedPrice: 8500, persistedCurrency: "GBP" })).toMatchObject({ state: "unknown", reason: "missing-price" });
+  });
+
+  it("summarizes age distribution and missing provider fields without filling gaps", () => {
+    const summary = summarizeSnapshotSourceQuality([
+      { providerListingId: "one", title: "One", askingPrice: 100, condition: "Used", currency: "GBP", sourceFetchedAt: "2026-10-24T10:00:00.000Z" },
+      { providerListingId: "two", title: "Two", askingPrice: 120, condition: "Used", sourceFetchedAt: "2026-10-20T10:00:00.000Z" },
+    ], "2026-10-24T11:00:00.000Z");
+    expect(summary.observationCount).toBe(2);
+    expect(summary.ageCounts.fresh).toBe(1);
+    expect(summary.ageCounts.aging).toBe(1);
+    expect(summary.missingCounts.currency).toBe(1);
+    expect(summary.missingCounts.sellerId).toBe(2);
   });
 
   it("preserves provider identity, source context, and asking price without valuation fields", () => {

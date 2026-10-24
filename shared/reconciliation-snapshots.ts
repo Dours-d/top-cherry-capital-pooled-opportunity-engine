@@ -36,6 +36,12 @@ export type ProviderReadComparison = {
   reason?: "missing-currency" | "currency-mismatch" | "missing-price";
 };
 
+export type SourceQualitySummary = {
+  observationCount: number;
+  ageCounts: { fresh: number; aging: number; stale: number; unknown: number };
+  missingCounts: Record<string, number>;
+};
+
 export type SnapshotFreshness = {
   state: "unknown" | "fresh" | "aging" | "stale";
   ageHours?: number;
@@ -126,6 +132,22 @@ export function getSnapshotFreshness(sourceFetchedAt: string | Date, now: string
   const ageHours = Math.max(0, (nowMs - fetchedMs) / 3_600_000);
   const normalized = normalizeSnapshotFreshnessThreshold(threshold);
   return { state: ageHours <= normalized.freshHours ? "fresh" : ageHours <= normalized.agingHours ? "aging" : "stale", ageHours };
+}
+
+export function summarizeSnapshotSourceQuality(snapshots: Array<Record<string, unknown>>, now: string | Date = new Date(), threshold: SnapshotFreshnessThreshold = DEFAULT_SNAPSHOT_FRESHNESS_THRESHOLD): SourceQualitySummary {
+  const ageCounts = { fresh: 0, aging: 0, stale: 0, unknown: 0 };
+  const missingCounts: Record<string, number> = {};
+  const fields = ["providerListingId", "title", "askingPrice", "condition", "currency", "location", "sellerId", "sourceUrl"];
+  for (const snapshot of snapshots) {
+    const freshness = getSnapshotFreshness(String(snapshot.sourceFetchedAt ?? ""), now, threshold);
+    ageCounts[freshness.state] += 1;
+    for (const field of fields) {
+      const value = snapshot[field];
+      const missing = value === undefined || value === null || (typeof value === "string" && value.trim().length === 0) || (field === "askingPrice" && (!Number.isFinite(value as number) || (value as number) < 0));
+      if (missing) missingCounts[field] = (missingCounts[field] ?? 0) + 1;
+    }
+  }
+  return { observationCount: snapshots.length, ageCounts, missingCounts };
 }
 
 export function compareSnapshotToPrior<T extends { providerListingId: string; askingPrice: number; currency?: string | null; sourceFetchedAt: string | Date }>(current: T, history: T[]): SnapshotComparison {
