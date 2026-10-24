@@ -92,7 +92,13 @@ const reconciliationSnapshotReviewInput = z.object({
 
 const reconciliationSnapshotCharacteristicsInput = z.object({
   snapshotId: z.string().min(1).max(160),
+  auditId: z.string().min(1).max(160),
   note: z.string().min(1).max(1000),
+});
+
+const characteristicCheckAuditListInput = z.object({
+  snapshotId: z.string().min(1).max(160).optional(),
+  providerListingId: z.string().min(1).max(255).optional(),
 });
 
 export const appRouter = router({
@@ -160,7 +166,8 @@ export const appRouter = router({
     list: protectedProcedure.query(({ ctx }) => db.listReconciliationSnapshots(ctx.user.id)),
     upsert: protectedProcedure.input(reconciliationSnapshotInput).mutation(({ ctx, input }) => db.upsertReconciliationSnapshot({ userId: ctx.user.id, ...input, sourceFetchedAt: new Date(input.sourceFetchedAt) })),
     review: protectedProcedure.input(reconciliationSnapshotReviewInput).mutation(({ ctx, input }) => db.reviewReconciliationSnapshot(ctx.user.id, input.snapshotId, input.reconciliationStatus, input.reviewNote, new Date())),
-    checkCharacteristics: protectedProcedure.input(reconciliationSnapshotCharacteristicsInput).mutation(({ ctx, input }) => db.checkReconciliationSnapshotCharacteristics(ctx.user.id, input.snapshotId, input.note, new Date())),
+    checkCharacteristics: protectedProcedure.input(reconciliationSnapshotCharacteristicsInput).mutation(({ ctx, input }) => db.checkReconciliationSnapshotCharacteristics(ctx.user.id, input.snapshotId, input.auditId, input.note, new Date())),
+    characteristicCheckAudits: protectedProcedure.input(characteristicCheckAuditListInput).query(({ ctx, input }) => db.listCharacteristicCheckAudits(ctx.user.id, input)),
   }),
   monitoring: router({
     ebay: publicProcedure.query(async () => {

@@ -74,13 +74,13 @@ export default function ProfileScreen() {
   };
 
   const markSnapshotCharacteristicsChecked = async (snapshotId: string, note: string) => {
-    await checkSnapshotCharacteristics.mutateAsync({ snapshotId, note });
+    await checkSnapshotCharacteristics.mutateAsync({ snapshotId, auditId: `characteristics:${snapshotId}:${Date.now()}`, note });
     await remoteSnapshots.refetch();
   };
 
   const markSnapshotsCharacteristicsChecked = async (snapshotIds: string[], note: string) => {
     for (const snapshotId of snapshotIds) {
-      await checkSnapshotCharacteristics.mutateAsync({ snapshotId, note });
+      await checkSnapshotCharacteristics.mutateAsync({ snapshotId, auditId: `characteristics:${snapshotId}:${Date.now()}`, note });
     }
     await remoteSnapshots.refetch();
   };

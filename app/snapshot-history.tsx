@@ -34,6 +34,7 @@ export default function SnapshotHistoryScreen() {
   const { isAuthenticated } = useAuth();
   const { providerListingId, title, profileSlug } = useLocalSearchParams<{ providerListingId?: string; title?: string; profileSlug?: string }>();
   const snapshotsQuery = trpc.reconciliationSnapshots.list.useQuery(undefined, { enabled: isAuthenticated });
+  const characteristicAudits = trpc.reconciliationSnapshots.characteristicCheckAudits.useQuery({ providerListingId }, { enabled: isAuthenticated && Boolean(providerListingId), staleTime: 30_000 });
   const snapshots = ((snapshotsQuery.data ?? []) as Snapshot[])
     .filter((snapshot) => snapshot.providerListingId === providerListingId)
     .sort((a, b) => new Date(b.sourceFetchedAt).getTime() - new Date(a.sourceFetchedAt).getTime());
@@ -65,6 +66,11 @@ export default function SnapshotHistoryScreen() {
           <Text style={[styles.qualitySummary, { color: attentionCount ? colors.warning : colors.success }]}>{attentionCount ? `${attentionCount} observation${attentionCount === 1 ? "" : "s"} need provider-field attention.` : "Provider-required fields are present for every stored observation."} This is a data-quality check only.</Text>
           <Text style={[styles.qualitySummary, { color: colors.muted }]}>{profileSlug ? `Profile characteristic prompts: ${characteristicCoverage.recommendedMissing.join(", ") || "none recorded"}.` : "No profile context was stored for this history route; profile-specific characteristic prompts remain unknown."} These prompts do not establish authenticity, value, stock or allocation eligibility.</Text>
           <Text style={[styles.qualitySummary, { color: snapshots.every((snapshot) => snapshot.characteristicsChecked) ? colors.success : colors.warning }]}>{snapshots.filter((snapshot) => snapshot.characteristicsChecked).length} of {snapshots.length} observations marked characteristics checked. This is an operator acknowledgment, not provider verification.</Text>
+          <View style={[styles.auditCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Text style={[styles.auditTitle, { color: colors.foreground }]}>Characteristic-check audit timeline</Text>
+            <Text style={[styles.auditIntro, { color: colors.muted }]}>Every check is appended as a separate event. Earlier notes are never overwritten; repeated checks are shown as rechecks.</Text>
+            {!characteristicAudits.data?.length ? <Text style={[styles.auditEmpty, { color: colors.muted }]}>{characteristicAudits.isLoading ? "Loading audit events…" : "No characteristic-check events recorded for this provider listing."}</Text> : characteristicAudits.data.map((audit) => <View key={audit.auditId} style={[styles.auditEvent, { borderTopColor: colors.border }]}><View style={styles.auditEventHeader}><Text style={[styles.auditAction, { color: audit.action === "rechecked" ? colors.primary : colors.success }]}>{audit.action === "rechecked" ? "RECHECKED" : "CHECKED"}</Text><Text style={[styles.auditDate, { color: colors.muted }]}>{new Date(audit.occurredAt).toLocaleString()}</Text></View><Text style={[styles.auditNote, { color: colors.foreground }]}>“{audit.note}”</Text><Text style={[styles.auditId, { color: colors.muted }]}>Audit {audit.auditId}</Text></View>)}
+          </View>
           {snapshots.map((snapshot, index) => {
             const freshness = getSnapshotFreshness(snapshot.sourceFetchedAt);
             const movement = compareSnapshotToPrior(snapshot, snapshots);
@@ -121,4 +127,14 @@ const styles = StyleSheet.create({
   quality: { fontSize: 11, lineHeight: 16, marginTop: 4, fontWeight: "700" },
   movement: { fontSize: 11, lineHeight: 16, marginTop: 4 },
   note: { fontSize: 12, lineHeight: 17, marginTop: 7 },
+  auditCard: { borderWidth: 1, borderRadius: 16, padding: 14, marginTop: 16 },
+  auditTitle: { fontSize: 14, fontWeight: "800" },
+  auditIntro: { fontSize: 11, lineHeight: 16, marginTop: 6 },
+  auditEmpty: { fontSize: 11, lineHeight: 16, marginTop: 10 },
+  auditEvent: { borderTopWidth: 1, paddingTop: 10, marginTop: 10 },
+  auditEventHeader: { flexDirection: "row", justifyContent: "space-between", gap: 8 },
+  auditAction: { fontSize: 10, fontWeight: "900", letterSpacing: 0.7 },
+  auditDate: { fontSize: 10 },
+  auditNote: { fontSize: 12, lineHeight: 17, marginTop: 5 },
+  auditId: { fontSize: 9, lineHeight: 13, marginTop: 5 },
 });

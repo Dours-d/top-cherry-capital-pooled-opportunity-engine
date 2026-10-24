@@ -210,6 +210,29 @@ export const reconciliationSnapshots = mysqlTable(
 export type ReconciliationSnapshot = typeof reconciliationSnapshots.$inferSelect;
 export type InsertReconciliationSnapshot = typeof reconciliationSnapshots.$inferInsert;
 
+export const characteristicCheckAudits = mysqlTable(
+  "characteristic_check_audits",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    auditId: varchar("auditId", { length: 160 }).notNull(),
+    snapshotId: varchar("snapshotId", { length: 160 }).notNull(),
+    providerListingId: varchar("providerListingId", { length: 255 }).notNull(),
+    action: mysqlEnum("action", ["checked", "rechecked"]).notNull(),
+    note: text("note").notNull(),
+    occurredAt: timestamp("occurredAt").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (table) => ({
+    auditKeyIdx: uniqueIndex("characteristic_check_audits_user_audit_idx").on(table.userId, table.auditId),
+    snapshotOccurredIdx: index("characteristic_check_audits_user_snapshot_occurred_idx").on(table.userId, table.snapshotId, table.occurredAt),
+    providerOccurredIdx: index("characteristic_check_audits_user_provider_occurred_idx").on(table.userId, table.providerListingId, table.occurredAt),
+  }),
+);
+
+export type CharacteristicCheckAudit = typeof characteristicCheckAudits.$inferSelect;
+export type InsertCharacteristicCheckAudit = typeof characteristicCheckAudits.$inferInsert;
+
 export const ingestionRuns = mysqlTable("ingestion_runs", {
   id: int("id").autoincrement().primaryKey(),
   sourceSlug: varchar("sourceSlug", { length: 64 }).notNull(),

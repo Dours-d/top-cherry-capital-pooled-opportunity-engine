@@ -103,6 +103,7 @@ R2 full real-data ingestion, R3 response estimation, R4 network feedback and R5 
 - [x] R2.0o Audited characteristic acknowledgment: persisted snapshots now have a separate `characteristicsChecked` flag, timestamp and required note, with protected user-scoped transition API and Workspace/history display; it does not change snapshot status or imply provider verification.
 - [x] R2.0p Bulk characteristic acknowledgment: Workspace can sequentially acknowledge only unchecked visible snapshots with one required note, waiting for server confirmation and preserving independent snapshot review status.
 - [x] R2.0q On-demand item detail: each normalized eBay row can fetch the provider item-detail response and show seller-provided localized aspects, coverage state, fetch time and item ID; unavailable details remain unknown and the panel carries no valuation, authenticity, stock or allocation meaning.
+- [x] R2.0r Immutable characteristic audit timeline: each authenticated check appends a user-scoped `checked` or `rechecked` event with stable audit ID, timestamp and required note; focused listing history displays all events without overwriting prior context.
 
 ## Existing boundaries
 - eBay account-deletion delivery does not establish Browse search or listing-stream permissions.

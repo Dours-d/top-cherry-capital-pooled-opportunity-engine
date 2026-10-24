@@ -1,6 +1,6 @@
 import { and, count, desc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { ebayListingEvents, ebayNotificationEvents, InsertEbayListingEvent, InsertEbayNotificationEvent, InsertListingOutcome, InsertObservationReview, InsertOutcomeSyncAudit, InsertReconciliationSnapshot, InsertSavedDeal, InsertThesisContradictionReview, InsertThesisDraftRevision, InsertUser, listingOutcomes, observationReviews, outcomeSyncAudits, reconciliationSnapshots, savedDeals, thesisContradictionReviews, thesisDraftRevisions, userPreferences, users } from "../drizzle/schema";
+import { characteristicCheckAudits, ebayListingEvents, ebayNotificationEvents, InsertCharacteristicCheckAudit, InsertEbayListingEvent, InsertEbayNotificationEvent, InsertListingOutcome, InsertObservationReview, InsertOutcomeSyncAudit, InsertReconciliationSnapshot, InsertSavedDeal, InsertThesisContradictionReview, InsertThesisDraftRevision, InsertUser, listingOutcomes, observationReviews, outcomeSyncAudits, reconciliationSnapshots, savedDeals, thesisContradictionReviews, thesisDraftRevisions, userPreferences, users } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import { buildEbayMarketSignals } from "../shared/ebay-signals";
 
@@ -192,12 +192,31 @@ export async function reviewReconciliationSnapshot(userId: number, snapshotId: s
   return result[0];
 }
 
-export async function checkReconciliationSnapshotCharacteristics(userId: number, snapshotId: string, note: string, checkedAt: Date) {
+export async function checkReconciliationSnapshotCharacteristics(userId: number, snapshotId: string, auditId: string, note: string, checkedAt: Date) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
+  const existing = await db.select().from(reconciliationSnapshots).where(and(eq(reconciliationSnapshots.userId, userId), eq(reconciliationSnapshots.snapshotId, snapshotId))).limit(1);
+  if (!existing[0]) throw new Error("Reconciliation snapshot not found");
+  const action = existing[0].characteristicsChecked ? "rechecked" as const : "checked" as const;
   await db.update(reconciliationSnapshots).set({ characteristicsChecked: true, characteristicsCheckedAt: checkedAt, characteristicsCheckNote: note }).where(and(eq(reconciliationSnapshots.userId, userId), eq(reconciliationSnapshots.snapshotId, snapshotId)));
+  await db.insert(characteristicCheckAudits).values({ userId, auditId, snapshotId, providerListingId: existing[0].providerListingId, action, note, occurredAt: checkedAt }).onDuplicateKeyUpdate({ set: { auditId } });
   const result = await db.select().from(reconciliationSnapshots).where(and(eq(reconciliationSnapshots.userId, userId), eq(reconciliationSnapshots.snapshotId, snapshotId))).limit(1);
   return result[0];
+}
+
+export async function appendCharacteristicCheckAudit(audit: InsertCharacteristicCheckAudit) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.insert(characteristicCheckAudits).values(audit).onDuplicateKeyUpdate({ set: { auditId: audit.auditId } });
+  const result = await db.select().from(characteristicCheckAudits).where(and(eq(characteristicCheckAudits.userId, audit.userId), eq(characteristicCheckAudits.auditId, audit.auditId))).limit(1);
+  return result[0];
+}
+
+export async function listCharacteristicCheckAudits(userId: number, filters: { snapshotId?: string; providerListingId?: string } = {}, limit = 100) {
+  const db = await getDb();
+  if (!db) return [];
+  const condition = and(eq(characteristicCheckAudits.userId, userId), ...(filters.snapshotId ? [eq(characteristicCheckAudits.snapshotId, filters.snapshotId)] : []), ...(filters.providerListingId ? [eq(characteristicCheckAudits.providerListingId, filters.providerListingId)] : []));
+  return db.select().from(characteristicCheckAudits).where(condition).orderBy(desc(characteristicCheckAudits.occurredAt)).limit(limit);
 }
 
 export async function insertEbayNotificationEvent(event: InsertEbayNotificationEvent) {
