@@ -1,6 +1,7 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { router, useLocalSearchParams } from "expo-router";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, Share, StyleSheet, Text, View } from "react-native";
+import { useState } from "react";
 
 import { ScreenContainer } from "@/components/screen-container";
 import { useAuth } from "@/hooks/use-auth";
@@ -48,6 +49,25 @@ export default function SnapshotHistoryScreen() {
   const timelineMax = Math.max(...timelineSnapshots.map((snapshot) => snapshot.askingPrice), 0);
   const sourceQuality = summarizeSnapshotSourceQuality(snapshots);
   const missingQualityFields = Object.entries(sourceQuality.missingCounts).filter(([, count]) => count > 0).map(([field, count]) => `${field} (${count})`);
+  const [shareStatus, setShareStatus] = useState<string | null>(null);
+  const shareEvidencePackage = async () => {
+    const payload = {
+      schemaVersion: "top-cherry-evidence-1",
+      exportedAt: new Date().toISOString(),
+      scope: { providerListingId, title: title ?? current?.title ?? null, profileSlug: profileSlug ?? null },
+      semantics: "Research evidence only. Asking prices and provider fields do not establish sale, stock, demand, fair value, authenticity, allocation eligibility or execution authority.",
+      sourceQuality,
+      snapshots: snapshots.map((snapshot) => ({ snapshotId: snapshot.snapshotId, marketplaceId: snapshot.marketplaceId, providerListingId: snapshot.providerListingId, profileSlug: snapshot.profileSlug, title: snapshot.title, askingPrice: snapshot.askingPrice, currency: snapshot.currency, condition: snapshot.condition, location: snapshot.location, sellerId: snapshot.sellerId, sourceFetchedAt: snapshot.sourceFetchedAt, reconciliationStatus: snapshot.reconciliationStatus, reviewNote: snapshot.reviewNote, reviewedAt: snapshot.reviewedAt, characteristicsChecked: snapshot.characteristicsChecked, characteristicsCheckedAt: snapshot.characteristicsCheckedAt, characteristicsCheckNote: snapshot.characteristicsCheckNote })),
+      currentProviderRead: currentProviderDetail.data ? { itemId: currentProviderDetail.data.itemId, askingPrice: currentProviderDetail.data.askingPrice, currency: currentProviderDetail.data.currency, fetchedAt: currentProviderDetail.data.fetchedAt, characteristicGroupCount: currentProviderDetail.data.localizedAspects?.length ?? 0 } : null,
+      characteristicAudits: characteristicAudits.data ?? [],
+    };
+    try {
+      await Share.share({ title: "Top Cherry evidence package", message: JSON.stringify(payload, null, 2) });
+      setShareStatus("Evidence package prepared for sharing.");
+    } catch {
+      setShareStatus("Sharing is unavailable on this device; the persisted evidence remains unchanged.");
+    }
+  };
 
   return (
     <ScreenContainer edges={["top", "bottom", "left", "right"]}>
@@ -78,6 +98,10 @@ export default function SnapshotHistoryScreen() {
             <Text style={[styles.qualityLine, { color: colors.foreground }]}>Age: {sourceQuality.ageCounts.fresh} fresh · {sourceQuality.ageCounts.aging} aging · {sourceQuality.ageCounts.stale} stale · {sourceQuality.ageCounts.unknown} unknown</Text>
             <Text style={[styles.qualityLine, { color: missingQualityFields.length ? colors.warning : colors.success }]}>{missingQualityFields.length ? `Missing fields: ${missingQualityFields.join(", ")}` : "No tracked provider fields are missing."}</Text>
             <Text style={[styles.qualityFootnote, { color: colors.muted }]}>Age and completeness are data-quality prompts only. They do not estimate availability, demand, market value, sale probability or allocation suitability.</Text>
+          </View>
+          <View style={[styles.exportCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={styles.exportHeader}><View style={styles.refreshCopy}><Text style={[styles.auditTitle, { color: colors.foreground }]}>Evidence package</Text><Text style={[styles.auditIntro, { color: colors.muted }]}>Share snapshots, provenance, source quality, current provider read and characteristic audits as a research record. No valuation, execution or custody fields are exported.</Text></View><Pressable onPress={() => void shareEvidencePackage()} style={({ pressed }) => [styles.refreshButton, { borderColor: colors.primary }, pressed && styles.pressed]}><Text style={[styles.refreshButtonText, { color: colors.primary }]}>Share</Text></Pressable></View>
+            {shareStatus ? <Text style={[styles.qualityFootnote, { color: colors.muted }]}>{shareStatus}</Text> : null}
           </View>
           <View style={[styles.timelineCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Text style={[styles.auditTitle, { color: colors.foreground }]}>Asking-price timeline</Text>
@@ -139,6 +163,8 @@ const styles = StyleSheet.create({
   qualityCard: { borderWidth: 1, borderRadius: 16, padding: 14, marginTop: 16 },
   qualityLine: { fontSize: 11, lineHeight: 16, marginTop: 9 },
   qualityFootnote: { fontSize: 10, lineHeight: 14, marginTop: 10 },
+  exportCard: { borderWidth: 1, borderRadius: 16, padding: 14, marginTop: 16 },
+  exportHeader: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
   timelineCard: { borderWidth: 1, borderRadius: 16, padding: 14, marginTop: 16 },
   timelineRow: { marginTop: 12 },
   timelineMeta: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
