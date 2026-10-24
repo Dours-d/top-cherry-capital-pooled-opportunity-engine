@@ -107,6 +107,7 @@ R2 full real-data ingestion, R3 response estimation, R4 network feedback and R5 
 - [x] R2.0s Durable characteristic-audit retry: failed audit writes persist locally with attempt/error diagnostics, retry sequentially from Workspace, clear only after server confirmation, and receive one bounded retry pass after authentication restoration; queue transitions have four regression tests.
 - [x] R2.0t Current-provider refresh: focused listing history can request the latest eBay item-detail response on demand, shows current asking price, characteristic-group count and provider fetch time separately from persisted history, and explicitly does not treat unavailable data as sale, stock, value or allocation evidence.
 - [x] R2.0u Current-read comparison: latest provider asking price is compared with the newest persisted snapshot only when both currencies match; mismatches and missing fields remain unknown, with no conversion, sale inference or market-value estimate.
+- [x] R2.0v Asking-price timeline: focused listing history displays oldest-to-newest persisted observations as relative bars using only currency-matched prices; the timeline is descriptive evidence and carries no predictive, valuation or allocation interpretation.
 
 ## Existing boundaries
 - eBay account-deletion delivery does not establish Browse search or listing-stream permissions.
