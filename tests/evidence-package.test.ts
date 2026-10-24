@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildEvidencePackage } from "../shared/evidence-package";
+import { buildEvidencePackage, renderEvidencePackageMarkdown } from "../shared/evidence-package";
 
 const sourceQuality = { observationCount: 1, ageCounts: { fresh: 1, aging: 0, stale: 0, unknown: 0 }, missingCounts: {} };
 
@@ -54,5 +54,14 @@ describe("evidence package", () => {
     expect(serialized).not.toContain("marketValue");
     expect(serialized).not.toContain("checkoutUrl");
     expect(serialized).not.toContain("custodyDecision");
+  });
+
+  it("renders a readable Markdown record from the same allowlisted package", () => {
+    const pkg = buildEvidencePackage({ exportedAt: "2026-10-24T11:00:00.000Z", scope: { title: "Example | watch" }, sourceQuality, snapshots: [snapshot], characteristicAudits: [] });
+    const markdown = renderEvidencePackageMarkdown(pkg);
+    expect(markdown).toContain("# Top Cherry evidence package");
+    expect(markdown).toContain("| 2026-10-24T10:00:00.000Z | 1000 GBP | observed | not checked |");
+    expect(markdown).toContain("Example \\| watch");
+    expect(markdown).toContain("not a valuation");
   });
 });

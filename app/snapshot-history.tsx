@@ -8,7 +8,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useColors } from "@/hooks/use-colors";
 import { formatCurrency } from "@/lib/market-data";
 import { trpc } from "@/lib/trpc";
-import { buildEvidencePackage } from "@/shared/evidence-package";
+import { buildEvidencePackage, renderEvidencePackageMarkdown } from "@/shared/evidence-package";
 import { compareCurrentProviderReadToSnapshot, compareSnapshotToPrior, evaluateEbayItemDetailCoverage, evaluateSnapshotReconciliation, getSnapshotFreshness, summarizeSnapshotSourceQuality } from "@/shared/reconciliation-snapshots";
 
 type Snapshot = {
@@ -51,7 +51,7 @@ export default function SnapshotHistoryScreen() {
   const sourceQuality = summarizeSnapshotSourceQuality(snapshots);
   const missingQualityFields = Object.entries(sourceQuality.missingCounts).filter(([, count]) => count > 0).map(([field, count]) => `${field} (${count})`);
   const [shareStatus, setShareStatus] = useState<string | null>(null);
-  const shareEvidencePackage = async () => {
+  const shareEvidencePackage = async (format: "json" | "markdown") => {
     const payload = buildEvidencePackage({
       exportedAt: new Date().toISOString(),
       scope: { providerListingId, title: title ?? current?.title ?? null, profileSlug: profileSlug ?? null },
@@ -61,8 +61,8 @@ export default function SnapshotHistoryScreen() {
       characteristicAudits: characteristicAudits.data ?? [],
     });
     try {
-      await Share.share({ title: "Top Cherry evidence package", message: JSON.stringify(payload, null, 2) });
-      setShareStatus("Evidence package prepared for sharing.");
+      await Share.share({ title: `Top Cherry evidence package (${format.toUpperCase()})`, message: format === "json" ? JSON.stringify(payload, null, 2) : renderEvidencePackageMarkdown(payload) });
+      setShareStatus(`${format.toUpperCase()} evidence package prepared for sharing.`);
     } catch {
       setShareStatus("Sharing is unavailable on this device; the persisted evidence remains unchanged.");
     }
@@ -99,7 +99,7 @@ export default function SnapshotHistoryScreen() {
             <Text style={[styles.qualityFootnote, { color: colors.muted }]}>Age and completeness are data-quality prompts only. They do not estimate availability, demand, market value, sale probability or allocation suitability.</Text>
           </View>
           <View style={[styles.exportCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <View style={styles.exportHeader}><View style={styles.refreshCopy}><Text style={[styles.auditTitle, { color: colors.foreground }]}>Evidence package</Text><Text style={[styles.auditIntro, { color: colors.muted }]}>Share snapshots, provenance, source quality, current provider read and characteristic audits as a research record. No valuation, execution or custody fields are exported.</Text></View><Pressable onPress={() => void shareEvidencePackage()} style={({ pressed }) => [styles.refreshButton, { borderColor: colors.primary }, pressed && styles.pressed]}><Text style={[styles.refreshButtonText, { color: colors.primary }]}>Share</Text></Pressable></View>
+            <View style={styles.exportHeader}><View style={styles.refreshCopy}><Text style={[styles.auditTitle, { color: colors.foreground }]}>Evidence package</Text><Text style={[styles.auditIntro, { color: colors.muted }]}>Share snapshots, provenance, source quality, current provider read and characteristic audits as a research record. No valuation, execution or custody fields are exported.</Text></View><View style={styles.exportActions}><Pressable onPress={() => void shareEvidencePackage("json")} style={({ pressed }) => [styles.refreshButton, { borderColor: colors.primary }, pressed && styles.pressed]}><Text style={[styles.refreshButtonText, { color: colors.primary }]}>JSON</Text></Pressable><Pressable onPress={() => void shareEvidencePackage("markdown")} style={({ pressed }) => [styles.refreshButton, { borderColor: colors.primary }, pressed && styles.pressed]}><Text style={[styles.refreshButtonText, { color: colors.primary }]}>Markdown</Text></Pressable></View></View>
             {shareStatus ? <Text style={[styles.qualityFootnote, { color: colors.muted }]}>{shareStatus}</Text> : null}
           </View>
           <View style={[styles.timelineCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -164,6 +164,7 @@ const styles = StyleSheet.create({
   qualityFootnote: { fontSize: 10, lineHeight: 14, marginTop: 10 },
   exportCard: { borderWidth: 1, borderRadius: 16, padding: 14, marginTop: 16 },
   exportHeader: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
+  exportActions: { gap: 6, alignItems: "flex-end" },
   timelineCard: { borderWidth: 1, borderRadius: 16, padding: 14, marginTop: 16 },
   timelineRow: { marginTop: 12 },
   timelineMeta: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },

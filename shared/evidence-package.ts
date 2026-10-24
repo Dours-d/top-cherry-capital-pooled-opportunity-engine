@@ -83,3 +83,17 @@ export function buildEvidencePackage(input: {
     })),
   };
 }
+
+type EvidencePackage = ReturnType<typeof buildEvidencePackage>;
+
+function markdownCell(value: unknown) {
+  return String(value ?? "—").replaceAll("|", "\\|").replaceAll("\n", " ");
+}
+
+export function renderEvidencePackageMarkdown(pkg: EvidencePackage) {
+  const scope = pkg.scope;
+  const rows = pkg.snapshots.map((snapshot) => `| ${markdownCell(snapshot.sourceFetchedAt)} | ${markdownCell(snapshot.askingPrice)} ${markdownCell(snapshot.currency)} | ${markdownCell(snapshot.reconciliationStatus)} | ${snapshot.characteristicsChecked ? "checked" : "not checked"} |`).join("\n") || "| — | — | — | — |";
+  const audits = pkg.characteristicAudits.map((audit) => `- **${markdownCell(audit.action)}** ${markdownCell(audit.occurredAt)} — ${markdownCell(audit.note)} (${markdownCell(audit.auditId)})`).join("\n") || "- No characteristic-check audit events recorded.";
+  const currentRead = pkg.currentProviderRead ? `${markdownCell(pkg.currentProviderRead.askingPrice)} ${markdownCell(pkg.currentProviderRead.currency)}; ${pkg.currentProviderRead.characteristicGroupCount} characteristic groups; fetched ${markdownCell(pkg.currentProviderRead.fetchedAt)}` : "No current provider read included.";
+  return `# Top Cherry evidence package\n\n- Schema: ${pkg.schemaVersion}\n- Exported: ${pkg.exportedAt}\n- Provider listing: ${markdownCell(scope.providerListingId)}\n- Title: ${markdownCell(scope.title)}\n- Profile: ${markdownCell(scope.profileSlug)}\n\n> ${pkg.semantics}\n\n## Source quality\n\n- Fresh: ${pkg.sourceQuality.ageCounts.fresh}\n- Aging: ${pkg.sourceQuality.ageCounts.aging}\n- Stale: ${pkg.sourceQuality.ageCounts.stale}\n- Unknown: ${pkg.sourceQuality.ageCounts.unknown}\n\n## Persisted observations\n\n| Fetched | Asking price | Status | Characteristics |\n|---|---:|---|---|\n${rows}\n\n## Current provider read\n\n${currentRead}\n\n## Characteristic-check audit\n\n${audits}\n\n## Boundary\n\nThis is a research record of provider observations and operator acknowledgments. It is not a valuation, sale record, stock confirmation, execution instruction, custody record or pooled-fund decision.\n`;
+}
