@@ -169,6 +169,10 @@ export default function SnapshotHistoryScreen() {
   const timelineMax = Math.max(...timelineSnapshots.map((snapshot) => snapshot.askingPrice), 0);
   const sourceQuality = summarizeSnapshotSourceQuality(snapshots);
   const missingQualityFields = Object.entries(sourceQuality.missingCounts).filter(([, count]) => count > 0).map(([field, count]) => `${field} (${count})`);
+  const exportRetryResetAudits = [
+    ...(retryResetAudits.data ?? []).map((audit) => ({ resetId: audit.resetId, providerListingId: audit.providerListingId, previousAttemptCount: audit.previousAttemptCount, occurredAt: audit.occurredAt, note: audit.note, syncStatus: "account-synced" as const })),
+    ...pendingRetryResets.filter((audit) => audit.providerListingId === providerListingId).map((audit) => ({ resetId: audit.resetId, providerListingId: audit.providerListingId, previousAttemptCount: audit.previousAttemptCount, occurredAt: audit.occurredAt, note: audit.note, syncStatus: "pending-local" as const })),
+  ];
   const [shareStatus, setShareStatus] = useState<string | null>(null);
   const [preview, setPreview] = useState<{ format: "json" | "markdown"; content: string; filename: string } | null>(null);
   const buildExportContent = (format: "json" | "markdown") => {
@@ -179,6 +183,7 @@ export default function SnapshotHistoryScreen() {
       snapshots,
       currentProviderRead: currentProviderDetail.data ? { itemId: currentProviderDetail.data.itemId, askingPrice: currentProviderDetail.data.askingPrice, currency: currentProviderDetail.data.currency, fetchedAt: currentProviderDetail.data.fetchedAt, localizedAspects: currentProviderDetail.data.localizedAspects } : null,
       characteristicAudits: characteristicAudits.data ?? [],
+      retryResetAudits: exportRetryResetAudits,
     });
     return format === "json" ? JSON.stringify(payload, null, 2) : renderEvidencePackageMarkdown(payload);
   };

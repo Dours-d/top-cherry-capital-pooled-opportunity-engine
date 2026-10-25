@@ -38,11 +38,13 @@ describe("evidence package", () => {
       snapshots: [snapshot],
       currentProviderRead: { itemId: "v1|123", askingPrice: 1010, currency: "GBP", fetchedAt: "2026-10-24T11:00:00.000Z", localizedAspects: [{ name: "Brand" }] },
       characteristicAudits: [{ auditId: "audit-1", action: "checked", occurredAt: "2026-10-24T11:00:00.000Z", note: "Reviewed seller fields" }],
+      retryResetAudits: [{ resetId: "reset-1", providerListingId: "v1|123", previousAttemptCount: 3, occurredAt: "2026-10-24T11:30:00.000Z", note: "Provider read budget reopened for a fresh observation", syncStatus: "account-synced" }],
     });
     const serialized = JSON.stringify(pkg);
     expect(pkg.schemaVersion).toBe("top-cherry-evidence-1");
     expect(pkg.snapshots[0]).toMatchObject({ askingPrice: 1000, currency: "GBP", providerListingId: "v1|123" });
     expect(pkg.currentProviderRead).toMatchObject({ askingPrice: 1010, characteristicGroupCount: 1 });
+    expect(pkg.retryResetAudits).toMatchObject([{ resetId: "reset-1", previousAttemptCount: 3, syncStatus: "account-synced" }]);
     expect(serialized).not.toMatch(/marketValue|fairValue|margin|execute|checkout|custody|pooled|funds|quantity/i);
   });
 
@@ -68,6 +70,15 @@ describe("evidence package", () => {
     expect(markdown).toContain("# Top Cherry evidence package");
     expect(markdown).toContain("| 2026-10-24T10:00:00.000Z | 1000 GBP | observed | not checked |");
     expect(markdown).toContain("Example \\| watch");
+    expect(markdown).toContain("No provider-read retry-reset audit events recorded.");
     expect(markdown).toContain("not a valuation");
+  });
+
+  it("keeps pending retry-reset exports allowlisted", () => {
+    const unsafeReset = Object.assign({ resetId: "reset-2", providerListingId: "v1|123", previousAttemptCount: 2, occurredAt: "2026-10-24T11:00:00.000Z", note: "Retry later", syncStatus: "pending-local" as const }, { marketValue: 5000, execute: true, custody: "hold", pooledFunds: 100 });
+    const pkg = buildEvidencePackage({ exportedAt: "2026-10-24T11:00:00.000Z", scope: {}, sourceQuality, snapshots: [], characteristicAudits: [], retryResetAudits: [unsafeReset] });
+    const serialized = JSON.stringify(pkg);
+    expect(pkg.retryResetAudits).toMatchObject([{ resetId: "reset-2", syncStatus: "pending-local" }]);
+    expect(serialized).not.toMatch(/marketValue|execute|custody|pooledFunds/i);
   });
 });
