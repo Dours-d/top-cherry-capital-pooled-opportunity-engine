@@ -126,6 +126,7 @@ R2 full real-data ingestion, R3 response estimation, R4 network feedback and R5 
 - [x] R2.0al Workspace-wide retry-reset summary: Workspace now aggregates account-synced reset events and locally queued reset events across listings, showing provider listing, prior attempt count, timestamp, note, pending attempt/error state and the evidence-only boundary without exposing reset actions or implying provider recovery.
 - [x] R2.0am Evidence export parity: focused JSON/Markdown packages now include allowlisted account-synced and provider-listing-matched pending-local retry-reset events with status, prior attempt count, timestamp, note and reset ID; arbitrary valuation, execution, custody and pooled-fund fields remain excluded and tested.
 - [x] R2.0an Retry-reset count visibility: focused history source quality now reports account-synced versus pending-local reset counts, and the export preview states the exact number and status split of retry-reset events included.
+- [x] R2.0ao Retry-reset filters: focused history provides All, Synced and Pending views; the active filter controls the visible count and the retry-reset audit subset included in JSON/Markdown exports, while total source counts remain visible for context.
 
 ## Existing boundaries
 - eBay account-deletion delivery does not establish Browse search or listing-stream permissions.
