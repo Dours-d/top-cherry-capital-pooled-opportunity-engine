@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildEbayReconciliationSnapshot, classifyProviderReadError, compareCurrentProviderReadToSnapshot, compareSnapshotToPrior, evaluateEbayItemDetailCoverage, evaluateSnapshotReconciliation, getSnapshotFreshness, nextSnapshotFreshnessThreshold, normalizeSnapshotFreshnessThreshold, summarizeSnapshotSourceQuality } from "../shared/reconciliation-snapshots";
+import { buildEbayReconciliationSnapshot, classifyProviderReadError, compareCurrentProviderReadToSnapshot, compareSnapshotToPrior, evaluateEbayItemDetailCoverage, evaluateSnapshotReconciliation, getProviderReadRetryDelayMs, getSnapshotFreshness, nextSnapshotFreshnessThreshold, normalizeSnapshotFreshnessThreshold, PROVIDER_READ_MAX_RETRIES, summarizeSnapshotSourceQuality } from "../shared/reconciliation-snapshots";
 
 const listing = {
   listingId: "v1|123456",
@@ -22,6 +22,15 @@ describe("reconciliation snapshots", () => {
     expect(classifyProviderReadError(new Error("item not found"))).toBe("not-found");
     expect(classifyProviderReadError(new Error("provider rejected request"))).toBe("provider");
     expect(classifyProviderReadError({ code: "secret" })).toBe("unknown");
+  });
+
+  it("caps provider retries and uses bounded exponential backoff", () => {
+    expect(PROVIDER_READ_MAX_RETRIES).toBe(3);
+    expect(getProviderReadRetryDelayMs(0)).toBe(0);
+    expect(getProviderReadRetryDelayMs(1)).toBe(1000);
+    expect(getProviderReadRetryDelayMs(2)).toBe(2000);
+    expect(getProviderReadRetryDelayMs(3)).toBe(4000);
+    expect(getProviderReadRetryDelayMs(99)).toBe(4000);
   });
 
   it("compares a current provider read only when currencies match", () => {

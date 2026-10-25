@@ -38,6 +38,13 @@ export type ProviderReadComparison = {
 
 export type ProviderReadErrorCategory = "offline" | "unauthorized" | "not-found" | "provider" | "unknown";
 
+export const PROVIDER_READ_MAX_RETRIES = 3;
+
+export function getProviderReadRetryDelayMs(retryAttempt: number): number {
+  if (!Number.isFinite(retryAttempt) || retryAttempt <= 0) return 0;
+  return Math.min(4_000, 1_000 * 2 ** (Math.ceil(retryAttempt) - 1));
+}
+
 /** Classify provider-read failures without exposing raw transport or credential details in the UI. */
 export function classifyProviderReadError(error: unknown): ProviderReadErrorCategory {
   const text = error instanceof Error ? error.message : typeof error === "string" ? error : "";
