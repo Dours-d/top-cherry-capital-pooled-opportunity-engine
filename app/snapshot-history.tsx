@@ -173,6 +173,8 @@ export default function SnapshotHistoryScreen() {
     ...(retryResetAudits.data ?? []).map((audit) => ({ resetId: audit.resetId, providerListingId: audit.providerListingId, previousAttemptCount: audit.previousAttemptCount, occurredAt: audit.occurredAt, note: audit.note, syncStatus: "account-synced" as const })),
     ...pendingRetryResets.filter((audit) => audit.providerListingId === providerListingId).map((audit) => ({ resetId: audit.resetId, providerListingId: audit.providerListingId, previousAttemptCount: audit.previousAttemptCount, occurredAt: audit.occurredAt, note: audit.note, syncStatus: "pending-local" as const })),
   ];
+  const accountRetryResetCount = retryResetAudits.data?.length ?? 0;
+  const pendingRetryResetCount = pendingRetryResets.filter((audit) => audit.providerListingId === providerListingId).length;
   const [shareStatus, setShareStatus] = useState<string | null>(null);
   const [preview, setPreview] = useState<{ format: "json" | "markdown"; content: string; filename: string } | null>(null);
   const buildExportContent = (format: "json" | "markdown") => {
@@ -230,6 +232,7 @@ export default function SnapshotHistoryScreen() {
             <Text style={[styles.auditIntro, { color: colors.muted }]}>A completeness and age summary of the persisted provider observations. Missing fields remain unknown; they are not reconstructed from titles, prices or assumptions.</Text>
             <Text style={[styles.qualityLine, { color: colors.foreground }]}>Age: {sourceQuality.ageCounts.fresh} fresh · {sourceQuality.ageCounts.aging} aging · {sourceQuality.ageCounts.stale} stale · {sourceQuality.ageCounts.unknown} unknown</Text>
             <Text style={[styles.qualityLine, { color: missingQualityFields.length ? colors.warning : colors.success }]}>{missingQualityFields.length ? `Missing fields: ${missingQualityFields.join(", ")}` : "No tracked provider fields are missing."}</Text>
+            <Text style={[styles.qualityLine, { color: accountRetryResetCount || pendingRetryResetCount ? colors.warning : colors.muted }]}>Retry-reset audit events: {accountRetryResetCount} account-synced · {pendingRetryResetCount} pending locally. A reset records operator context only; it does not establish provider recovery.</Text>
             <Text style={[styles.qualityFootnote, { color: colors.muted }]}>Age and completeness are data-quality prompts only. They do not estimate availability, demand, market value, sale probability or allocation suitability.</Text>
           </View>
           <View style={[styles.exportCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -279,7 +282,7 @@ export default function SnapshotHistoryScreen() {
               <View style={styles.refreshCopy}>
                 <Text style={[styles.auditTitle, { color: colors.foreground }]}>Review export</Text>
                 <Text style={[styles.auditIntro, { color: colors.muted }]}>{preview?.format.toUpperCase()} preview · sharing does not change persisted evidence.</Text>
-                <Text style={[styles.previewMeta, { color: colors.muted }]}>{preview?.filename} · {snapshots.length} observation{snapshots.length === 1 ? "" : "s"} · latest fetch {current ? new Date(current.sourceFetchedAt).toLocaleString() : "unknown"} · current provider read {currentProviderDetail.data ? "included" : "not included"}</Text>
+                <Text style={[styles.previewMeta, { color: colors.muted }]}>{preview?.filename} · {snapshots.length} observation{snapshots.length === 1 ? "" : "s"} · {exportRetryResetAudits.length} retry-reset audit event{exportRetryResetAudits.length === 1 ? "" : "s"} included ({accountRetryResetCount} synced, {pendingRetryResetCount} pending) · latest fetch {current ? new Date(current.sourceFetchedAt).toLocaleString() : "unknown"} · current provider read {currentProviderDetail.data ? "included" : "not included"}</Text>
               </View>
               <Pressable onPress={() => setPreview(null)} style={({ pressed }) => [styles.closeButton, pressed && styles.pressed]}><Text style={[styles.closeButtonText, { color: colors.muted }]}>Close</Text></Pressable>
             </View>
