@@ -8,7 +8,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useColors } from "@/hooks/use-colors";
 import { formatCurrency } from "@/lib/market-data";
 import { trpc } from "@/lib/trpc";
-import { buildEvidencePackage, renderEvidencePackageMarkdown } from "@/shared/evidence-package";
+import { buildEvidenceFilename, buildEvidencePackage, renderEvidencePackageMarkdown } from "@/shared/evidence-package";
 import { classifyProviderReadError, compareCurrentProviderReadToSnapshot, compareSnapshotToPrior, evaluateEbayItemDetailCoverage, evaluateSnapshotReconciliation, getProviderReadRetryDelayMs, getSnapshotFreshness, PROVIDER_READ_MAX_RETRIES, summarizeSnapshotSourceQuality } from "@/shared/reconciliation-snapshots";
 
 type Snapshot = {
@@ -79,7 +79,7 @@ export default function SnapshotHistoryScreen() {
   const sourceQuality = summarizeSnapshotSourceQuality(snapshots);
   const missingQualityFields = Object.entries(sourceQuality.missingCounts).filter(([, count]) => count > 0).map(([field, count]) => `${field} (${count})`);
   const [shareStatus, setShareStatus] = useState<string | null>(null);
-  const [preview, setPreview] = useState<{ format: "json" | "markdown"; content: string } | null>(null);
+  const [preview, setPreview] = useState<{ format: "json" | "markdown"; content: string; filename: string } | null>(null);
   const buildExportContent = (format: "json" | "markdown") => {
     const payload = buildEvidencePackage({
       exportedAt: new Date().toISOString(),
@@ -93,12 +93,12 @@ export default function SnapshotHistoryScreen() {
   };
   const previewEvidencePackage = (format: "json" | "markdown") => {
     setShareStatus(null);
-    setPreview({ format, content: buildExportContent(format) });
+    setPreview({ format, content: buildExportContent(format), filename: buildEvidenceFilename(providerListingId, format) });
   };
   const shareEvidencePackage = async () => {
     if (!preview) return;
     try {
-      await Share.share({ title: `Top Cherry evidence package (${preview.format.toUpperCase()})`, message: preview.content });
+      await Share.share({ title: preview.filename, message: preview.content });
       setShareStatus(`${preview.format.toUpperCase()} evidence package prepared for sharing.`);
       setPreview(null);
     } catch {
@@ -183,7 +183,7 @@ export default function SnapshotHistoryScreen() {
               <View style={styles.refreshCopy}>
                 <Text style={[styles.auditTitle, { color: colors.foreground }]}>Review export</Text>
                 <Text style={[styles.auditIntro, { color: colors.muted }]}>{preview?.format.toUpperCase()} preview · sharing does not change persisted evidence.</Text>
-                <Text style={[styles.previewMeta, { color: colors.muted }]}>{snapshots.length} observation{snapshots.length === 1 ? "" : "s"} · latest fetch {current ? new Date(current.sourceFetchedAt).toLocaleString() : "unknown"} · current provider read {currentProviderDetail.data ? "included" : "not included"}</Text>
+                <Text style={[styles.previewMeta, { color: colors.muted }]}>{preview?.filename} · {snapshots.length} observation{snapshots.length === 1 ? "" : "s"} · latest fetch {current ? new Date(current.sourceFetchedAt).toLocaleString() : "unknown"} · current provider read {currentProviderDetail.data ? "included" : "not included"}</Text>
               </View>
               <Pressable onPress={() => setPreview(null)} style={({ pressed }) => [styles.closeButton, pressed && styles.pressed]}><Text style={[styles.closeButtonText, { color: colors.muted }]}>Close</Text></Pressable>
             </View>

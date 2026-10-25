@@ -86,6 +86,11 @@ export function buildEvidencePackage(input: {
 
 type EvidencePackage = ReturnType<typeof buildEvidencePackage>;
 
+export function buildEvidenceFilename(providerListingId: string | undefined, format: "json" | "markdown") {
+  const token = (providerListingId ?? "listing").replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase() || "listing";
+  return `top-cherry-${token}-evidence.${format === "markdown" ? "md" : "json"}`;
+}
+
 function markdownCell(value: unknown) {
   return String(value ?? "—").replaceAll("|", "\\|").replaceAll("\n", " ");
 }

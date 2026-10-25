@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildEvidencePackage, renderEvidencePackageMarkdown } from "../shared/evidence-package";
+import { buildEvidenceFilename, buildEvidencePackage, renderEvidencePackageMarkdown } from "../shared/evidence-package";
 
 const sourceQuality = { observationCount: 1, ageCounts: { fresh: 1, aging: 0, stale: 0, unknown: 0 }, missingCounts: {} };
 
@@ -24,6 +24,12 @@ const snapshot = {
 };
 
 describe("evidence package", () => {
+  it("builds safe filenames from provider listing IDs and formats", () => {
+    expect(buildEvidenceFilename("v1|123/secret", "json")).toBe("top-cherry-v1-123-secret-evidence.json");
+    expect(buildEvidenceFilename("v1|123/secret", "markdown")).toBe("top-cherry-v1-123-secret-evidence.md");
+    expect(buildEvidenceFilename(undefined, "json")).toBe("top-cherry-listing-evidence.json");
+  });
+
   it("preserves evidence fields and excludes valuation, execution, custody and pooled-fund fields", () => {
     const pkg = buildEvidencePackage({
       exportedAt: "2026-10-24T11:00:00.000Z",
