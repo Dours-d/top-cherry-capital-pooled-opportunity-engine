@@ -18,6 +18,7 @@ import { mergeListingOutcomes } from "@/shared/listing-outcomes";
 import { compareSnapshotToPrior, evaluateSnapshotReconciliation, getSnapshotFreshness, nextSnapshotFreshnessThreshold, type SnapshotFreshnessThreshold } from "@/shared/reconciliation-snapshots";
 import { dismissalsFromOutcomeSyncAudits, dismissPendingOutcome, mergeOutcomeSyncAudits, queueOutcomeSyncAudit, resolveOutcomeSyncAudit, restoreDismissedOutcome as restoreDismissedOutcomeTransition, type OutcomeSyncAuditRecord, type OutcomeSyncDismissal, type PendingOutcomeRecord, type PendingOutcomeSyncAudit } from "@/shared/outcome-sync-queue";
 import { CHARACTERISTIC_CHECK_AUDIT_QUEUE_STORAGE_KEY, enqueueCharacteristicCheck, normalizeCharacteristicCheckQueue, resolveCharacteristicCheck, type PendingCharacteristicCheck } from "@/shared/characteristic-check-audits";
+import { parsePendingProviderRetryResets, PROVIDER_RETRY_RESET_PENDING_KEY, type PendingProviderRetryReset } from "@/shared/provider-retry-resets";
 
 const EBAY_READINESS_KEY = "topCherry.ebayReadiness";
 const OBSERVATION_REVIEW_STORAGE_KEY = "topCherry.observationReviews";
@@ -42,6 +43,7 @@ export default function ProfileScreen() {
   const remoteOutcomes = trpc.listingOutcomes.list.useQuery(undefined, { enabled: isAuthenticated });
   const remoteOutcomeAudits = trpc.outcomeSyncAudits.list.useQuery(undefined, { enabled: isAuthenticated });
   const remoteSnapshots = trpc.reconciliationSnapshots.list.useQuery(undefined, { enabled: isAuthenticated });
+  const remoteRetryResetAudits = trpc.reconciliationSnapshots.retryResetAudits.useQuery({ providerListingId: undefined }, { enabled: isAuthenticated });
   const syncReview = trpc.observationReviews.upsert.useMutation();
   const syncOutcome = trpc.listingOutcomes.upsert.useMutation();
   const syncOutcomeAudit = trpc.outcomeSyncAudits.upsert.useMutation();
@@ -60,6 +62,7 @@ export default function ProfileScreen() {
   const [outcomeSyncAudits, setOutcomeSyncAudits] = useState<OutcomeSyncAuditRecord[]>([]);
   const [pendingOutcomeAuditRecords, setPendingOutcomeAuditRecords] = useState<PendingOutcomeSyncAudit[]>([]);
   const [pendingCharacteristicChecks, setPendingCharacteristicChecks] = useState<PendingCharacteristicCheck[]>([]);
+  const [pendingProviderRetryResets, setPendingProviderRetryResets] = useState<PendingProviderRetryReset[]>([]);
   const [autoRetryAttempted, setAutoRetryAttempted] = useState(false);
   const [snapshotFreshnessThresholds, setSnapshotFreshnessThresholds] = useState<Record<string, SnapshotFreshnessThreshold>>({});
 
@@ -124,6 +127,12 @@ export default function ProfileScreen() {
     void AsyncStorage.getItem(SNAPSHOT_FRESHNESS_THRESHOLDS_STORAGE_KEY).then((raw) => {
       if (!raw) return;
       try { setSnapshotFreshnessThresholds(JSON.parse(raw) as Record<string, SnapshotFreshnessThreshold>); } catch { setSnapshotFreshnessThresholds({}); }
+    });
+  }, []);
+
+  useEffect(() => {
+    void AsyncStorage.getItem(PROVIDER_RETRY_RESET_PENDING_KEY).then((raw) => {
+      setPendingProviderRetryResets(parsePendingProviderRetryResets(raw));
     });
   }, []);
 
@@ -331,6 +340,7 @@ export default function ProfileScreen() {
           });
         }} />
         <ReconciliationSnapshotQueue colors={colors} authenticated={isAuthenticated} snapshots={remoteSnapshots.data ?? []} reviewing={reviewSnapshot.isPending} checkingCharacteristics={checkSnapshotCharacteristics.isPending} pendingCharacteristicChecks={pendingCharacteristicChecks} freshnessThresholds={snapshotFreshnessThresholds} onCycleFreshnessThreshold={cycleSnapshotFreshnessThreshold} onRetryCharacteristicChecks={() => void retryPendingCharacteristicChecks()} onReview={(snapshotId, status, note) => void markSnapshotReviewed(snapshotId, status, note)} onReviewMany={(snapshotIds, note) => markSnapshotsReviewed(snapshotIds, note)} onCheckCharacteristics={(snapshotId, note) => markSnapshotCharacteristicsChecked(snapshotId, note)} onCheckCharacteristicsMany={(snapshotIds, note) => markSnapshotsCharacteristicsChecked(snapshotIds, note)} />
+        <ProviderRetryResetSummary colors={colors} authenticated={isAuthenticated} audits={remoteRetryResetAudits.data ?? []} pending={pendingProviderRetryResets} />
         <SyncedOutcomeHistory colors={colors} outcomes={followUpOutcomes} authenticated={isAuthenticated} auditCount={outcomeSyncAudits.length} pendingAuditSyncs={pendingOutcomeAuditRecords.length} pendingSyncs={pendingOutcomeSyncs} pendingRecords={pendingOutcomeRecords} dismissedRecords={dismissedOutcomeRecords} onRetryPending={() => void retryPendingOutcomeSync()} onRetryAudit={() => void retryPendingOutcomeAuditSync()} onClearPending={(outcomeId, note) => void clearPendingOutcome(outcomeId, note)} onRestorePending={(outcomeId, note) => void restoreDismissedOutcome(outcomeId, note)} retrying={syncOutcome.isPending} retryingAudit={syncOutcomeAudit.isPending} />
         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>eBay authorization readiness</Text>
         <EbayReadinessChecklist colors={colors} completed={ebayReadiness} onToggle={(id) => {
@@ -455,6 +465,16 @@ function ObservationFollowUpQueue({ colors, followUps, outcomes, recentReviews, 
   </View>;
 }
 
+function ProviderRetryResetSummary({ colors, authenticated, audits, pending }: { colors: ReturnType<typeof useColors>; authenticated: boolean; audits: { resetId: string; providerListingId: string; previousAttemptCount: number; note: string; occurredAt: Date | string }[]; pending: PendingProviderRetryReset[] }) {
+  const recent = audits.slice().sort((a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime()).slice(0, 5);
+  return <View style={[styles.retryResetSummaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+    <View style={styles.readinessHeader}><View style={styles.settingCopy}><Text style={[styles.settingTitle, { color: colors.foreground }]}>Provider-read retry audit</Text><Text style={[styles.settingDescription, { color: colors.muted }]}>{authenticated ? `${audits.length} account-synced reset${audits.length === 1 ? "" : "s"}` : "Account audit unavailable until sign-in"}{pending.length ? ` · ${pending.length} queued locally` : ""}</Text></View><MaterialIcons name="history" size={20} color={pending.length ? colors.warning : colors.primary} /></View>
+    <Text style={[styles.dataNote, { color: colors.muted }]}>A reset records why a bounded provider-read retry budget was reopened. It does not confirm provider recovery, listing availability, a sale, a stock unit, a valuation, or an allocation decision.</Text>
+    {pending.length ? <View style={[styles.retryResetPending, { borderColor: colors.warning }]}><Text style={[styles.retryResetPendingTitle, { color: colors.warning }]}>Pending account synchronization</Text>{pending.slice(0, 3).map((item) => <Text key={item.resetId} style={[styles.settingDescription, { color: colors.muted }]} numberOfLines={1}>{item.providerListingId} · attempt {item.attemptCount}{item.lastError ? ` · ${item.lastError}` : ""}</Text>)}</View> : null}
+    {recent.length ? <View style={styles.retryResetHistory}><Text style={[styles.reviewHistoryTitle, { color: colors.muted }]}>Recent account audit events</Text>{recent.map((audit) => <View key={audit.resetId} style={styles.retryResetRow}><MaterialIcons name="restart-alt" size={14} color={colors.primary} /><View style={styles.settingCopy}><Text style={[styles.settingDescription, { color: colors.foreground }]} numberOfLines={1}>{audit.providerListingId} · reopened after {audit.previousAttemptCount} attempt{audit.previousAttemptCount === 1 ? "" : "s"}</Text><Text style={[styles.settingDescription, { color: colors.muted }]}>{new Date(audit.occurredAt).toLocaleString()}</Text><Text style={[styles.reviewNoteText, { color: colors.muted }]} numberOfLines={2}>“{audit.note}”</Text></View></View>)}</View> : <Text style={[styles.dataNote, { color: colors.muted }]}>No retry-reset audit events recorded.</Text>}
+  </View>;
+}
+
 function SyncedOutcomeHistory({ colors, outcomes, authenticated, auditCount, pendingAuditSyncs, pendingSyncs, pendingRecords, dismissedRecords, onRetryPending, onRetryAudit, onClearPending, onRestorePending, retrying, retryingAudit }: { colors: ReturnType<typeof useColors>; outcomes: ListingOutcome[]; authenticated: boolean; auditCount: number; pendingAuditSyncs: number; pendingSyncs: number; pendingRecords: PendingOutcomeRecord[]; dismissedRecords: OutcomeSyncDismissal[]; onRetryPending: () => void; onRetryAudit: () => void; onClearPending: (outcomeId: string, note: string) => void; onRestorePending: (outcomeId: string, note: string) => void; retrying: boolean; retryingAudit: boolean }) {
   const [clearTarget, setClearTarget] = useState<string | null>(null);
   const [clearNote, setClearNote] = useState("");
@@ -530,6 +550,11 @@ const styles = StyleSheet.create({
   readinessCard: { borderRadius: 19, borderWidth: 1, padding: 14, marginBottom: 27 },
   followUpCard: { borderRadius: 19, borderWidth: 1, padding: 14, marginBottom: 27 },
   outcomeHistoryCard: { borderRadius: 19, borderWidth: 1, padding: 14, marginBottom: 27 },
+  retryResetSummaryCard: { borderRadius: 19, borderWidth: 1, padding: 14, marginBottom: 27 },
+  retryResetPending: { borderWidth: 1, borderRadius: 10, padding: 9, marginTop: 12 },
+  retryResetPendingTitle: { fontSize: 10, fontWeight: "800", marginBottom: 4 },
+  retryResetHistory: { marginTop: 12, paddingTop: 11, borderTopWidth: 1, borderTopColor: "rgba(128,128,128,0.18)" },
+  retryResetRow: { flexDirection: "row", alignItems: "flex-start", gap: 7, minHeight: 38, marginTop: 8 },
   snapshotQueueCard: { borderRadius: 19, borderWidth: 1, padding: 14, marginBottom: 27 },
   snapshotRow: { flexDirection: "row", alignItems: "flex-start", gap: 8, minHeight: 66, paddingTop: 10, marginTop: 8, borderTopWidth: 1 },
   snapshotActions: { gap: 6, alignItems: "flex-end" },
