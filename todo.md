@@ -121,6 +121,7 @@ R2 full real-data ingestion, R3 response estimation, R4 network feedback and R5 
 - [x] R2.0ag Export traceability: JSON and Markdown evidence previews now show deterministic sanitized filenames derived from provider listing ID and format, and the same filename is used as the share title; filename generation is regression-tested.
 - [x] R2.0ah Audited retry reset: after the three-attempt limit, an operator must enter a note to reset the local retry budget; the note and timestamp remain visible for the session and explicitly do not confirm provider recovery or change historical evidence.
 - [x] R2.0ai Account audit persistence: retry-reset notes now append idempotently to a user-scoped `provider_read_retry_resets` table through protected list/append procedures; authenticated history hydrates prior events and reports account-save failure with local-session fallback, while reset semantics remain evidence-only.
+- [x] R2.0aj Durable retry-reset queue: anonymous or failed account writes now persist locally with attempt/error diagnostics, synchronize sequentially after authentication restoration, clear only after server confirmation, and remain visibly queued when synchronization fails; queue parsing and transitions have regression coverage.
 
 ## Existing boundaries
 - eBay account-deletion delivery does not establish Browse search or listing-stream permissions.

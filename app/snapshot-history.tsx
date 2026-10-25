@@ -1,4 +1,5 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router, useLocalSearchParams } from "expo-router";
 import { Modal, Platform, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from "react-native";
 import { useEffect, useRef, useState } from "react";
@@ -10,6 +11,7 @@ import { formatCurrency } from "@/lib/market-data";
 import { trpc } from "@/lib/trpc";
 import { buildEvidenceFilename, buildEvidencePackage, renderEvidencePackageMarkdown } from "@/shared/evidence-package";
 import { classifyProviderReadError, compareCurrentProviderReadToSnapshot, compareSnapshotToPrior, evaluateEbayItemDetailCoverage, evaluateSnapshotReconciliation, getProviderReadRetryDelayMs, getSnapshotFreshness, PROVIDER_READ_MAX_RETRIES, summarizeSnapshotSourceQuality } from "@/shared/reconciliation-snapshots";
+import { enqueueProviderRetryReset, markProviderRetryResetAttempt, parsePendingProviderRetryResets, PROVIDER_RETRY_RESET_PENDING_KEY, removeProviderRetryReset, type PendingProviderRetryReset } from "@/shared/provider-retry-resets";
 
 type Snapshot = {
   snapshotId: string;
@@ -69,6 +71,8 @@ export default function SnapshotHistoryScreen() {
   const [retryResetNote, setRetryResetNote] = useState("");
   const [retryResetAudit, setRetryResetAudit] = useState<{ note: string; at: number } | null>(null);
   const [retryResetSyncStatus, setRetryResetSyncStatus] = useState<string | null>(null);
+  const [pendingRetryResets, setPendingRetryResets] = useState<PendingProviderRetryReset[]>([]);
+  const [retryResetQueueHydrated, setRetryResetQueueHydrated] = useState(false);
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (retryTimerRef.current) clearTimeout(retryTimerRef.current); }, []);
   useEffect(() => { if (currentProviderDetail.data || current?.providerListingId) setProviderRetryAttempt(0); }, [currentProviderDetail.data, current?.providerListingId]);
@@ -79,6 +83,40 @@ export default function SnapshotHistoryScreen() {
       setRetryResetSyncStatus("Loaded from account audit.");
     }
   }, [retryResetAudit, retryResetAudits.data]);
+  useEffect(() => {
+    let active = true;
+    void AsyncStorage.getItem(PROVIDER_RETRY_RESET_PENDING_KEY).then((raw) => {
+      if (!active) return;
+      setPendingRetryResets(parsePendingProviderRetryResets(raw));
+      setRetryResetQueueHydrated(true);
+    });
+    return () => { active = false; };
+  }, []);
+  useEffect(() => {
+    if (!retryResetQueueHydrated) return;
+    void AsyncStorage.setItem(PROVIDER_RETRY_RESET_PENDING_KEY, JSON.stringify(pendingRetryResets));
+  }, [pendingRetryResets, retryResetQueueHydrated]);
+  const syncPendingRetryResets = async (queued: PendingProviderRetryReset[]) => {
+    if (!isAuthenticated || queued.length === 0) return;
+    let working = queued;
+    for (const item of queued) {
+      const attempted = markProviderRetryResetAttempt(working, item.resetId, new Date().toISOString());
+      working = attempted;
+      setPendingRetryResets(working);
+      try {
+        await appendRetryResetAudit.mutateAsync({ resetId: item.resetId, providerListingId: item.providerListingId, previousAttemptCount: item.previousAttemptCount, note: item.note, occurredAt: item.occurredAt });
+        working = removeProviderRetryReset(working, item.resetId);
+        setPendingRetryResets(working);
+      } catch {
+        working = markProviderRetryResetAttempt(working, item.resetId, new Date().toISOString(), "account-sync-failed");
+        setPendingRetryResets(working);
+      }
+    }
+    setRetryResetSyncStatus(working.length ? `${working.length} retry-reset audit event${working.length === 1 ? "" : "s"} pending synchronization.` : "Retry-reset audit queue synchronized.");
+  };
+  useEffect(() => {
+    if (retryResetQueueHydrated && isAuthenticated && pendingRetryResets.length > 0) void syncPendingRetryResets(pendingRetryResets);
+  }, [isAuthenticated, retryResetQueueHydrated]);
   const retryProviderRead = () => {
     if (browserOffline || currentProviderDetail.isFetching || providerRetryAttempt >= PROVIDER_READ_MAX_RETRIES) return;
     const nextAttempt = providerRetryAttempt + 1;
@@ -92,21 +130,19 @@ export default function SnapshotHistoryScreen() {
     const occurredAt = new Date().toISOString();
     const resetId = `retry-reset-${providerListingId ?? "unknown"}-${Date.now()}`;
     const previousAttemptCount = providerRetryAttempt;
+    const pendingEntry: PendingProviderRetryReset = { resetId, providerListingId: providerListingId ?? "unknown", previousAttemptCount, note, occurredAt, attemptCount: 0 };
+    const nextQueue = enqueueProviderRetryReset(pendingRetryResets, pendingEntry);
+    setPendingRetryResets(nextQueue);
     setProviderRetryAttempt(0);
     setRetryResetAudit({ note, at: new Date(occurredAt).getTime() });
     setRetryResetNote("");
     if (!isAuthenticated || !providerListingId) {
-      setRetryResetSyncStatus("Local session audit only; sign in to persist this reset.");
+      setRetryResetSyncStatus("Durable local audit queued; sign in to persist this reset to the account.");
       return;
     }
     setRetryResetSyncStatus("Saving reset note to account audit…");
-    try {
-      await appendRetryResetAudit.mutateAsync({ resetId, providerListingId, previousAttemptCount, note, occurredAt });
-      await retryResetAudits.refetch();
-      setRetryResetSyncStatus("Reset note saved to the account audit.");
-    } catch {
-      setRetryResetSyncStatus("Account audit unavailable; the reset remains local to this session.");
-    }
+    await syncPendingRetryResets(nextQueue);
+    await retryResetAudits.refetch();
   };
   const timelineSnapshots = current?.currency ? [...snapshots].filter((snapshot) => snapshot.currency === current.currency).reverse() : [];
   const timelineMax = Math.max(...timelineSnapshots.map((snapshot) => snapshot.askingPrice), 0);
@@ -182,7 +218,7 @@ export default function SnapshotHistoryScreen() {
           </View>
           <View style={[styles.refreshCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={styles.refreshHeader}><View style={styles.refreshCopy}><Text style={[styles.auditTitle, { color: colors.foreground }]}>Current provider refresh</Text><Text style={[styles.auditIntro, { color: colors.muted }]}>Optional live read of the provider item-detail endpoint. It is not written into the historical timeline until you save a new reconciliation snapshot.</Text><Text style={[styles.networkStatus, { color: browserOffline || currentProviderDetail.isError ? colors.warning : colors.muted }]}>{connectivityLabel} · historical evidence remains available offline.</Text></View><Pressable onPress={currentProviderDetail.isError ? retryProviderRead : () => void currentProviderDetail.refetch()} disabled={currentProviderDetail.isFetching || browserOffline || (currentProviderDetail.isError && retryLimitReached)} style={({ pressed }) => [styles.refreshButton, { borderColor: colors.primary }, (currentProviderDetail.isFetching || browserOffline || (currentProviderDetail.isError && retryLimitReached)) && styles.disabled, pressed && styles.pressed]}><Text style={[styles.refreshButtonText, { color: colors.primary }]}>{browserOffline ? "Offline" : currentProviderDetail.isFetching ? "Reading…" : currentProviderDetail.isError ? retryLimitReached ? "Retry limit" : `Retry (${providerRetryAttempt}/${PROVIDER_READ_MAX_RETRIES})` : "Refresh"}</Text></Pressable></View>
-            {currentProviderDetail.data ? <><Text style={[styles.refreshResult, { color: colors.muted }]}>Provider returned {formatCurrency(currentProviderDetail.data.askingPrice, currentProviderDetail.data.currency)} · {currentProviderDetail.data.localizedAspects?.length ?? 0} characteristic groups · fetched {new Date(currentProviderDetail.data.fetchedAt).toLocaleString()}. This remains an asking-price/provider-field observation only.</Text>{currentReadComparison?.state === "unknown" ? <Text style={[styles.refreshComparison, { color: colors.warning }]}>{currentReadComparison.reason === "currency-mismatch" ? "Movement not comparable: provider and persisted currencies differ." : currentReadComparison.reason === "missing-currency" ? "Movement not comparable: currency is missing from one side." : "Movement not comparable: asking price is missing."} No conversion or valuation is inferred.</Text> : <Text style={[styles.refreshComparison, { color: currentReadComparison?.state === "increased" ? colors.warning : currentReadComparison?.state === "decreased" ? colors.success : colors.muted }]}>{currentReadComparison?.state === "unchanged" ? "Current provider asking price matches the persisted snapshot." : `${currentReadComparison?.state === "increased" ? "Current provider asking price increased" : "Current provider asking price decreased"} by ${formatCurrency(Math.abs(currentReadComparison?.delta ?? 0), currentReadComparison?.currency)}.`} Asking-price movement only; not a sale or market-value signal.</Text>}</> : currentProviderDetail.isError ? <><Text style={[styles.refreshResult, { color: colors.warning }]}>Current provider read failed or is unavailable. Use Retry when connectivity is available; historical observations remain unchanged. No disappearance or error is treated as a sale or stock signal.</Text><Text style={[styles.refreshComparison, { color: colors.muted }]}>Category: {providerReadErrorLabel} · attempt {providerRetryAttempt}/{PROVIDER_READ_MAX_RETRIES} · last attempt {providerReadAttemptAt ? new Date(providerReadAttemptAt).toLocaleString() : "unknown"}. {retryLimitReached ? "Retry limit reached; try again later." : `Next retry uses a bounded ${getProviderReadRetryDelayMs(providerRetryAttempt + 1)}ms backoff.`} Raw provider error details are hidden.</Text>{retryLimitReached ? <View style={styles.retryReset}><Text style={[styles.qualityFootnote, { color: colors.muted }]}>Resetting the local retry budget requires a note. This is session context only; it does not confirm provider recovery.</Text><TextInput value={retryResetNote} onChangeText={setRetryResetNote} placeholder="Why reset the retry budget?" placeholderTextColor={colors.muted} style={[styles.retryResetInput, { color: colors.foreground, borderColor: colors.border }]} multiline /><Pressable onPress={() => void resetProviderRetryBudget()} disabled={!retryResetNote.trim() || appendRetryResetAudit.isPending} style={({ pressed }) => [styles.retryResetButton, { borderColor: colors.primary }, (!retryResetNote.trim() || appendRetryResetAudit.isPending) && styles.disabled, pressed && styles.pressed]}><Text style={[styles.refreshButtonText, { color: colors.primary }]}>{appendRetryResetAudit.isPending ? "Saving…" : "Reset retry budget"}</Text></Pressable></View> : null}{retryResetAudit ? <Text style={[styles.qualityFootnote, { color: colors.muted }]}>Last reset noted {new Date(retryResetAudit.at).toLocaleString()}: “{retryResetAudit.note}” · {retryResetSyncStatus ?? "local session audit only"}.</Text> : null}{retryResetAudits.data?.length ? <Text style={[styles.qualityFootnote, { color: colors.muted }]}>{retryResetAudits.data.length} persisted retry-reset audit event{retryResetAudits.data.length === 1 ? "" : "s"} for this provider listing.</Text> : null}</> : <Text style={[styles.refreshResult, { color: colors.muted }]}>No current provider read requested yet.</Text>}
+            {currentProviderDetail.data ? <><Text style={[styles.refreshResult, { color: colors.muted }]}>Provider returned {formatCurrency(currentProviderDetail.data.askingPrice, currentProviderDetail.data.currency)} · {currentProviderDetail.data.localizedAspects?.length ?? 0} characteristic groups · fetched {new Date(currentProviderDetail.data.fetchedAt).toLocaleString()}. This remains an asking-price/provider-field observation only.</Text>{currentReadComparison?.state === "unknown" ? <Text style={[styles.refreshComparison, { color: colors.warning }]}>{currentReadComparison.reason === "currency-mismatch" ? "Movement not comparable: provider and persisted currencies differ." : currentReadComparison.reason === "missing-currency" ? "Movement not comparable: currency is missing from one side." : "Movement not comparable: asking price is missing."} No conversion or valuation is inferred.</Text> : <Text style={[styles.refreshComparison, { color: currentReadComparison?.state === "increased" ? colors.warning : currentReadComparison?.state === "decreased" ? colors.success : colors.muted }]}>{currentReadComparison?.state === "unchanged" ? "Current provider asking price matches the persisted snapshot." : `${currentReadComparison?.state === "increased" ? "Current provider asking price increased" : "Current provider asking price decreased"} by ${formatCurrency(Math.abs(currentReadComparison?.delta ?? 0), currentReadComparison?.currency)}.`} Asking-price movement only; not a sale or market-value signal.</Text>}</> : currentProviderDetail.isError ? <><Text style={[styles.refreshResult, { color: colors.warning }]}>Current provider read failed or is unavailable. Use Retry when connectivity is available; historical observations remain unchanged. No disappearance or error is treated as a sale or stock signal.</Text><Text style={[styles.refreshComparison, { color: colors.muted }]}>Category: {providerReadErrorLabel} · attempt {providerRetryAttempt}/{PROVIDER_READ_MAX_RETRIES} · last attempt {providerReadAttemptAt ? new Date(providerReadAttemptAt).toLocaleString() : "unknown"}. {retryLimitReached ? "Retry limit reached; try again later." : `Next retry uses a bounded ${getProviderReadRetryDelayMs(providerRetryAttempt + 1)}ms backoff.`} Raw provider error details are hidden.</Text>{retryLimitReached ? <View style={styles.retryReset}><Text style={[styles.qualityFootnote, { color: colors.muted }]}>Resetting the local retry budget requires a note. This is session context only; it does not confirm provider recovery.</Text><TextInput value={retryResetNote} onChangeText={setRetryResetNote} placeholder="Why reset the retry budget?" placeholderTextColor={colors.muted} style={[styles.retryResetInput, { color: colors.foreground, borderColor: colors.border }]} multiline /><Pressable onPress={() => void resetProviderRetryBudget()} disabled={!retryResetNote.trim() || appendRetryResetAudit.isPending} style={({ pressed }) => [styles.retryResetButton, { borderColor: colors.primary }, (!retryResetNote.trim() || appendRetryResetAudit.isPending) && styles.disabled, pressed && styles.pressed]}><Text style={[styles.refreshButtonText, { color: colors.primary }]}>{appendRetryResetAudit.isPending ? "Saving…" : "Reset retry budget"}</Text></Pressable></View> : null}{retryResetAudit ? <Text style={[styles.qualityFootnote, { color: colors.muted }]}>Last reset noted {new Date(retryResetAudit.at).toLocaleString()}: “{retryResetAudit.note}” · {retryResetSyncStatus ?? "local session audit only"}.</Text> : null}{pendingRetryResets.length ? <Text style={[styles.qualityFootnote, { color: colors.warning }]}>{pendingRetryResets.length} retry-reset audit event{pendingRetryResets.length === 1 ? "" : "s"} queued locally for account synchronization.</Text> : null}{retryResetAudits.data?.length ? <Text style={[styles.qualityFootnote, { color: colors.muted }]}>{retryResetAudits.data.length} persisted retry-reset audit event{retryResetAudits.data.length === 1 ? "" : "s"} for this provider listing.</Text> : null}</> : <Text style={[styles.refreshResult, { color: colors.muted }]}>No current provider read requested yet.</Text>}
           </View>
           <View style={[styles.auditCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Text style={[styles.auditTitle, { color: colors.foreground }]}>Characteristic-check audit timeline</Text>
