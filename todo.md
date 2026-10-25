@@ -119,6 +119,7 @@ R2 full real-data ingestion, R3 response estimation, R4 network feedback and R5 
 - [x] R2.0ae Provider-read diagnostics: failures expose only coarse categories (network/timeout, authorization, item unavailable, provider response, unclassified) plus the latest attempt time; raw transport/provider error details are hidden and classifier behavior is regression-tested.
 - [x] R2.0af Bounded retry accounting: focused history permits at most three manual retries, applies 1s/2s/4s backoff, disables the action at the limit, and displays attempt count plus next-delay context; retry timing is pure-helper tested and no polling loop is created.
 - [x] R2.0ag Export traceability: JSON and Markdown evidence previews now show deterministic sanitized filenames derived from provider listing ID and format, and the same filename is used as the share title; filename generation is regression-tested.
+- [x] R2.0ah Audited retry reset: after the three-attempt limit, an operator must enter a note to reset the local retry budget; the note and timestamp remain visible for the session and explicitly do not confirm provider recovery or change historical evidence.
 
 ## Existing boundaries
 - eBay account-deletion delivery does not establish Browse search or listing-stream permissions.
