@@ -11,7 +11,7 @@ import { formatCurrency } from "@/lib/market-data";
 import { trpc } from "@/lib/trpc";
 import { buildEvidenceFilename, buildEvidencePackage, renderEvidencePackageMarkdown } from "@/shared/evidence-package";
 import { classifyProviderReadError, compareCurrentProviderReadToSnapshot, compareSnapshotToPrior, evaluateEbayItemDetailCoverage, evaluateSnapshotReconciliation, getProviderReadRetryDelayMs, getSnapshotFreshness, PROVIDER_READ_MAX_RETRIES, summarizeSnapshotSourceQuality } from "@/shared/reconciliation-snapshots";
-import { enqueueProviderRetryReset, markProviderRetryResetAttempt, parsePendingProviderRetryResets, PROVIDER_RETRY_RESET_PENDING_KEY, removeProviderRetryReset, type PendingProviderRetryReset } from "@/shared/provider-retry-resets";
+import { enqueueProviderRetryReset, markProviderRetryResetAttempt, parsePendingProviderRetryResets, PROVIDER_RETRY_RESET_PENDING_KEY, removeProviderRetryReset, shouldSyncRetryResetQueueOnConnectivity, type PendingProviderRetryReset } from "@/shared/provider-retry-resets";
 
 type Snapshot = {
   snapshotId: string;
@@ -73,6 +73,8 @@ export default function SnapshotHistoryScreen() {
   const [retryResetSyncStatus, setRetryResetSyncStatus] = useState<string | null>(null);
   const [pendingRetryResets, setPendingRetryResets] = useState<PendingProviderRetryReset[]>([]);
   const [retryResetQueueHydrated, setRetryResetQueueHydrated] = useState(false);
+  const retryResetSyncInFlightRef = useRef(false);
+  const previousWebOnlineRef = useRef<boolean | null>(null);
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (retryTimerRef.current) clearTimeout(retryTimerRef.current); }, []);
   useEffect(() => { if (currentProviderDetail.data || current?.providerListingId) setProviderRetryAttempt(0); }, [currentProviderDetail.data, current?.providerListingId]);
@@ -97,26 +99,45 @@ export default function SnapshotHistoryScreen() {
     void AsyncStorage.setItem(PROVIDER_RETRY_RESET_PENDING_KEY, JSON.stringify(pendingRetryResets));
   }, [pendingRetryResets, retryResetQueueHydrated]);
   const syncPendingRetryResets = async (queued: PendingProviderRetryReset[]) => {
-    if (!isAuthenticated || queued.length === 0) return;
+    if (!isAuthenticated || queued.length === 0 || retryResetSyncInFlightRef.current) return;
+    retryResetSyncInFlightRef.current = true;
     let working = queued;
-    for (const item of queued) {
-      const attempted = markProviderRetryResetAttempt(working, item.resetId, new Date().toISOString());
-      working = attempted;
-      setPendingRetryResets(working);
-      try {
-        await appendRetryResetAudit.mutateAsync({ resetId: item.resetId, providerListingId: item.providerListingId, previousAttemptCount: item.previousAttemptCount, note: item.note, occurredAt: item.occurredAt });
-        working = removeProviderRetryReset(working, item.resetId);
+    try {
+      for (const item of queued) {
+        const attempted = markProviderRetryResetAttempt(working, item.resetId, new Date().toISOString());
+        working = attempted;
         setPendingRetryResets(working);
-      } catch {
-        working = markProviderRetryResetAttempt(working, item.resetId, new Date().toISOString(), "account-sync-failed");
-        setPendingRetryResets(working);
+        try {
+          await appendRetryResetAudit.mutateAsync({ resetId: item.resetId, providerListingId: item.providerListingId, previousAttemptCount: item.previousAttemptCount, note: item.note, occurredAt: item.occurredAt });
+          working = removeProviderRetryReset(working, item.resetId);
+          setPendingRetryResets(working);
+        } catch {
+          working = markProviderRetryResetAttempt(working, item.resetId, new Date().toISOString(), "account-sync-failed");
+          setPendingRetryResets(working);
+        }
       }
+      setRetryResetSyncStatus(working.length ? `${working.length} retry-reset audit event${working.length === 1 ? "" : "s"} pending synchronization.` : "Retry-reset audit queue synchronized.");
+    } finally {
+      retryResetSyncInFlightRef.current = false;
     }
-    setRetryResetSyncStatus(working.length ? `${working.length} retry-reset audit event${working.length === 1 ? "" : "s"} pending synchronization.` : "Retry-reset audit queue synchronized.");
   };
   useEffect(() => {
     if (retryResetQueueHydrated && isAuthenticated && pendingRetryResets.length > 0) void syncPendingRetryResets(pendingRetryResets);
   }, [isAuthenticated, retryResetQueueHydrated]);
+  useEffect(() => {
+    const shouldSync = shouldSyncRetryResetQueueOnConnectivity({
+      platform: Platform.OS === "web" ? "web" : "native",
+      online: webOnline,
+      previousOnline: previousWebOnlineRef.current,
+      authenticated: isAuthenticated,
+      hydrated: retryResetQueueHydrated,
+      pendingCount: pendingRetryResets.length,
+    });
+    previousWebOnlineRef.current = webOnline;
+    if (shouldSync) {
+      void syncPendingRetryResets(pendingRetryResets);
+    }
+  }, [webOnline, isAuthenticated, retryResetQueueHydrated]);
   const retryProviderRead = () => {
     if (browserOffline || currentProviderDetail.isFetching || providerRetryAttempt >= PROVIDER_READ_MAX_RETRIES) return;
     const nextAttempt = providerRetryAttempt + 1;

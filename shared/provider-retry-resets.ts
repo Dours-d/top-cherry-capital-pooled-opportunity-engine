@@ -11,6 +11,24 @@ export type PendingProviderRetryReset = {
   lastError?: string;
 };
 
+export type RetryResetConnectivityContext = {
+  platform: "web" | "native";
+  online: boolean | null;
+  previousOnline: boolean | null;
+  authenticated: boolean;
+  hydrated: boolean;
+  pendingCount: number;
+};
+
+export function shouldSyncRetryResetQueueOnConnectivity(context: RetryResetConnectivityContext) {
+  return context.platform === "web"
+    && context.online === true
+    && context.previousOnline !== true
+    && context.authenticated
+    && context.hydrated
+    && context.pendingCount > 0;
+}
+
 export function parsePendingProviderRetryResets(raw: string | null): PendingProviderRetryReset[] {
   if (!raw) return [];
   try {
