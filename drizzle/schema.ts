@@ -233,6 +233,27 @@ export const characteristicCheckAudits = mysqlTable(
 export type CharacteristicCheckAudit = typeof characteristicCheckAudits.$inferSelect;
 export type InsertCharacteristicCheckAudit = typeof characteristicCheckAudits.$inferInsert;
 
+export const providerReadRetryResets = mysqlTable(
+  "provider_read_retry_resets",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    resetId: varchar("resetId", { length: 160 }).notNull(),
+    providerListingId: varchar("providerListingId", { length: 255 }).notNull(),
+    previousAttemptCount: int("previousAttemptCount").notNull(),
+    note: text("note").notNull(),
+    occurredAt: timestamp("occurredAt").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (table) => ({
+    resetKeyIdx: uniqueIndex("provider_read_retry_resets_user_reset_idx").on(table.userId, table.resetId),
+    providerOccurredIdx: index("provider_read_retry_resets_user_provider_occurred_idx").on(table.userId, table.providerListingId, table.occurredAt),
+  }),
+);
+
+export type ProviderReadRetryReset = typeof providerReadRetryResets.$inferSelect;
+export type InsertProviderReadRetryReset = typeof providerReadRetryResets.$inferInsert;
+
 export const ingestionRuns = mysqlTable("ingestion_runs", {
   id: int("id").autoincrement().primaryKey(),
   sourceSlug: varchar("sourceSlug", { length: 64 }).notNull(),

@@ -101,6 +101,18 @@ const characteristicCheckAuditListInput = z.object({
   providerListingId: z.string().min(1).max(255).optional(),
 });
 
+const providerReadRetryResetInput = z.object({
+  resetId: z.string().min(1).max(160),
+  providerListingId: z.string().min(1).max(255),
+  previousAttemptCount: z.number().int().min(1).max(3),
+  note: z.string().min(1).max(1000),
+  occurredAt: z.string().datetime(),
+});
+
+const providerReadRetryResetListInput = z.object({
+  providerListingId: z.string().min(1).max(255).optional(),
+});
+
 export const appRouter = router({
   system: systemRouter,
   auth: router({
@@ -168,6 +180,8 @@ export const appRouter = router({
     review: protectedProcedure.input(reconciliationSnapshotReviewInput).mutation(({ ctx, input }) => db.reviewReconciliationSnapshot(ctx.user.id, input.snapshotId, input.reconciliationStatus, input.reviewNote, new Date())),
     checkCharacteristics: protectedProcedure.input(reconciliationSnapshotCharacteristicsInput).mutation(({ ctx, input }) => db.checkReconciliationSnapshotCharacteristics(ctx.user.id, input.snapshotId, input.auditId, input.note, new Date())),
     characteristicCheckAudits: protectedProcedure.input(characteristicCheckAuditListInput).query(({ ctx, input }) => db.listCharacteristicCheckAudits(ctx.user.id, input)),
+    retryResetAudits: protectedProcedure.input(providerReadRetryResetListInput).query(({ ctx, input }) => db.listProviderReadRetryResets(ctx.user.id, input.providerListingId)),
+    appendRetryResetAudit: protectedProcedure.input(providerReadRetryResetInput).mutation(({ ctx, input }) => db.appendProviderReadRetryReset({ userId: ctx.user.id, ...input, occurredAt: new Date(input.occurredAt) })),
   }),
   monitoring: router({
     ebay: publicProcedure.query(async () => {
