@@ -116,6 +116,7 @@ R2 full real-data ingestion, R3 response estimation, R4 network feedback and R5 
 - [x] R2.0ab Export transparency: the preview identifies observation count, latest fetch timestamp and whether a current provider read is included before sharing.
 - [x] R2.0ac Connectivity honesty: focused history detects browser online/offline transitions where available, disables provider refresh while offline, labels native connectivity as unprobed, and keeps historical evidence/export available without a network request.
 - [x] R2.0ad Recoverable provider reads: failed current item-detail requests now show an explicit failure explanation and a Retry action when connectivity is available; retry never mutates historical observations or interprets failure as sale/stock evidence.
+- [x] R2.0ae Provider-read diagnostics: failures expose only coarse categories (network/timeout, authorization, item unavailable, provider response, unclassified) plus the latest attempt time; raw transport/provider error details are hidden and classifier behavior is regression-tested.
 
 ## Existing boundaries
 - eBay account-deletion delivery does not establish Browse search or listing-stream permissions.

@@ -36,6 +36,19 @@ export type ProviderReadComparison = {
   reason?: "missing-currency" | "currency-mismatch" | "missing-price";
 };
 
+export type ProviderReadErrorCategory = "offline" | "unauthorized" | "not-found" | "provider" | "unknown";
+
+/** Classify provider-read failures without exposing raw transport or credential details in the UI. */
+export function classifyProviderReadError(error: unknown): ProviderReadErrorCategory {
+  const text = error instanceof Error ? error.message : typeof error === "string" ? error : "";
+  const normalized = text.toLowerCase();
+  if (normalized.includes("network") || normalized.includes("fetch") || normalized.includes("offline") || normalized.includes("timeout")) return "offline";
+  if (normalized.includes("401") || normalized.includes("403") || normalized.includes("unauthorized") || normalized.includes("forbidden")) return "unauthorized";
+  if (normalized.includes("404") || normalized.includes("not found") || normalized.includes("item not found")) return "not-found";
+  if (normalized) return "provider";
+  return "unknown";
+}
+
 export type SourceQualitySummary = {
   observationCount: number;
   ageCounts: { fresh: number; aging: number; stale: number; unknown: number };

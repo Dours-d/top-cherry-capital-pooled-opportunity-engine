@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildEbayReconciliationSnapshot, compareCurrentProviderReadToSnapshot, compareSnapshotToPrior, evaluateEbayItemDetailCoverage, evaluateSnapshotReconciliation, getSnapshotFreshness, nextSnapshotFreshnessThreshold, normalizeSnapshotFreshnessThreshold, summarizeSnapshotSourceQuality } from "../shared/reconciliation-snapshots";
+import { buildEbayReconciliationSnapshot, classifyProviderReadError, compareCurrentProviderReadToSnapshot, compareSnapshotToPrior, evaluateEbayItemDetailCoverage, evaluateSnapshotReconciliation, getSnapshotFreshness, nextSnapshotFreshnessThreshold, normalizeSnapshotFreshnessThreshold, summarizeSnapshotSourceQuality } from "../shared/reconciliation-snapshots";
 
 const listing = {
   listingId: "v1|123456",
@@ -16,6 +16,14 @@ const listing = {
 };
 
 describe("reconciliation snapshots", () => {
+  it("classifies provider-read failures without exposing raw error details", () => {
+    expect(classifyProviderReadError(new Error("fetch failed: timeout"))).toBe("offline");
+    expect(classifyProviderReadError(new Error("HTTP 403 forbidden"))).toBe("unauthorized");
+    expect(classifyProviderReadError(new Error("item not found"))).toBe("not-found");
+    expect(classifyProviderReadError(new Error("provider rejected request"))).toBe("provider");
+    expect(classifyProviderReadError({ code: "secret" })).toBe("unknown");
+  });
+
   it("compares a current provider read only when currencies match", () => {
     expect(compareCurrentProviderReadToSnapshot({ providerPrice: 8750, providerCurrency: "GBP", persistedPrice: 8500, persistedCurrency: "GBP" })).toMatchObject({ state: "increased", delta: 250, currency: "GBP" });
     expect(compareCurrentProviderReadToSnapshot({ providerPrice: 8750, providerCurrency: "USD", persistedPrice: 8500, persistedCurrency: "GBP" })).toMatchObject({ state: "unknown", reason: "currency-mismatch" });
