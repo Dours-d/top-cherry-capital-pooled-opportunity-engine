@@ -177,6 +177,9 @@ export default function SnapshotHistoryScreen() {
   const visibleRetryResetAudits = retryResetFilter === "all" ? exportRetryResetAudits : exportRetryResetAudits.filter((audit) => audit.syncStatus === retryResetFilter);
   const accountRetryResetCount = retryResetAudits.data?.length ?? 0;
   const pendingRetryResetCount = pendingRetryResets.filter((audit) => audit.providerListingId === providerListingId).length;
+  const latestAccountRetryResetAt = retryResetAudits.data?.reduce<string | null>((latest, audit) => !latest || new Date(audit.occurredAt).getTime() > new Date(latest).getTime() ? String(audit.occurredAt) : latest, null);
+  const latestPendingRetryResetAt = pendingRetryResets.filter((audit) => audit.providerListingId === providerListingId).reduce<string | null>((latest, audit) => !latest || new Date(audit.occurredAt).getTime() > new Date(latest).getTime() ? audit.occurredAt : latest, null);
+  const retryResetFilterLabel = retryResetFilter === "all" ? "all statuses" : retryResetFilter === "account-synced" ? "synced only" : "pending only";
   const [shareStatus, setShareStatus] = useState<string | null>(null);
   const [preview, setPreview] = useState<{ format: "json" | "markdown"; content: string; filename: string } | null>(null);
   const buildExportContent = (format: "json" | "markdown") => {
@@ -237,6 +240,7 @@ export default function SnapshotHistoryScreen() {
             <Text style={[styles.qualityLine, { color: colors.foreground }]}>Retry-reset view</Text>
             <View style={styles.retryResetFilters}>{(["all", "account-synced", "pending-local"] as const).map((filter) => <Pressable key={filter} onPress={() => setRetryResetFilter(filter)} style={({ pressed }) => [styles.retryResetFilter, { borderColor: retryResetFilter === filter ? colors.primary : colors.border, backgroundColor: retryResetFilter === filter ? `${colors.primary}18` : "transparent" }, pressed && styles.pressed]}><Text style={[styles.retryResetFilterText, { color: retryResetFilter === filter ? colors.primary : colors.muted }]}>{filter === "all" ? "All" : filter === "account-synced" ? "Synced" : "Pending"}</Text></Pressable>)}</View>
             <Text style={[styles.qualityLine, { color: accountRetryResetCount || pendingRetryResetCount ? colors.warning : colors.muted }]}>Retry-reset audit events: {accountRetryResetCount} account-synced · {pendingRetryResetCount} pending locally. A reset records operator context only; it does not establish provider recovery.</Text>
+            <Text style={[styles.qualityLine, { color: colors.muted }]}>Last account sync: {latestAccountRetryResetAt ? new Date(latestAccountRetryResetAt).toLocaleString() : "none"} · last pending event: {latestPendingRetryResetAt ? new Date(latestPendingRetryResetAt).toLocaleString() : "none"} · showing {retryResetFilterLabel}.</Text>
             <Text style={[styles.qualityFootnote, { color: colors.muted }]}>Age and completeness are data-quality prompts only. They do not estimate availability, demand, market value, sale probability or allocation suitability.</Text>
           </View>
           <View style={[styles.exportCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -286,7 +290,7 @@ export default function SnapshotHistoryScreen() {
               <View style={styles.refreshCopy}>
                 <Text style={[styles.auditTitle, { color: colors.foreground }]}>Review export</Text>
                 <Text style={[styles.auditIntro, { color: colors.muted }]}>{preview?.format.toUpperCase()} preview · sharing does not change persisted evidence.</Text>
-                <Text style={[styles.previewMeta, { color: colors.muted }]}>{preview?.filename} · {snapshots.length} observation{snapshots.length === 1 ? "" : "s"} · {visibleRetryResetAudits.length} retry-reset audit event{visibleRetryResetAudits.length === 1 ? "" : "s"} included ({retryResetFilter === "all" ? "all statuses" : retryResetFilter === "account-synced" ? "synced only" : "pending only"}; {accountRetryResetCount} synced, {pendingRetryResetCount} pending) · latest fetch {current ? new Date(current.sourceFetchedAt).toLocaleString() : "unknown"} · current provider read {currentProviderDetail.data ? "included" : "not included"}</Text>
+                <Text style={[styles.previewMeta, { color: colors.muted }]}>{preview?.filename} · {snapshots.length} observation{snapshots.length === 1 ? "" : "s"} · {visibleRetryResetAudits.length} retry-reset audit event{visibleRetryResetAudits.length === 1 ? "" : "s"} included ({retryResetFilterLabel}; {accountRetryResetCount} synced, {pendingRetryResetCount} pending) · last account sync {latestAccountRetryResetAt ? new Date(latestAccountRetryResetAt).toLocaleString() : "none"} · last pending event {latestPendingRetryResetAt ? new Date(latestPendingRetryResetAt).toLocaleString() : "none"} · latest fetch {current ? new Date(current.sourceFetchedAt).toLocaleString() : "unknown"} · current provider read {currentProviderDetail.data ? "included" : "not included"}</Text>
               </View>
               <Pressable onPress={() => setPreview(null)} style={({ pressed }) => [styles.closeButton, pressed && styles.pressed]}><Text style={[styles.closeButtonText, { color: colors.muted }]}>Close</Text></Pressable>
             </View>
