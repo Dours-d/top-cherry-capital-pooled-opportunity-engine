@@ -94,7 +94,7 @@ describe("evidence package", () => {
     });
     const redacted = redactEvidencePackage(pkg);
     expect(redacted.scope).toMatchObject({ providerListingId: "[redacted]", title: "[redacted]" });
-    expect(redacted.snapshots[0]).toMatchObject({ providerListingId: "[redacted]", askingPrice: 1000, reviewNote: "[redacted]" });
+    expect(redacted.snapshots[0]).toMatchObject({ providerListingId: "[redacted]", marketplaceId: "[redacted]", profileSlug: "[redacted]", askingPrice: 1000, reviewNote: "[redacted]" });
     expect(redacted.currentProviderRead).toMatchObject({ itemId: "[redacted]", askingPrice: 1010, currency: "GBP" });
     expect(redacted.characteristicAudits[0]).toMatchObject({ auditId: "[redacted]", note: "[redacted]" });
     expect(redacted.retryResetAudits[0]).toMatchObject({ resetId: "[redacted]", providerListingId: "[redacted]", note: "[redacted]", previousAttemptCount: 3 });
@@ -110,9 +110,17 @@ describe("evidence package", () => {
       characteristicAudits: [{ auditId: "audit-1", action: "checked", occurredAt: "2026-10-24T11:00:00.000Z", note: "Private reviewer note" }],
     });
     const redacted = redactEvidencePackage(pkg, { redactTitles: false });
-    expect(redacted.scope).toMatchObject({ providerListingId: "[redacted]", title: "Example watch" });
-    expect(redacted.snapshots[0]).toMatchObject({ providerListingId: "[redacted]", title: "Example watch", reviewNote: "[redacted]" });
+    expect(redacted.scope).toMatchObject({ providerListingId: "[redacted]", title: "Example watch", profileSlug: "[redacted]" });
+    expect(redacted.snapshots[0]).toMatchObject({ providerListingId: "[redacted]", marketplaceId: "[redacted]", profileSlug: "[redacted]", title: "Example watch", reviewNote: "[redacted]" });
     expect(redacted.characteristicAudits[0]).toMatchObject({ auditId: "[redacted]", note: "[redacted]" });
     expect(JSON.stringify(redacted)).not.toMatch(/v1\|123|Keep this private|Private reviewer/);
+  });
+
+  it("can retain marketplace and profile context while redacting titles, identifiers and notes", () => {
+    const pkg = buildEvidencePackage({ exportedAt: "2026-10-24T11:00:00.000Z", scope: { providerListingId: "v1|123", title: "Example watch", profileSlug: "luxury_watches" }, sourceQuality, snapshots: [snapshot], characteristicAudits: [] });
+    const redacted = redactEvidencePackage(pkg, { redactContext: false });
+    expect(redacted.scope).toMatchObject({ providerListingId: "[redacted]", title: "[redacted]", profileSlug: "luxury_watches" });
+    expect(redacted.snapshots[0]).toMatchObject({ snapshotId: "[redacted]", marketplaceId: "EBAY_GB", profileSlug: "luxury_watches", title: "[redacted]", sellerId: "[redacted]" });
+    expect(JSON.stringify(redacted)).not.toContain("v1|123");
   });
 });

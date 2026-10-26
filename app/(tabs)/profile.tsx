@@ -491,7 +491,7 @@ function ProviderRetryResetSummary({ colors, authenticated, audits, pending, lis
     return counts;
   }, {});
   const groupedCountLabel = Object.entries(groupedCounts).sort(([, a], [, b]) => b - a).slice(0, 4).map(([group, count]) => `${group}: ${count}`).join(" · ");
-  const [exportPreview, setExportPreview] = useState<{ format: "json" | "markdown"; content: string; redactedContent: string; titlePreservingRedactedContent: string; redacted: boolean; keepTitles: boolean; filename: string; count: number; scopeLabel: string } | null>(null);
+  const [exportPreview, setExportPreview] = useState<{ format: "json" | "markdown"; content: string; redactedContent: string; titlePreservingRedactedContent: string; contextPreservingRedactedContent: string; titleAndContextPreservingRedactedContent: string; redacted: boolean; keepTitles: boolean; keepContext: boolean; filename: string; count: number; scopeLabel: string } | null>(null);
   const [copiedExport, setCopiedExport] = useState<{ format: "json" | "markdown"; occurredAt: string } | null>(null);
   const [lastExport, setLastExport] = useState<{ format: "json" | "markdown"; occurredAt: string; scopeLabel: string; count: number } | null>(null);
   useEffect(() => {
@@ -515,19 +515,27 @@ function ProviderRetryResetSummary({ colors, authenticated, audits, pending, lis
     const pkg = buildEvidencePackage({ exportedAt: new Date().toISOString(), scope: { title: "Workspace repeated provider-read retry resets", profileSlug: null }, sourceQuality, snapshots: [], characteristicAudits: [], retryResetAudits: exportAudits });
     const redactedPkg = redactEvidencePackage(pkg);
     const titlePreservingRedactedPkg = redactEvidencePackage(pkg, { redactTitles: false });
+    const contextPreservingRedactedPkg = redactEvidencePackage(pkg, { redactContext: false });
+    const titleAndContextPreservingRedactedPkg = redactEvidencePackage(pkg, { redactTitles: false, redactContext: false });
     const content = format === "json" ? JSON.stringify(pkg, null, 2) : renderEvidencePackageMarkdown(pkg);
     const redactedContent = format === "json" ? JSON.stringify(redactedPkg, null, 2) : renderEvidencePackageMarkdown(redactedPkg);
     const titlePreservingRedactedContent = format === "json" ? JSON.stringify(titlePreservingRedactedPkg, null, 2) : renderEvidencePackageMarkdown(titlePreservingRedactedPkg);
+    const contextPreservingRedactedContent = format === "json" ? JSON.stringify(contextPreservingRedactedPkg, null, 2) : renderEvidencePackageMarkdown(contextPreservingRedactedPkg);
+    const titleAndContextPreservingRedactedContent = format === "json" ? JSON.stringify(titleAndContextPreservingRedactedPkg, null, 2) : renderEvidencePackageMarkdown(titleAndContextPreservingRedactedPkg);
     const scopeLabel = `${failureFilter === "repeated" ? "Repeated failures" : "All resets"} · ${groupFilter === "all" ? "All groups" : groupFilter}`;
     setCopiedExport(null);
-    setExportPreview({ format, content, redactedContent, titlePreservingRedactedContent, redacted: true, keepTitles: false, filename: buildEvidenceFilename("workspace-repeated-provider-retry-resets", format), count: exportAudits.length, scopeLabel });
+    setExportPreview({ format, content, redactedContent, titlePreservingRedactedContent, contextPreservingRedactedContent, titleAndContextPreservingRedactedContent, redacted: true, keepTitles: false, keepContext: false, filename: buildEvidenceFilename("workspace-repeated-provider-retry-resets", format), count: exportAudits.length, scopeLabel });
   };
   const toggleExportRedaction = () => setExportPreview((current) => current ? { ...current, redacted: !current.redacted } : current);
   const toggleExportTitles = () => setExportPreview((current) => current ? { ...current, keepTitles: !current.keepTitles } : current);
+  const toggleExportContext = () => setExportPreview((current) => current ? { ...current, keepContext: !current.keepContext } : current);
   const getVisibleExportContent = () => {
     if (!exportPreview) return "";
     if (!exportPreview.redacted) return exportPreview.content;
-    return exportPreview.keepTitles ? exportPreview.titlePreservingRedactedContent : exportPreview.redactedContent;
+    if (exportPreview.keepTitles && exportPreview.keepContext) return exportPreview.titleAndContextPreservingRedactedContent;
+    if (exportPreview.keepTitles) return exportPreview.titlePreservingRedactedContent;
+    if (exportPreview.keepContext) return exportPreview.contextPreservingRedactedContent;
+    return exportPreview.redactedContent;
   };
   const shareExport = async () => {
     if (!exportPreview) return;
@@ -582,13 +590,13 @@ function ProviderRetryResetSummary({ colors, authenticated, audits, pending, lis
       <View style={[styles.exportPreviewCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <Text style={[styles.exportPreviewTitle, { color: colors.foreground }]}>Review export before sharing</Text>
         <Text style={[styles.exportPreviewMeta, { color: colors.muted }]}>{exportPreview?.format.toUpperCase()} · {exportPreview?.count ?? 0} repeated retry-reset event{exportPreview?.count === 1 ? "" : "s"}</Text>
-        <Text style={[styles.exportPreviewMeta, { color: colors.muted }]}>{exportPreview?.scopeLabel} · {exportPreview?.redacted ? `Redacted${exportPreview.keepTitles ? " · titles retained" : ""}` : "Full identifiers"}</Text>
+        <Text style={[styles.exportPreviewMeta, { color: colors.muted }]}>{exportPreview?.scopeLabel} · {exportPreview?.redacted ? `Redacted${exportPreview.keepTitles ? " · titles retained" : ""}${exportPreview.keepContext ? " · marketplace/profile retained" : ""}` : "Full identifiers"}</Text>
         {copiedExport ? <Text style={[styles.exportPreviewMeta, { color: colors.success }]}>Copied {copiedExport.format.toUpperCase()} · {new Date(copiedExport.occurredAt).toLocaleString()}</Text> : null}
         <Text style={[styles.exportPreviewMeta, { color: colors.muted }]} numberOfLines={2}>{exportPreview?.filename}</Text>
-        <Text style={[styles.exportPreviewText, { color: exportPreview?.redacted ? colors.success : colors.warning }]}>{exportPreview?.redacted ? "Privacy mode: listing identifiers and operator notes are redacted." : "Privacy warning: this package includes provider identifiers and operator notes. Redact it before sharing outside your research group."}</Text>
+        <Text style={[styles.exportPreviewText, { color: exportPreview?.redacted ? colors.success : colors.warning }]}>{exportPreview?.redacted ? `Privacy mode: listing identifiers, seller data and operator notes are redacted${exportPreview.keepTitles ? "; titles retained" : ""}${exportPreview.keepContext ? "; marketplace/profile context retained" : ""}.` : "Privacy warning: this package includes provider identifiers and operator notes. Redact it before sharing outside your research group."}</Text>
         <Text style={[styles.exportPreviewText, { color: colors.muted }]}>This package contains retry evidence only. It does not establish provider recovery, listing availability, sale, stock, valuation, execution, custody or pooled-fund eligibility.</Text>
         <ScrollView style={styles.exportPreviewBody} contentContainerStyle={styles.exportPreviewBodyContent}><Text selectable style={[styles.exportPreviewText, { color: colors.foreground }]}>{getVisibleExportContent()}</Text></ScrollView>
-        <View style={styles.exportPreviewActions}><Pressable onPress={() => setExportPreview(null)} style={({ pressed }) => [styles.clearCancelButton, pressed && styles.pressed]}><Text style={[styles.reviewButtonText, { color: colors.muted }]}>Cancel</Text></Pressable><Pressable onPress={toggleExportRedaction} style={({ pressed }) => [styles.reviewButton, { borderColor: exportPreview?.redacted ? colors.primary : colors.border }, pressed && styles.pressed]}><Text style={[styles.reviewButtonText, { color: exportPreview?.redacted ? colors.primary : colors.muted }]}>{exportPreview?.redacted ? "Show identifiers" : "Redact identifiers"}</Text></Pressable>{exportPreview?.redacted ? <Pressable onPress={toggleExportTitles} style={({ pressed }) => [styles.reviewButton, { borderColor: exportPreview.keepTitles ? colors.primary : colors.border }, pressed && styles.pressed]}><Text style={[styles.reviewButtonText, { color: exportPreview.keepTitles ? colors.primary : colors.muted }]}>{exportPreview.keepTitles ? "Redact titles" : "Keep titles"}</Text></Pressable> : null}<Pressable onPress={() => void copyExport()} style={({ pressed }) => [styles.reviewButton, { borderColor: colors.border }, pressed && styles.pressed]}><Text style={[styles.reviewButtonText, { color: colors.muted }]}>Copy</Text></Pressable><Pressable onPress={() => void shareExport()} style={({ pressed }) => [styles.clearConfirmButton, { backgroundColor: colors.primary }, pressed && styles.pressed]}><Text style={[styles.clearConfirmText, { color: colors.onPrimary }]}>Confirm share</Text></Pressable></View>
+        <View style={styles.exportPreviewActions}><Pressable onPress={() => setExportPreview(null)} style={({ pressed }) => [styles.clearCancelButton, pressed && styles.pressed]}><Text style={[styles.reviewButtonText, { color: colors.muted }]}>Cancel</Text></Pressable><Pressable onPress={toggleExportRedaction} style={({ pressed }) => [styles.reviewButton, { borderColor: exportPreview?.redacted ? colors.primary : colors.border }, pressed && styles.pressed]}><Text style={[styles.reviewButtonText, { color: exportPreview?.redacted ? colors.primary : colors.muted }]}>{exportPreview?.redacted ? "Show identifiers" : "Redact identifiers"}</Text></Pressable>{exportPreview?.redacted ? <><Pressable onPress={toggleExportTitles} style={({ pressed }) => [styles.reviewButton, { borderColor: exportPreview.keepTitles ? colors.primary : colors.border }, pressed && styles.pressed]}><Text style={[styles.reviewButtonText, { color: exportPreview.keepTitles ? colors.primary : colors.muted }]}>{exportPreview.keepTitles ? "Redact titles" : "Keep titles"}</Text></Pressable><Pressable onPress={toggleExportContext} style={({ pressed }) => [styles.reviewButton, { borderColor: exportPreview.keepContext ? colors.primary : colors.border }, pressed && styles.pressed]}><Text style={[styles.reviewButtonText, { color: exportPreview.keepContext ? colors.primary : colors.muted }]}>{exportPreview.keepContext ? "Redact context" : "Keep context"}</Text></Pressable></> : null}<Pressable onPress={() => void copyExport()} style={({ pressed }) => [styles.reviewButton, { borderColor: colors.border }, pressed && styles.pressed]}><Text style={[styles.reviewButtonText, { color: colors.muted }]}>Copy</Text></Pressable><Pressable onPress={() => void shareExport()} style={({ pressed }) => [styles.clearConfirmButton, { backgroundColor: colors.primary }, pressed && styles.pressed]}><Text style={[styles.clearConfirmText, { color: colors.onPrimary }]}>Confirm share</Text></Pressable></View>
       </View>
     </View>
   </Modal>
