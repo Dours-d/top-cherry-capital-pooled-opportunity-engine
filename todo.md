@@ -132,6 +132,7 @@ R2 full real-data ingestion, R3 response estimation, R4 network feedback and R5 
 - [x] R2.0ar Actionable failure context: pending and account-synced retry-reset rows now open the matching focused listing-history route with the provider listing ID; navigation is read-only and does not retry, alter audits or imply provider recovery.
 - [x] R2.0as Context-aware failure rows: when a stored reconciliation snapshot matches a retry-reset event, Workspace shows its title/profile and passes both into focused history; unmatched events retain a safe provider-ID fallback.
 - [x] R2.0at Retry-reset context summary: Workspace groups recorded reset events by stored marketplace/profile context, caps the visible group list, and labels the counts as event counts rather than failure rates or availability estimates.
+- [x] R2.0au Filtered failure export: when Workspace is filtered to repeated provider-read resets, it can share allowlisted JSON or Markdown evidence containing only reset-event records and the research-only boundary.
 
 ## Existing boundaries
 - eBay account-deletion delivery does not establish Browse search or listing-stream permissions.
