@@ -143,6 +143,7 @@ R2 full real-data ingestion, R3 response estimation, R4 network feedback and R5 
 - [x] R2.0bc Clipboard evidence copy: the export preview now offers a Copy action using Expo Clipboard for the same allowlisted JSON/Markdown content; success/failure feedback is explicit and copying does not mark an export as device-shared or mutate audit state.
 - [x] R2.0bd Clipboard feedback: after a successful copy, the open preview visibly shows copied format and local timestamp while remaining available for Cancel or Confirm share; opening a new export clears stale copied-state feedback.
 - [x] R2.0be Privacy redaction: export preview can switch between full identifiers and a redacted package before Copy or Confirm share; redaction replaces listing/snapshot/item/audit IDs, titles, seller IDs and operator notes while preserving source values, prices, statuses, timestamps and research-boundary semantics; helper and exclusion tests pass.
+- [x] R2.0bf Privacy warning: unredacted previews now show a warning that provider identifiers and operator notes are included, while redacted previews show a positive privacy-mode confirmation; the warning is visible before both Copy and Confirm share.
 
 ## Existing boundaries
 - eBay account-deletion delivery does not establish Browse search or listing-stream permissions.
