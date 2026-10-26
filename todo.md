@@ -140,6 +140,7 @@ R2 full real-data ingestion, R3 response estimation, R4 network feedback and R5 
 - [x] R2.0az Export traceability: the Workspace export preview now identifies the active failure/group scope, and after a successful device share the card records last format, event count, scope and local timestamp; zero-result filtered states no longer expose export buttons.
 - [x] R2.0ba Durable export traceability: last successful Workspace export metadata now persists locally and hydrates on reopen with strict shape validation; malformed metadata is ignored without affecting audit records or retry queues.
 - [x] R2.0bb Reversible cleanup: Workspace now offers a confirmation-gated Clear export summary action that removes only the local metadata key; audit history, pending queues and shared evidence remain untouched.
+- [x] R2.0bc Clipboard evidence copy: the export preview now offers a Copy action using Expo Clipboard for the same allowlisted JSON/Markdown content; success/failure feedback is explicit and copying does not mark an export as device-shared or mutate audit state.
 
 ## Existing boundaries
 - eBay account-deletion delivery does not establish Browse search or listing-stream permissions.
