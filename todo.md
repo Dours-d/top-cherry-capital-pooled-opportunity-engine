@@ -153,6 +153,7 @@ R2 full real-data ingestion, R3 response estimation, R4 network feedback and R5 
 - [x] R2.0bm Durable export-audit queue: copy/share audit events are persisted locally before account sync, malformed queue entries are ignored, failed writes retain bounded error/attempt metadata, and queued events retry sequentially after authentication restoration or an explicit Retry audit sync action.
 - [x] R2.0bn Compact export history: authenticated Workspace now shows the five newest copy/share audit events with action, format, event count, scope, privacy mode and timestamp only; exported content and provider identifiers remain excluded.
 - [x] R2.0bo Focused-history export parity: snapshot history now opens redacted-by-default JSON/Markdown previews, supports explicit identifier reveal plus copy/share, and appends the same bounded export-audit metadata to the shared local/account queue without exporting valuation, execution, custody or pooled-fund fields.
+- [x] R2.0bp Pending export visibility: Workspace recent export activity now merges queued focused-history events with account history, deduplicates by export ID, and labels each item Pending local or Account synced without revealing exported content or provider identifiers.
 
 ## Existing boundaries
 - eBay account-deletion delivery does not establish Browse search or listing-stream permissions.
