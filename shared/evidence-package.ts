@@ -102,7 +102,31 @@ export function buildEvidencePackage(input: {
   };
 }
 
-type EvidencePackage = ReturnType<typeof buildEvidencePackage>;
+export type EvidencePackage = ReturnType<typeof buildEvidencePackage>;
+
+export function redactEvidencePackage(pkg: EvidencePackage): EvidencePackage {
+  const redacted = "[redacted]";
+  return {
+    ...pkg,
+    scope: {
+      ...pkg.scope,
+      providerListingId: pkg.scope.providerListingId ? redacted : pkg.scope.providerListingId,
+      title: pkg.scope.title ? redacted : pkg.scope.title,
+    },
+    snapshots: pkg.snapshots.map((snapshot) => ({
+      ...snapshot,
+      snapshotId: redacted,
+      providerListingId: redacted,
+      title: redacted,
+      sellerId: snapshot.sellerId ? redacted : snapshot.sellerId,
+      reviewNote: snapshot.reviewNote ? redacted : snapshot.reviewNote,
+      characteristicsCheckNote: snapshot.characteristicsCheckNote ? redacted : snapshot.characteristicsCheckNote,
+    })),
+    currentProviderRead: pkg.currentProviderRead ? { ...pkg.currentProviderRead, itemId: redacted } : null,
+    characteristicAudits: pkg.characteristicAudits.map((audit) => ({ ...audit, auditId: redacted, note: redacted })),
+    retryResetAudits: pkg.retryResetAudits.map((audit) => ({ ...audit, resetId: redacted, providerListingId: redacted, note: redacted })),
+  };
+}
 
 export function buildEvidenceFilename(providerListingId: string | undefined, format: "json" | "markdown") {
   const token = (providerListingId ?? "listing").replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase() || "listing";

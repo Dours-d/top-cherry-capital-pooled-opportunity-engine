@@ -20,7 +20,7 @@ import { compareSnapshotToPrior, evaluateSnapshotReconciliation, getSnapshotFres
 import { dismissalsFromOutcomeSyncAudits, dismissPendingOutcome, mergeOutcomeSyncAudits, queueOutcomeSyncAudit, resolveOutcomeSyncAudit, restoreDismissedOutcome as restoreDismissedOutcomeTransition, type OutcomeSyncAuditRecord, type OutcomeSyncDismissal, type PendingOutcomeRecord, type PendingOutcomeSyncAudit } from "@/shared/outcome-sync-queue";
 import { CHARACTERISTIC_CHECK_AUDIT_QUEUE_STORAGE_KEY, enqueueCharacteristicCheck, normalizeCharacteristicCheckQueue, resolveCharacteristicCheck, type PendingCharacteristicCheck } from "@/shared/characteristic-check-audits";
 import { filterProviderRetryResetsByGroup, getProviderRetryResetGroup, parsePendingProviderRetryResets, PROVIDER_RETRY_RESET_PENDING_KEY, type PendingProviderRetryReset } from "@/shared/provider-retry-resets";
-import { buildEvidenceFilename, buildEvidencePackage, renderEvidencePackageMarkdown } from "@/shared/evidence-package";
+import { buildEvidenceFilename, buildEvidencePackage, redactEvidencePackage, renderEvidencePackageMarkdown } from "@/shared/evidence-package";
 
 const EBAY_READINESS_KEY = "topCherry.ebayReadiness";
 const OBSERVATION_REVIEW_STORAGE_KEY = "topCherry.observationReviews";
@@ -491,7 +491,7 @@ function ProviderRetryResetSummary({ colors, authenticated, audits, pending, lis
     return counts;
   }, {});
   const groupedCountLabel = Object.entries(groupedCounts).sort(([, a], [, b]) => b - a).slice(0, 4).map(([group, count]) => `${group}: ${count}`).join(" · ");
-  const [exportPreview, setExportPreview] = useState<{ format: "json" | "markdown"; content: string; filename: string; count: number; scopeLabel: string } | null>(null);
+  const [exportPreview, setExportPreview] = useState<{ format: "json" | "markdown"; content: string; redactedContent: string; redacted: boolean; filename: string; count: number; scopeLabel: string } | null>(null);
   const [copiedExport, setCopiedExport] = useState<{ format: "json" | "markdown"; occurredAt: string } | null>(null);
   const [lastExport, setLastExport] = useState<{ format: "json" | "markdown"; occurredAt: string; scopeLabel: string; count: number } | null>(null);
   useEffect(() => {
@@ -513,15 +513,18 @@ function ProviderRetryResetSummary({ colors, authenticated, audits, pending, lis
     const exportAudits = [...filteredRepeatedAudits.map((audit) => ({ resetId: audit.resetId, providerListingId: audit.providerListingId, previousAttemptCount: audit.previousAttemptCount, occurredAt: audit.occurredAt, note: audit.note, syncStatus: "account-synced" as const })), ...filteredRepeatedPending.map((item) => ({ resetId: item.resetId, providerListingId: item.providerListingId, previousAttemptCount: item.previousAttemptCount, occurredAt: item.occurredAt, note: item.note, syncStatus: "pending-local" as const }))];
     const sourceQuality = { observationCount: 0, ageCounts: { fresh: 0, aging: 0, stale: 0, unknown: 0 }, missingCounts: {} };
     const pkg = buildEvidencePackage({ exportedAt: new Date().toISOString(), scope: { title: "Workspace repeated provider-read retry resets", profileSlug: null }, sourceQuality, snapshots: [], characteristicAudits: [], retryResetAudits: exportAudits });
+    const redactedPkg = redactEvidencePackage(pkg);
     const content = format === "json" ? JSON.stringify(pkg, null, 2) : renderEvidencePackageMarkdown(pkg);
+    const redactedContent = format === "json" ? JSON.stringify(redactedPkg, null, 2) : renderEvidencePackageMarkdown(redactedPkg);
     const scopeLabel = `${failureFilter === "repeated" ? "Repeated failures" : "All resets"} · ${groupFilter === "all" ? "All groups" : groupFilter}`;
     setCopiedExport(null);
-    setExportPreview({ format, content, filename: buildEvidenceFilename("workspace-repeated-provider-retry-resets", format), count: exportAudits.length, scopeLabel });
+    setExportPreview({ format, content, redactedContent, redacted: false, filename: buildEvidenceFilename("workspace-repeated-provider-retry-resets", format), count: exportAudits.length, scopeLabel });
   };
+  const toggleExportRedaction = () => setExportPreview((current) => current ? { ...current, redacted: !current.redacted } : current);
   const shareExport = async () => {
     if (!exportPreview) return;
     try {
-      await Share.share({ title: exportPreview.filename, message: exportPreview.content });
+      await Share.share({ title: exportPreview.filename, message: exportPreview.redacted ? exportPreview.redactedContent : exportPreview.content });
       const completedExport = { format: exportPreview.format, occurredAt: new Date().toISOString(), scopeLabel: exportPreview.scopeLabel, count: exportPreview.count };
       setLastExport(completedExport);
       void AsyncStorage.setItem(PROVIDER_RETRY_RESET_LAST_EXPORT_KEY, JSON.stringify(completedExport)).catch(() => undefined);
@@ -545,7 +548,7 @@ function ProviderRetryResetSummary({ colors, authenticated, audits, pending, lis
   const copyExport = async () => {
     if (!exportPreview) return;
     try {
-      await Clipboard.setStringAsync(exportPreview.content);
+      await Clipboard.setStringAsync(exportPreview.redacted ? exportPreview.redactedContent : exportPreview.content);
       const copiedAt = new Date().toISOString();
       setCopiedExport({ format: exportPreview.format, occurredAt: copiedAt });
       Alert.alert("Copied", `${exportPreview.format.toUpperCase()} evidence package copied to the clipboard.`);
@@ -571,12 +574,12 @@ function ProviderRetryResetSummary({ colors, authenticated, audits, pending, lis
       <View style={[styles.exportPreviewCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <Text style={[styles.exportPreviewTitle, { color: colors.foreground }]}>Review export before sharing</Text>
         <Text style={[styles.exportPreviewMeta, { color: colors.muted }]}>{exportPreview?.format.toUpperCase()} · {exportPreview?.count ?? 0} repeated retry-reset event{exportPreview?.count === 1 ? "" : "s"}</Text>
-        <Text style={[styles.exportPreviewMeta, { color: colors.muted }]}>{exportPreview?.scopeLabel}</Text>
+        <Text style={[styles.exportPreviewMeta, { color: colors.muted }]}>{exportPreview?.scopeLabel} · {exportPreview?.redacted ? "Redacted" : "Full identifiers"}</Text>
         {copiedExport ? <Text style={[styles.exportPreviewMeta, { color: colors.success }]}>Copied {copiedExport.format.toUpperCase()} · {new Date(copiedExport.occurredAt).toLocaleString()}</Text> : null}
         <Text style={[styles.exportPreviewMeta, { color: colors.muted }]} numberOfLines={2}>{exportPreview?.filename}</Text>
         <Text style={[styles.exportPreviewText, { color: colors.muted }]}>This package contains retry evidence only. It does not establish provider recovery, listing availability, sale, stock, valuation, execution, custody or pooled-fund eligibility.</Text>
-        <ScrollView style={styles.exportPreviewBody} contentContainerStyle={styles.exportPreviewBodyContent}><Text selectable style={[styles.exportPreviewText, { color: colors.foreground }]}>{exportPreview?.content}</Text></ScrollView>
-        <View style={styles.exportPreviewActions}><Pressable onPress={() => setExportPreview(null)} style={({ pressed }) => [styles.clearCancelButton, pressed && styles.pressed]}><Text style={[styles.reviewButtonText, { color: colors.muted }]}>Cancel</Text></Pressable><Pressable onPress={() => void copyExport()} style={({ pressed }) => [styles.reviewButton, { borderColor: colors.border }, pressed && styles.pressed]}><Text style={[styles.reviewButtonText, { color: colors.muted }]}>Copy</Text></Pressable><Pressable onPress={() => void shareExport()} style={({ pressed }) => [styles.clearConfirmButton, { backgroundColor: colors.primary }, pressed && styles.pressed]}><Text style={[styles.clearConfirmText, { color: colors.onPrimary }]}>Confirm share</Text></Pressable></View>
+        <ScrollView style={styles.exportPreviewBody} contentContainerStyle={styles.exportPreviewBodyContent}><Text selectable style={[styles.exportPreviewText, { color: colors.foreground }]}>{exportPreview?.redacted ? exportPreview.redactedContent : exportPreview?.content}</Text></ScrollView>
+        <View style={styles.exportPreviewActions}><Pressable onPress={() => setExportPreview(null)} style={({ pressed }) => [styles.clearCancelButton, pressed && styles.pressed]}><Text style={[styles.reviewButtonText, { color: colors.muted }]}>Cancel</Text></Pressable><Pressable onPress={toggleExportRedaction} style={({ pressed }) => [styles.reviewButton, { borderColor: exportPreview?.redacted ? colors.primary : colors.border }, pressed && styles.pressed]}><Text style={[styles.reviewButtonText, { color: exportPreview?.redacted ? colors.primary : colors.muted }]}>{exportPreview?.redacted ? "Show identifiers" : "Redact identifiers"}</Text></Pressable><Pressable onPress={() => void copyExport()} style={({ pressed }) => [styles.reviewButton, { borderColor: colors.border }, pressed && styles.pressed]}><Text style={[styles.reviewButtonText, { color: colors.muted }]}>Copy</Text></Pressable><Pressable onPress={() => void shareExport()} style={({ pressed }) => [styles.clearConfirmButton, { backgroundColor: colors.primary }, pressed && styles.pressed]}><Text style={[styles.clearConfirmText, { color: colors.onPrimary }]}>Confirm share</Text></Pressable></View>
       </View>
     </View>
   </Modal>

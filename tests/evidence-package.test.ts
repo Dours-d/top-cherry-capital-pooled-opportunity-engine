@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildEvidenceFilename, buildEvidencePackage, renderEvidencePackageMarkdown } from "../shared/evidence-package";
+import { buildEvidenceFilename, buildEvidencePackage, redactEvidencePackage, renderEvidencePackageMarkdown } from "../shared/evidence-package";
 
 const sourceQuality = { observationCount: 1, ageCounts: { fresh: 1, aging: 0, stale: 0, unknown: 0 }, missingCounts: {} };
 
@@ -80,5 +80,24 @@ describe("evidence package", () => {
     const serialized = JSON.stringify(pkg);
     expect(pkg.retryResetAudits).toMatchObject([{ resetId: "reset-2", syncStatus: "pending-local" }]);
     expect(serialized).not.toMatch(/marketValue|execute|custody|pooledFunds/i);
+  });
+
+  it("redacts identifiers and operator notes without changing evidence values", () => {
+    const pkg = buildEvidencePackage({
+      exportedAt: "2026-10-24T11:00:00.000Z",
+      scope: { providerListingId: "v1|123", title: "Example watch", profileSlug: "luxury_watches" },
+      sourceQuality,
+      snapshots: [{ ...snapshot, reviewNote: "Keep this private" }],
+      currentProviderRead: { itemId: "v1|123", askingPrice: 1010, currency: "GBP", fetchedAt: "2026-10-24T11:00:00.000Z" },
+      characteristicAudits: [{ auditId: "audit-1", action: "checked", occurredAt: "2026-10-24T11:00:00.000Z", note: "Private reviewer note" }],
+      retryResetAudits: [{ resetId: "reset-1", providerListingId: "v1|123", previousAttemptCount: 3, occurredAt: "2026-10-24T11:30:00.000Z", note: "Private retry context", syncStatus: "account-synced" }],
+    });
+    const redacted = redactEvidencePackage(pkg);
+    expect(redacted.scope).toMatchObject({ providerListingId: "[redacted]", title: "[redacted]" });
+    expect(redacted.snapshots[0]).toMatchObject({ providerListingId: "[redacted]", askingPrice: 1000, reviewNote: "[redacted]" });
+    expect(redacted.currentProviderRead).toMatchObject({ itemId: "[redacted]", askingPrice: 1010, currency: "GBP" });
+    expect(redacted.characteristicAudits[0]).toMatchObject({ auditId: "[redacted]", note: "[redacted]" });
+    expect(redacted.retryResetAudits[0]).toMatchObject({ resetId: "[redacted]", providerListingId: "[redacted]", note: "[redacted]", previousAttemptCount: 3 });
+    expect(JSON.stringify(redacted)).not.toMatch(/v1\|123|Private this|Private reviewer|Private retry/);
   });
 });
