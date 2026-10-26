@@ -1,7 +1,7 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useEffect, useState } from "react";
 import { router } from "expo-router";
-import { Alert, Linking, Platform, Pressable, ScrollView, Share, StyleSheet, Switch, Text, TextInput, View } from "react-native";
+import { Alert, Linking, Modal, Platform, Pressable, ScrollView, Share, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 import * as Haptics from "expo-haptics";
 import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
@@ -479,14 +479,25 @@ function ProviderRetryResetSummary({ colors, authenticated, audits, pending, lis
     return groups;
   }, {});
   const groupedCountLabel = Object.entries(groupedCounts).sort(([, a], [, b]) => b - a).slice(0, 4).map(([group, count]) => `${group}: ${count}`).join(" · ");
+  const [exportPreview, setExportPreview] = useState<{ format: "json" | "markdown"; content: string; filename: string; count: number } | null>(null);
   const exportRepeated = async (format: "json" | "markdown") => {
     const exportAudits = [...repeatedAudits.map((audit) => ({ resetId: audit.resetId, providerListingId: audit.providerListingId, previousAttemptCount: audit.previousAttemptCount, occurredAt: audit.occurredAt, note: audit.note, syncStatus: "account-synced" as const })), ...repeatedPending.map((item) => ({ resetId: item.resetId, providerListingId: item.providerListingId, previousAttemptCount: item.previousAttemptCount, occurredAt: item.occurredAt, note: item.note, syncStatus: "pending-local" as const }))];
     const sourceQuality = { observationCount: 0, ageCounts: { fresh: 0, aging: 0, stale: 0, unknown: 0 }, missingCounts: {} };
     const pkg = buildEvidencePackage({ exportedAt: new Date().toISOString(), scope: { title: "Workspace repeated provider-read retry resets", profileSlug: null }, sourceQuality, snapshots: [], characteristicAudits: [], retryResetAudits: exportAudits });
     const content = format === "json" ? JSON.stringify(pkg, null, 2) : renderEvidencePackageMarkdown(pkg);
-    try { await Share.share({ title: buildEvidenceFilename("workspace-repeated-provider-retry-resets", format), message: content }); } catch { Alert.alert("Export unavailable", "Sharing is unavailable on this device; the local and account audit records remain unchanged."); }
+    setExportPreview({ format, content, filename: buildEvidenceFilename("workspace-repeated-provider-retry-resets", format), count: exportAudits.length });
   };
-  return <View style={[styles.retryResetSummaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+  const shareExport = async () => {
+    if (!exportPreview) return;
+    try {
+      await Share.share({ title: exportPreview.filename, message: exportPreview.content });
+      setExportPreview(null);
+    } catch {
+      Alert.alert("Export unavailable", "Sharing is unavailable on this device; the local and account audit records remain unchanged.");
+    }
+  };
+  return <>
+  <View style={[styles.retryResetSummaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
     <View style={styles.readinessHeader}><View style={styles.settingCopy}><Text style={[styles.settingTitle, { color: colors.foreground }]}>Provider-read retry audit</Text><Text style={[styles.settingDescription, { color: colors.muted }]}>{authenticated ? `${audits.length} account-synced reset${audits.length === 1 ? "" : "s"}` : "Account audit unavailable until sign-in"}{pending.length ? ` · ${pending.length} queued locally` : ""}</Text></View><MaterialIcons name="history" size={20} color={pending.length ? colors.warning : colors.primary} /></View>
     <Text style={[styles.dataNote, { color: colors.muted }]}>A reset records why a bounded provider-read retry budget was reopened. It does not confirm provider recovery, listing availability, a sale, a stock unit, a valuation, or an allocation decision.</Text>
     <View style={styles.filterRow}>{(["all", "repeated"] as const).map((option) => <Pressable key={option} onPress={() => setFailureFilter(option)} style={({ pressed }) => [styles.filterChip, { backgroundColor: failureFilter === option ? colors.foreground : colors.background, borderColor: colors.border }, pressed && styles.pressed]}><Text style={[styles.filterChipText, { color: failureFilter === option ? colors.background : colors.muted }]}>{option === "all" ? `All (${audits.length + pending.length})` : `Repeated · 2+ attempts (${repeatedAudits.length + repeatedPending.length})`}</Text></Pressable>)}</View>
@@ -495,7 +506,20 @@ function ProviderRetryResetSummary({ colors, authenticated, audits, pending, lis
     {failureFilter === "repeated" && (repeatedAudits.length || repeatedPending.length) ? <View style={styles.retryResetExportRow}><Pressable onPress={() => void exportRepeated("json")} style={({ pressed }) => [styles.reviewButton, { borderColor: colors.primary }, pressed && styles.pressed]}><Text style={[styles.reviewButtonText, { color: colors.primary }]}>Export JSON</Text></Pressable><Pressable onPress={() => void exportRepeated("markdown")} style={({ pressed }) => [styles.reviewButton, { borderColor: colors.border }, pressed && styles.pressed]}><Text style={[styles.reviewButtonText, { color: colors.muted }]}>Export Markdown</Text></Pressable></View> : null}
     {visiblePending.length ? <View style={[styles.retryResetPending, { borderColor: colors.warning }]}><Text style={[styles.retryResetPendingTitle, { color: colors.warning }]}>Pending account synchronization</Text>{visiblePending.slice(0, 3).map((item) => { const context = listingContext.find((snapshot) => snapshot.providerListingId === item.providerListingId); return <Pressable key={item.resetId} accessibilityRole="button" accessibilityLabel={`Open history for ${context?.title ?? item.providerListingId}`} onPress={() => onOpenListing(item.providerListingId)} style={({ pressed }) => [styles.retryResetRow, pressed && styles.pressed]}><MaterialIcons name="cloud-off" size={14} color={colors.warning} /><View style={styles.settingCopy}><Text style={[styles.settingDescription, { color: colors.foreground }]} numberOfLines={1}>{context?.title ?? item.providerListingId}</Text><Text style={[styles.settingDescription, { color: colors.muted }]} numberOfLines={1}>{context?.profileSlug ? `${context.profileSlug} · ` : ""}{item.providerListingId} · attempt {item.attemptCount} · reset after {item.previousAttemptCount} provider-read attempts{item.lastError ? ` · ${item.lastError}` : ""}</Text><Text style={[styles.settingDescription, { color: colors.muted }]}>Open focused listing history</Text></View><MaterialIcons name="chevron-right" size={16} color={colors.muted} /></Pressable>; })}</View> : null}
     {visibleAudits.length ? <View style={styles.retryResetHistory}><Text style={[styles.reviewHistoryTitle, { color: colors.muted }]}>Recent account audit events</Text>{visibleAudits.map((audit) => { const context = listingContext.find((snapshot) => snapshot.providerListingId === audit.providerListingId); return <Pressable key={audit.resetId} accessibilityRole="button" accessibilityLabel={`Open history for ${context?.title ?? audit.providerListingId}`} onPress={() => onOpenListing(audit.providerListingId)} style={({ pressed }) => [styles.retryResetRow, pressed && styles.pressed]}><MaterialIcons name="restart-alt" size={14} color={colors.primary} /><View style={styles.settingCopy}><Text style={[styles.settingDescription, { color: colors.foreground }]} numberOfLines={1}>{context?.title ?? audit.providerListingId}</Text><Text style={[styles.settingDescription, { color: colors.muted }]} numberOfLines={1}>{context?.profileSlug ? `${context.profileSlug} · ` : ""}{audit.providerListingId} · reopened after {audit.previousAttemptCount} attempt{audit.previousAttemptCount === 1 ? "" : "s"}</Text><Text style={[styles.settingDescription, { color: colors.muted }]}>{new Date(audit.occurredAt).toLocaleString()} · Open focused listing history</Text><Text style={[styles.reviewNoteText, { color: colors.muted }]} numberOfLines={2}>“{audit.note}”</Text></View><MaterialIcons name="chevron-right" size={16} color={colors.muted} /></Pressable>; })}</View> : <Text style={[styles.dataNote, { color: colors.muted }]}>No retry-reset audit events match this filter.</Text>}
-  </View>;
+  </View>
+  <Modal visible={Boolean(exportPreview)} transparent animationType="fade" onRequestClose={() => setExportPreview(null)}>
+    <View style={[styles.exportOverlay, { backgroundColor: "rgba(0,0,0,0.45)" }]}>
+      <View style={[styles.exportPreviewCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <Text style={[styles.exportPreviewTitle, { color: colors.foreground }]}>Review export before sharing</Text>
+        <Text style={[styles.exportPreviewMeta, { color: colors.muted }]}>{exportPreview?.format.toUpperCase()} · {exportPreview?.count ?? 0} repeated retry-reset event{exportPreview?.count === 1 ? "" : "s"}</Text>
+        <Text style={[styles.exportPreviewMeta, { color: colors.muted }]} numberOfLines={2}>{exportPreview?.filename}</Text>
+        <Text style={[styles.exportPreviewText, { color: colors.muted }]}>This package contains retry evidence only. It does not establish provider recovery, listing availability, sale, stock, valuation, execution, custody or pooled-fund eligibility.</Text>
+        <ScrollView style={styles.exportPreviewBody} contentContainerStyle={styles.exportPreviewBodyContent}><Text selectable style={[styles.exportPreviewText, { color: colors.foreground }]}>{exportPreview?.content}</Text></ScrollView>
+        <View style={styles.exportPreviewActions}><Pressable onPress={() => setExportPreview(null)} style={({ pressed }) => [styles.clearCancelButton, pressed && styles.pressed]}><Text style={[styles.reviewButtonText, { color: colors.muted }]}>Cancel</Text></Pressable><Pressable onPress={() => void shareExport()} style={({ pressed }) => [styles.clearConfirmButton, { backgroundColor: colors.primary }, pressed && styles.pressed]}><Text style={[styles.clearConfirmText, { color: colors.onPrimary }]}>Confirm share</Text></Pressable></View>
+      </View>
+    </View>
+  </Modal>
+  </>;
 }
 
 function SyncedOutcomeHistory({ colors, outcomes, authenticated, auditCount, pendingAuditSyncs, pendingSyncs, pendingRecords, dismissedRecords, onRetryPending, onRetryAudit, onClearPending, onRestorePending, retrying, retryingAudit }: { colors: ReturnType<typeof useColors>; outcomes: ListingOutcome[]; authenticated: boolean; auditCount: number; pendingAuditSyncs: number; pendingSyncs: number; pendingRecords: PendingOutcomeRecord[]; dismissedRecords: OutcomeSyncDismissal[]; onRetryPending: () => void; onRetryAudit: () => void; onClearPending: (outcomeId: string, note: string) => void; onRestorePending: (outcomeId: string, note: string) => void; retrying: boolean; retryingAudit: boolean }) {
@@ -579,6 +603,14 @@ const styles = StyleSheet.create({
   retryResetHistory: { marginTop: 12, paddingTop: 11, borderTopWidth: 1, borderTopColor: "rgba(128,128,128,0.18)" },
   retryResetRow: { flexDirection: "row", alignItems: "flex-start", gap: 7, minHeight: 38, marginTop: 8 },
   retryResetExportRow: { flexDirection: "row", gap: 7, marginTop: 10 },
+  exportOverlay: { flex: 1, alignItems: "center", justifyContent: "center", padding: 20 },
+  exportPreviewCard: { width: "100%", maxHeight: "86%", borderRadius: 19, borderWidth: 1, padding: 15 },
+  exportPreviewTitle: { fontSize: 16, fontWeight: "900" },
+  exportPreviewMeta: { fontSize: 10, lineHeight: 14, marginTop: 5 },
+  exportPreviewText: { fontSize: 10, lineHeight: 15, marginTop: 9 },
+  exportPreviewBody: { marginTop: 8, maxHeight: 260, borderWidth: 1, borderRadius: 9, borderColor: "rgba(128,128,128,0.2)", padding: 8 },
+  exportPreviewBodyContent: { paddingBottom: 8 },
+  exportPreviewActions: { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 8, marginTop: 12 },
   snapshotQueueCard: { borderRadius: 19, borderWidth: 1, padding: 14, marginBottom: 27 },
   snapshotRow: { flexDirection: "row", alignItems: "flex-start", gap: 8, minHeight: 66, paddingTop: 10, marginTop: 8, borderTopWidth: 1 },
   snapshotActions: { gap: 6, alignItems: "flex-end" },
