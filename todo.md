@@ -136,6 +136,7 @@ R2 full real-data ingestion, R3 response estimation, R4 network feedback and R5 
 - [x] R2.0av Workspace export preview: JSON/Markdown retry-reset exports now open a mobile preview showing format, deterministic filename, event count, full allowlisted content and the research-only boundary; Cancel closes without sharing, while Confirm share is the only action that invokes the device share sheet.
 - [x] R2.0aw Marketplace/profile grouping filters: Workspace retry-reset audit summary now exposes bounded group chips derived only from stored snapshot context, reports the selected group explicitly, and applies the group plus repeated-failure filters to visible rows, counts and allowlisted exports; unknown context remains an explicit group.
 - [x] R2.0ax Grouping hardening: marketplace/profile group derivation and filtering now live in pure shared retry-reset helpers; regression coverage proves known-context selection, explicit unknown grouping and all-group identity preservation.
+- [x] R2.0ay Filter count clarity: marketplace/profile chips now show counts under the active All versus Repeated-failure mode, while the selected group and total matching count remain explicit; combined-filter behavior is covered by the full validation suite.
 
 ## Existing boundaries
 - eBay account-deletion delivery does not establish Browse search or listing-stream permissions.
