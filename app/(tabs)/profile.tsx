@@ -492,6 +492,7 @@ function ProviderRetryResetSummary({ colors, authenticated, audits, pending, lis
   }, {});
   const groupedCountLabel = Object.entries(groupedCounts).sort(([, a], [, b]) => b - a).slice(0, 4).map(([group, count]) => `${group}: ${count}`).join(" · ");
   const [exportPreview, setExportPreview] = useState<{ format: "json" | "markdown"; content: string; filename: string; count: number; scopeLabel: string } | null>(null);
+  const [copiedExport, setCopiedExport] = useState<{ format: "json" | "markdown"; occurredAt: string } | null>(null);
   const [lastExport, setLastExport] = useState<{ format: "json" | "markdown"; occurredAt: string; scopeLabel: string; count: number } | null>(null);
   useEffect(() => {
     void AsyncStorage.getItem(PROVIDER_RETRY_RESET_LAST_EXPORT_KEY).then((raw) => {
@@ -514,6 +515,7 @@ function ProviderRetryResetSummary({ colors, authenticated, audits, pending, lis
     const pkg = buildEvidencePackage({ exportedAt: new Date().toISOString(), scope: { title: "Workspace repeated provider-read retry resets", profileSlug: null }, sourceQuality, snapshots: [], characteristicAudits: [], retryResetAudits: exportAudits });
     const content = format === "json" ? JSON.stringify(pkg, null, 2) : renderEvidencePackageMarkdown(pkg);
     const scopeLabel = `${failureFilter === "repeated" ? "Repeated failures" : "All resets"} · ${groupFilter === "all" ? "All groups" : groupFilter}`;
+    setCopiedExport(null);
     setExportPreview({ format, content, filename: buildEvidenceFilename("workspace-repeated-provider-retry-resets", format), count: exportAudits.length, scopeLabel });
   };
   const shareExport = async () => {
@@ -544,6 +546,8 @@ function ProviderRetryResetSummary({ colors, authenticated, audits, pending, lis
     if (!exportPreview) return;
     try {
       await Clipboard.setStringAsync(exportPreview.content);
+      const copiedAt = new Date().toISOString();
+      setCopiedExport({ format: exportPreview.format, occurredAt: copiedAt });
       Alert.alert("Copied", `${exportPreview.format.toUpperCase()} evidence package copied to the clipboard.`);
     } catch {
       Alert.alert("Copy unavailable", "The evidence package could not be copied; the local and account audit records remain unchanged.");
@@ -568,6 +572,7 @@ function ProviderRetryResetSummary({ colors, authenticated, audits, pending, lis
         <Text style={[styles.exportPreviewTitle, { color: colors.foreground }]}>Review export before sharing</Text>
         <Text style={[styles.exportPreviewMeta, { color: colors.muted }]}>{exportPreview?.format.toUpperCase()} · {exportPreview?.count ?? 0} repeated retry-reset event{exportPreview?.count === 1 ? "" : "s"}</Text>
         <Text style={[styles.exportPreviewMeta, { color: colors.muted }]}>{exportPreview?.scopeLabel}</Text>
+        {copiedExport ? <Text style={[styles.exportPreviewMeta, { color: colors.success }]}>Copied {copiedExport.format.toUpperCase()} · {new Date(copiedExport.occurredAt).toLocaleString()}</Text> : null}
         <Text style={[styles.exportPreviewMeta, { color: colors.muted }]} numberOfLines={2}>{exportPreview?.filename}</Text>
         <Text style={[styles.exportPreviewText, { color: colors.muted }]}>This package contains retry evidence only. It does not establish provider recovery, listing availability, sale, stock, valuation, execution, custody or pooled-fund eligibility.</Text>
         <ScrollView style={styles.exportPreviewBody} contentContainerStyle={styles.exportPreviewBodyContent}><Text selectable style={[styles.exportPreviewText, { color: colors.foreground }]}>{exportPreview?.content}</Text></ScrollView>
