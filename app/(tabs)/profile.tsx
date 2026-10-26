@@ -22,6 +22,7 @@ import { CHARACTERISTIC_CHECK_AUDIT_QUEUE_STORAGE_KEY, enqueueCharacteristicChec
 import { filterProviderRetryResetsByGroup, getProviderRetryResetGroup, parsePendingProviderRetryResets, PROVIDER_RETRY_RESET_PENDING_KEY, type PendingProviderRetryReset } from "@/shared/provider-retry-resets";
 import { buildEvidenceFilename, buildEvidencePackage, redactEvidencePackage, renderEvidencePackageMarkdown } from "@/shared/evidence-package";
 import { buildEvidenceExportAudit } from "@/shared/export-audits";
+import { EVIDENCE_EXPORT_AUDIT_QUEUE_STORAGE_KEY, parsePendingEvidenceExportAudits, queueEvidenceExportAudit, resolveEvidenceExportAudit, type PendingEvidenceExportAudit } from "@/shared/export-audit-queue";
 
 const EBAY_READINESS_KEY = "topCherry.ebayReadiness";
 const OBSERVATION_REVIEW_STORAGE_KEY = "topCherry.observationReviews";
@@ -515,6 +516,11 @@ function ProviderRetryResetSummary({ colors, authenticated, audits, pending, lis
       }
     }).catch(() => undefined);
   }, []);
+  const [pendingExportAudits, setPendingExportAudits] = useState<PendingEvidenceExportAudit[]>([]);
+  const [retryingExportAudits, setRetryingExportAudits] = useState(false);
+  useEffect(() => {
+    void AsyncStorage.getItem(EVIDENCE_EXPORT_AUDIT_QUEUE_STORAGE_KEY).then((raw) => setPendingExportAudits(parsePendingEvidenceExportAudits(raw))).catch(() => setPendingExportAudits([]));
+  }, []);
   useEffect(() => {
     void AsyncStorage.getItem(PROVIDER_RETRY_RESET_EXPORT_PRIVACY_KEY).then((raw) => {
       if (!raw) return;
@@ -528,6 +534,37 @@ function ProviderRetryResetSummary({ colors, authenticated, audits, pending, lis
       }
     }).catch(() => undefined);
   }, []);
+  const persistPendingExportAudits = (queue: PendingEvidenceExportAudit[]) => {
+    setPendingExportAudits(queue);
+    void AsyncStorage.setItem(EVIDENCE_EXPORT_AUDIT_QUEUE_STORAGE_KEY, JSON.stringify(queue));
+  };
+  const retryPendingExportAudits = async () => {
+    if (!authenticated || retryingExportAudits || !pendingExportAudits.length) return;
+    setRetryingExportAudits(true);
+    let remaining = [...pendingExportAudits];
+    for (const audit of pendingExportAudits) {
+      const attemptedAt = new Date().toISOString();
+      try {
+        const { syncError: _syncError, lastAttemptAt: _lastAttemptAt, ...payload } = audit;
+        await appendExportAudit.mutateAsync(payload);
+        remaining = resolveEvidenceExportAudit(remaining, audit.exportId, { ok: true }, attemptedAt);
+      } catch (error) {
+        const syncError = error instanceof Error ? error.message : "The export audit server rejected this retry.";
+        remaining = resolveEvidenceExportAudit(remaining, audit.exportId, { ok: false, error: syncError }, attemptedAt);
+        setExportAuditSyncError("The export action is retained locally, but the account audit ledger could not be updated.");
+      }
+      persistPendingExportAudits(remaining);
+    }
+    setRetryingExportAudits(false);
+    if (!remaining.length) {
+      setExportAuditSyncError(null);
+      await exportAuditHistory.refetch();
+    }
+  };
+  useEffect(() => {
+    if (!authenticated || !pendingExportAudits.length) return;
+    void retryPendingExportAudits();
+  }, [authenticated, pendingExportAudits.length]);
   const exportRepeated = async (format: "json" | "markdown") => {
     const exportAudits = [...filteredRepeatedAudits.map((audit) => ({ resetId: audit.resetId, providerListingId: audit.providerListingId, previousAttemptCount: audit.previousAttemptCount, occurredAt: audit.occurredAt, note: audit.note, syncStatus: "account-synced" as const })), ...filteredRepeatedPending.map((item) => ({ resetId: item.resetId, providerListingId: item.providerListingId, previousAttemptCount: item.previousAttemptCount, occurredAt: item.occurredAt, note: item.note, syncStatus: "pending-local" as const }))];
     const sourceQuality = { observationCount: 0, ageCounts: { fresh: 0, aging: 0, stale: 0, unknown: 0 }, missingCounts: {} };
@@ -571,10 +608,9 @@ function ProviderRetryResetSummary({ colors, authenticated, audits, pending, lis
     if (!authenticated || !exportPreview) return;
     const occurredAt = new Date().toISOString();
     const audit = buildEvidenceExportAudit({ action, format: exportPreview.format, privacyMode: exportPreview.redacted ? "redacted" : "full", keepTitles: exportPreview.redacted && exportPreview.keepTitles, keepContext: exportPreview.redacted && exportPreview.keepContext, scopeLabel: exportPreview.scopeLabel, eventCount: exportPreview.count, occurredAt });
-    void appendExportAudit.mutateAsync(audit).then(() => {
-      setExportAuditSyncError(null);
-      return exportAuditHistory.refetch();
-    }).catch(() => setExportAuditSyncError("The export action is retained locally, but the account audit ledger could not be updated."));
+    const queued = queueEvidenceExportAudit(pendingExportAudits, audit, occurredAt);
+    persistPendingExportAudits(queued);
+    void retryPendingExportAudits();
   };
   const shareExport = async () => {
     if (!exportPreview) return;
@@ -630,7 +666,7 @@ function ProviderRetryResetSummary({ colors, authenticated, audits, pending, lis
     </View>
     {failureFilter === "repeated" && (filteredRepeatedAudits.length || filteredRepeatedPending.length) ? <View style={styles.retryResetExportRow}><Pressable onPress={() => void exportRepeated("json")} style={({ pressed }) => [styles.reviewButton, { borderColor: colors.primary }, pressed && styles.pressed]}><Text style={[styles.reviewButtonText, { color: colors.primary }]}>Export JSON</Text></Pressable><Pressable onPress={() => void exportRepeated("markdown")} style={({ pressed }) => [styles.reviewButton, { borderColor: colors.border }, pressed && styles.pressed]}><Text style={[styles.reviewButtonText, { color: colors.muted }]}>Export Markdown</Text></Pressable></View> : null}
     {lastExport ? <View><Text style={[styles.dataNote, { color: colors.muted }]}>Last shared export · {lastExport.format.toUpperCase()} · {lastExport.count} event{lastExport.count === 1 ? "" : "s"} · {lastExport.scopeLabel} · {new Date(lastExport.occurredAt).toLocaleString()}</Text><Pressable onPress={clearLastExport} accessibilityRole="button" accessibilityLabel="Clear last export summary" style={({ pressed }) => [styles.reviewButton, { borderColor: colors.border, alignSelf: "flex-start", marginTop: 6 }, pressed && styles.pressed]}><Text style={[styles.reviewButtonText, { color: colors.muted }]}>Clear export summary</Text></Pressable></View> : null}
-    {authenticated ? <Text style={[styles.dataNote, { color: exportAuditSyncError ? colors.warning : colors.muted }]}>{exportAuditSyncError ?? `${exportAuditHistory.data?.length ?? 0} copy/share export audit event${(exportAuditHistory.data?.length ?? 0) === 1 ? "" : "s"} account-synced. The ledger records the action and privacy mode, not the exported content.`}</Text> : <Text style={[styles.dataNote, { color: colors.muted }]}>Copy/share actions remain on this device until sign-in; no account export ledger is available.</Text>}
+    {authenticated ? <View><Text style={[styles.dataNote, { color: exportAuditSyncError ? colors.warning : colors.muted }]}>{exportAuditSyncError ?? `${exportAuditHistory.data?.length ?? 0} copy/share export audit event${(exportAuditHistory.data?.length ?? 0) === 1 ? "" : "s"} account-synced. The ledger records the action and privacy mode, not the exported content.`}</Text>{pendingExportAudits.length ? <View style={styles.clearActionRow}><Text style={[styles.dataNote, { color: colors.warning }]}>{pendingExportAudits.length} export audit event{pendingExportAudits.length === 1 ? "" : "s"} queued locally.</Text><Pressable onPress={() => void retryPendingExportAudits()} disabled={retryingExportAudits} style={({ pressed }) => [styles.reviewButton, { borderColor: colors.warning }, retryingExportAudits && styles.disabled, pressed && styles.pressed]}><Text style={[styles.reviewButtonText, { color: colors.warning }]}>{retryingExportAudits ? "Retrying…" : "Retry audit sync"}</Text></Pressable></View> : null}</View> : <Text style={[styles.dataNote, { color: colors.muted }]}>Copy/share actions remain on this device until sign-in; no account export ledger is available.</Text>}
     {visiblePending.length ? <View style={[styles.retryResetPending, { borderColor: colors.warning }]}><Text style={[styles.retryResetPendingTitle, { color: colors.warning }]}>Pending account synchronization</Text>{visiblePending.slice(0, 3).map((item) => { const context = listingContext.find((snapshot) => snapshot.providerListingId === item.providerListingId); return <Pressable key={item.resetId} accessibilityRole="button" accessibilityLabel={`Open history for ${context?.title ?? item.providerListingId}`} onPress={() => onOpenListing(item.providerListingId)} style={({ pressed }) => [styles.retryResetRow, pressed && styles.pressed]}><MaterialIcons name="cloud-off" size={14} color={colors.warning} /><View style={styles.settingCopy}><Text style={[styles.settingDescription, { color: colors.foreground }]} numberOfLines={1}>{context?.title ?? item.providerListingId}</Text><Text style={[styles.settingDescription, { color: colors.muted }]} numberOfLines={1}>{context?.profileSlug ? `${context.profileSlug} · ` : ""}{item.providerListingId} · attempt {item.attemptCount} · reset after {item.previousAttemptCount} provider-read attempts{item.lastError ? ` · ${item.lastError}` : ""}</Text><Text style={[styles.settingDescription, { color: colors.muted }]}>Open focused listing history</Text></View><MaterialIcons name="chevron-right" size={16} color={colors.muted} /></Pressable>; })}</View> : null}
     {visibleAudits.length ? <View style={styles.retryResetHistory}><Text style={[styles.reviewHistoryTitle, { color: colors.muted }]}>Recent account audit events</Text>{visibleAudits.map((audit) => { const context = listingContext.find((snapshot) => snapshot.providerListingId === audit.providerListingId); return <Pressable key={audit.resetId} accessibilityRole="button" accessibilityLabel={`Open history for ${context?.title ?? audit.providerListingId}`} onPress={() => onOpenListing(audit.providerListingId)} style={({ pressed }) => [styles.retryResetRow, pressed && styles.pressed]}><MaterialIcons name="restart-alt" size={14} color={colors.primary} /><View style={styles.settingCopy}><Text style={[styles.settingDescription, { color: colors.foreground }]} numberOfLines={1}>{context?.title ?? audit.providerListingId}</Text><Text style={[styles.settingDescription, { color: colors.muted }]} numberOfLines={1}>{context?.profileSlug ? `${context.profileSlug} · ` : ""}{audit.providerListingId} · reopened after {audit.previousAttemptCount} attempt{audit.previousAttemptCount === 1 ? "" : "s"}</Text><Text style={[styles.settingDescription, { color: colors.muted }]}>{new Date(audit.occurredAt).toLocaleString()} · Open focused listing history</Text><Text style={[styles.reviewNoteText, { color: colors.muted }]} numberOfLines={2}>“{audit.note}”</Text></View><MaterialIcons name="chevron-right" size={16} color={colors.muted} /></Pressable>; })}</View> : <Text style={[styles.dataNote, { color: colors.muted }]}>No retry-reset audit events match this filter.</Text>}
   </View>
