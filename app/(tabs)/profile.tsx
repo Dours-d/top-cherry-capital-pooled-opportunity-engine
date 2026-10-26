@@ -18,7 +18,7 @@ import { mergeListingOutcomes } from "@/shared/listing-outcomes";
 import { compareSnapshotToPrior, evaluateSnapshotReconciliation, getSnapshotFreshness, nextSnapshotFreshnessThreshold, type SnapshotFreshnessThreshold } from "@/shared/reconciliation-snapshots";
 import { dismissalsFromOutcomeSyncAudits, dismissPendingOutcome, mergeOutcomeSyncAudits, queueOutcomeSyncAudit, resolveOutcomeSyncAudit, restoreDismissedOutcome as restoreDismissedOutcomeTransition, type OutcomeSyncAuditRecord, type OutcomeSyncDismissal, type PendingOutcomeRecord, type PendingOutcomeSyncAudit } from "@/shared/outcome-sync-queue";
 import { CHARACTERISTIC_CHECK_AUDIT_QUEUE_STORAGE_KEY, enqueueCharacteristicCheck, normalizeCharacteristicCheckQueue, resolveCharacteristicCheck, type PendingCharacteristicCheck } from "@/shared/characteristic-check-audits";
-import { parsePendingProviderRetryResets, PROVIDER_RETRY_RESET_PENDING_KEY, type PendingProviderRetryReset } from "@/shared/provider-retry-resets";
+import { filterProviderRetryResetsByGroup, getProviderRetryResetGroup, parsePendingProviderRetryResets, PROVIDER_RETRY_RESET_PENDING_KEY, type PendingProviderRetryReset } from "@/shared/provider-retry-resets";
 import { buildEvidenceFilename, buildEvidencePackage, renderEvidencePackageMarkdown } from "@/shared/evidence-package";
 
 const EBAY_READINESS_KEY = "topCherry.ebayReadiness";
@@ -471,21 +471,16 @@ function ProviderRetryResetSummary({ colors, authenticated, audits, pending, lis
   const [groupFilter, setGroupFilter] = useState("all");
   const repeatedAudits = audits.filter((audit) => audit.previousAttemptCount >= 2);
   const repeatedPending = pending.filter((item) => item.previousAttemptCount >= 2);
-  const groupFor = (providerListingId: string) => {
-    const context = listingContext.find((snapshot) => snapshot.providerListingId === providerListingId);
-    return `${context?.marketplaceId ?? "Unknown marketplace"} / ${context?.profileSlug ?? "unknown profile"}`;
-  };
   const groupedCounts = [...audits.map((audit) => audit.providerListingId), ...pending.map((item) => item.providerListingId)].reduce<Record<string, number>>((groups, providerListingId) => {
-    const group = groupFor(providerListingId);
+    const group = getProviderRetryResetGroup(providerListingId, listingContext);
     groups[group] = (groups[group] ?? 0) + 1;
     return groups;
   }, {});
   const groupOptions = ["all", ...Object.keys(groupedCounts).sort()];
-  const matchesGroup = (providerListingId: string) => groupFilter === "all" || groupFor(providerListingId) === groupFilter;
-  const filteredAudits = audits.filter((audit) => matchesGroup(audit.providerListingId));
-  const filteredPending = pending.filter((item) => matchesGroup(item.providerListingId));
-  const filteredRepeatedAudits = repeatedAudits.filter((audit) => matchesGroup(audit.providerListingId));
-  const filteredRepeatedPending = repeatedPending.filter((item) => matchesGroup(item.providerListingId));
+  const filteredAudits = filterProviderRetryResetsByGroup(audits, groupFilter, listingContext);
+  const filteredPending = filterProviderRetryResetsByGroup(pending, groupFilter, listingContext);
+  const filteredRepeatedAudits = filterProviderRetryResetsByGroup(repeatedAudits, groupFilter, listingContext);
+  const filteredRepeatedPending = filterProviderRetryResetsByGroup(repeatedPending, groupFilter, listingContext);
   const visibleAudits = (failureFilter === "repeated" ? filteredRepeatedAudits : filteredAudits).slice().sort((a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime()).slice(0, 5);
   const visiblePending = failureFilter === "repeated" ? filteredRepeatedPending : filteredPending;
   const groupedCountLabel = Object.entries(groupedCounts).sort(([, a], [, b]) => b - a).slice(0, 4).map(([group, count]) => `${group}: ${count}`).join(" · ");

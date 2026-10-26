@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   enqueueProviderRetryReset,
+  filterProviderRetryResetsByGroup,
+  getProviderRetryResetGroup,
   markProviderRetryResetAttempt,
   parsePendingProviderRetryResets,
   removeProviderRetryReset,
@@ -17,6 +19,17 @@ const entry = {
 };
 
 describe("provider retry-reset queue", () => {
+  it("groups records by stored marketplace/profile context and preserves unknown context", () => {
+    const contexts = [
+      { providerListingId: "item-1", marketplaceId: "ebay", profileSlug: "watches" },
+      { providerListingId: "item-2", marketplaceId: "ebay", profileSlug: "cameras" },
+    ];
+    expect(getProviderRetryResetGroup("item-1", contexts)).toBe("ebay / watches");
+    expect(getProviderRetryResetGroup("missing-item", contexts)).toBe("Unknown marketplace / unknown profile");
+    expect(filterProviderRetryResetsByGroup([entry, { ...entry, resetId: "reset-2", providerListingId: "item-2" }], "ebay / watches", contexts)).toEqual([entry]);
+    expect(filterProviderRetryResetsByGroup([entry], "all", contexts)).toEqual([entry]);
+  });
+
   it("rejects malformed persisted values without throwing", () => {
     expect(parsePendingProviderRetryResets("not-json")).toEqual([]);
     expect(parsePendingProviderRetryResets(JSON.stringify([{ resetId: "missing-fields" }]))).toEqual([]);

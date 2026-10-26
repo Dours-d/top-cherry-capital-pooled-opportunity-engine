@@ -20,6 +20,22 @@ export type RetryResetConnectivityContext = {
   pendingCount: number;
 };
 
+export type RetryResetListingContext = {
+  providerListingId: string;
+  marketplaceId?: string | null;
+  profileSlug?: string | null;
+};
+
+export function getProviderRetryResetGroup(providerListingId: string, contexts: readonly RetryResetListingContext[]) {
+  const context = contexts.find((item) => item.providerListingId === providerListingId);
+  return `${context?.marketplaceId ?? "Unknown marketplace"} / ${context?.profileSlug ?? "unknown profile"}`;
+}
+
+export function filterProviderRetryResetsByGroup<T extends { providerListingId: string }>(items: readonly T[], group: string, contexts: readonly RetryResetListingContext[]) {
+  if (group === "all") return [...items];
+  return items.filter((item) => getProviderRetryResetGroup(item.providerListingId, contexts) === group);
+}
+
 export function shouldSyncRetryResetQueueOnConnectivity(context: RetryResetConnectivityContext) {
   return context.platform === "web"
     && context.online === true
