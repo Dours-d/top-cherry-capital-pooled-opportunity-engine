@@ -138,6 +138,7 @@ R2 full real-data ingestion, R3 response estimation, R4 network feedback and R5 
 - [x] R2.0ax Grouping hardening: marketplace/profile group derivation and filtering now live in pure shared retry-reset helpers; regression coverage proves known-context selection, explicit unknown grouping and all-group identity preservation.
 - [x] R2.0ay Filter count clarity: marketplace/profile chips now show counts under the active All versus Repeated-failure mode, while the selected group and total matching count remain explicit; combined-filter behavior is covered by the full validation suite.
 - [x] R2.0az Export traceability: the Workspace export preview now identifies the active failure/group scope, and after a successful device share the card records last format, event count, scope and local timestamp; zero-result filtered states no longer expose export buttons.
+- [x] R2.0ba Durable export traceability: last successful Workspace export metadata now persists locally and hydrates on reopen with strict shape validation; malformed metadata is ignored without affecting audit records or retry queues.
 
 ## Existing boundaries
 - eBay account-deletion delivery does not establish Browse search or listing-stream permissions.

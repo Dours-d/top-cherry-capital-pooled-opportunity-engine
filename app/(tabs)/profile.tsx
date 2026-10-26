@@ -26,6 +26,7 @@ const OBSERVATION_REVIEW_STORAGE_KEY = "topCherry.observationReviews";
 const OUTCOME_SYNC_AUDIT_STORAGE_KEY = "topCherry.outcomeSyncAudits";
 const OUTCOME_SYNC_AUDIT_QUEUE_STORAGE_KEY = "topCherry.outcomeSyncAuditQueue";
 const SNAPSHOT_FRESHNESS_THRESHOLDS_STORAGE_KEY = "topCherry.snapshotFreshnessThresholds";
+const PROVIDER_RETRY_RESET_LAST_EXPORT_KEY = "topCherry.providerRetryResetLastExport";
 const EBAY_READINESS_ITEMS = [
   { id: "browse", label: "Verify read-only Browse access", detail: "Application-token search is verified for EBAY_GB.", state: "DONE" },
   { id: "details", label: "Verify item-detail characteristics", detail: "getItem PRODUCT details are requested when a live listing opens.", state: "DONE" },
@@ -491,6 +492,21 @@ function ProviderRetryResetSummary({ colors, authenticated, audits, pending, lis
   const groupedCountLabel = Object.entries(groupedCounts).sort(([, a], [, b]) => b - a).slice(0, 4).map(([group, count]) => `${group}: ${count}`).join(" · ");
   const [exportPreview, setExportPreview] = useState<{ format: "json" | "markdown"; content: string; filename: string; count: number; scopeLabel: string } | null>(null);
   const [lastExport, setLastExport] = useState<{ format: "json" | "markdown"; occurredAt: string; scopeLabel: string; count: number } | null>(null);
+  useEffect(() => {
+    void AsyncStorage.getItem(PROVIDER_RETRY_RESET_LAST_EXPORT_KEY).then((raw) => {
+      if (!raw) return;
+      try {
+        const value: unknown = JSON.parse(raw);
+        if (!value || typeof value !== "object") return;
+        const candidate = value as Partial<NonNullable<typeof lastExport>>;
+        if ((candidate.format === "json" || candidate.format === "markdown") && typeof candidate.occurredAt === "string" && typeof candidate.scopeLabel === "string" && typeof candidate.count === "number" && Number.isInteger(candidate.count)) {
+          setLastExport({ format: candidate.format, occurredAt: candidate.occurredAt, scopeLabel: candidate.scopeLabel, count: candidate.count });
+        }
+      } catch {
+        // Ignore malformed local metadata; audit records remain unaffected.
+      }
+    }).catch(() => undefined);
+  }, []);
   const exportRepeated = async (format: "json" | "markdown") => {
     const exportAudits = [...filteredRepeatedAudits.map((audit) => ({ resetId: audit.resetId, providerListingId: audit.providerListingId, previousAttemptCount: audit.previousAttemptCount, occurredAt: audit.occurredAt, note: audit.note, syncStatus: "account-synced" as const })), ...filteredRepeatedPending.map((item) => ({ resetId: item.resetId, providerListingId: item.providerListingId, previousAttemptCount: item.previousAttemptCount, occurredAt: item.occurredAt, note: item.note, syncStatus: "pending-local" as const }))];
     const sourceQuality = { observationCount: 0, ageCounts: { fresh: 0, aging: 0, stale: 0, unknown: 0 }, missingCounts: {} };
@@ -503,7 +519,9 @@ function ProviderRetryResetSummary({ colors, authenticated, audits, pending, lis
     if (!exportPreview) return;
     try {
       await Share.share({ title: exportPreview.filename, message: exportPreview.content });
-      setLastExport({ format: exportPreview.format, occurredAt: new Date().toISOString(), scopeLabel: exportPreview.scopeLabel, count: exportPreview.count });
+      const completedExport = { format: exportPreview.format, occurredAt: new Date().toISOString(), scopeLabel: exportPreview.scopeLabel, count: exportPreview.count };
+      setLastExport(completedExport);
+      void AsyncStorage.setItem(PROVIDER_RETRY_RESET_LAST_EXPORT_KEY, JSON.stringify(completedExport)).catch(() => undefined);
       setExportPreview(null);
     } catch {
       Alert.alert("Export unavailable", "Sharing is unavailable on this device; the local and account audit records remain unchanged.");
