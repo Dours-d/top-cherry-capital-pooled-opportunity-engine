@@ -129,6 +129,7 @@ R2 full real-data ingestion, R3 response estimation, R4 network feedback and R5 
 - [x] R2.0ao Retry-reset filters: focused history provides All, Synced and Pending views; the active filter controls the visible count and the retry-reset audit subset included in JSON/Markdown exports, while total source counts remain visible for context.
 - [x] R2.0ap Timestamp transparency: focused history now shows the latest account-synced and pending-local retry-reset timestamps, and export preview metadata records both timestamps plus the active status filter used for the package.
 - [x] R2.0aq Workspace failure filter: the provider-read retry audit summary now offers All versus Repeated (2+ preceding attempts) views across account-synced and pending-local reset events, labels the filter as retry evidence rather than a complete failure history, and preserves the evidence-only boundary.
+- [x] R2.0ar Actionable failure context: pending and account-synced retry-reset rows now open the matching focused listing-history route with the provider listing ID; navigation is read-only and does not retry, alter audits or imply provider recovery.
 
 ## Existing boundaries
 - eBay account-deletion delivery does not establish Browse search or listing-stream permissions.
