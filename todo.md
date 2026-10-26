@@ -134,6 +134,7 @@ R2 full real-data ingestion, R3 response estimation, R4 network feedback and R5 
 - [x] R2.0at Retry-reset context summary: Workspace groups recorded reset events by stored marketplace/profile context, caps the visible group list, and labels the counts as event counts rather than failure rates or availability estimates.
 - [x] R2.0au Filtered failure export: when Workspace is filtered to repeated provider-read resets, it can share allowlisted JSON or Markdown evidence containing only reset-event records and the research-only boundary.
 - [x] R2.0av Workspace export preview: JSON/Markdown retry-reset exports now open a mobile preview showing format, deterministic filename, event count, full allowlisted content and the research-only boundary; Cancel closes without sharing, while Confirm share is the only action that invokes the device share sheet.
+- [x] R2.0aw Marketplace/profile grouping filters: Workspace retry-reset audit summary now exposes bounded group chips derived only from stored snapshot context, reports the selected group explicitly, and applies the group plus repeated-failure filters to visible rows, counts and allowlisted exports; unknown context remains an explicit group.
 
 ## Existing boundaries
 - eBay account-deletion delivery does not establish Browse search or listing-stream permissions.
