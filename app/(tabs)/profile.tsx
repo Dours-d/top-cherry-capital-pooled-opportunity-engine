@@ -542,22 +542,19 @@ function ProviderRetryResetSummary({ colors, authenticated, audits, pending, lis
     setExportPreview({ format, content, redactedContent, titlePreservingRedactedContent, contextPreservingRedactedContent, titleAndContextPreservingRedactedContent, redacted: true, keepTitles: exportPrivacyPreferences.keepTitles, keepContext: exportPrivacyPreferences.keepContext, filename: buildEvidenceFilename("workspace-repeated-provider-retry-resets", format), count: exportAudits.length, scopeLabel });
   };
   const toggleExportRedaction = () => setExportPreview((current) => current ? { ...current, redacted: !current.redacted } : current);
-  const toggleExportTitles = () => setExportPreview((current) => {
-    if (!current) return current;
-    const next = { ...current, keepTitles: !current.keepTitles };
-    const preferences = { keepTitles: next.keepTitles, keepContext: next.keepContext };
+  const applyPrivacyPreferences = (preferences: { keepTitles: boolean; keepContext: boolean }) => {
     setExportPrivacyPreferences(preferences);
     void AsyncStorage.setItem(PROVIDER_RETRY_RESET_EXPORT_PRIVACY_KEY, JSON.stringify(preferences)).catch(() => undefined);
-    return next;
-  });
-  const toggleExportContext = () => setExportPreview((current) => {
-    if (!current) return current;
-    const next = { ...current, keepContext: !current.keepContext };
-    const preferences = { keepTitles: next.keepTitles, keepContext: next.keepContext };
-    setExportPrivacyPreferences(preferences);
-    void AsyncStorage.setItem(PROVIDER_RETRY_RESET_EXPORT_PRIVACY_KEY, JSON.stringify(preferences)).catch(() => undefined);
-    return next;
-  });
+    setExportPreview((current) => current ? { ...current, ...preferences } : current);
+  };
+  const toggleExportTitles = () => applyPrivacyPreferences({ keepTitles: !exportPrivacyPreferences.keepTitles, keepContext: exportPrivacyPreferences.keepContext });
+  const toggleExportContext = () => applyPrivacyPreferences({ keepTitles: exportPrivacyPreferences.keepTitles, keepContext: !exportPrivacyPreferences.keepContext });
+  const resetExportPrivacyPreferences = () => {
+    Alert.alert("Reset export privacy choices?", "New exports will redact identifiers, titles, marketplace/profile context and operator notes unless you choose otherwise in the preview.", [
+      { text: "Cancel", style: "cancel" },
+      { text: "Reset choices", style: "destructive", onPress: () => { applyPrivacyPreferences({ keepTitles: false, keepContext: false }); void AsyncStorage.removeItem(PROVIDER_RETRY_RESET_EXPORT_PRIVACY_KEY).catch(() => undefined); } },
+    ]);
+  };
   const getVisibleExportContent = () => {
     if (!exportPreview) return "";
     if (!exportPreview.redacted) return exportPreview.content;
@@ -609,6 +606,13 @@ function ProviderRetryResetSummary({ colors, authenticated, audits, pending, lis
     <View style={styles.filterRow}>{groupOptions.slice(0, 5).map((option) => <Pressable key={option} onPress={() => setGroupFilter(option)} style={({ pressed }) => [styles.filterChip, { backgroundColor: groupFilter === option ? colors.primary : colors.background, borderColor: colors.border }, pressed && styles.pressed]}><Text style={[styles.filterChipText, { color: groupFilter === option ? colors.onPrimary : colors.muted }]}>{option === "all" ? `All groups (${failureFilter === "repeated" ? filteredRepeatedAudits.length + filteredRepeatedPending.length : filteredAudits.length + filteredPending.length})` : `${option} (${groupChipCounts[option] ?? 0})`}</Text></Pressable>)}</View>
     <Text style={[styles.dataNote, { color: colors.muted }]}>{failureFilter === "repeated" ? "Showing only reset events where at least two provider-read attempts preceded the reset." : "Showing all reset events."} {groupFilter === "all" ? "All marketplace/profile groups are included." : `Showing ${groupFilter}.`} Actual provider-read failures are not retained as a complete historical series unless a retry budget was reset.</Text>
     {groupedCountLabel ? <Text style={[styles.dataNote, { color: colors.muted }]}>Context counts · {groupedCountLabel}. These are retry-reset events, not failure rates or marketplace availability estimates.</Text> : null}
+    <View style={[styles.exportPrivacyPanel, { backgroundColor: colors.background, borderColor: colors.border }]}>
+      <View style={styles.readinessHeader}><View style={styles.settingCopy}><Text style={[styles.settingTitle, { color: colors.foreground }]}>Evidence export privacy</Text><Text style={[styles.settingDescription, { color: colors.muted }]}>Identifiers and operator notes remain redacted unless explicitly revealed in an export preview.</Text></View><MaterialIcons name="privacy-tip" size={19} color={colors.primary} /></View>
+      <View style={styles.exportPrivacyRow}><View style={styles.settingCopy}><Text style={[styles.settingDescription, { color: colors.foreground }]}>Keep listing titles</Text><Text style={[styles.dataNote, { color: colors.muted }]}>Titles can help recognize the research subject.</Text></View><Switch value={exportPrivacyPreferences.keepTitles} onValueChange={toggleExportTitles} trackColor={{ false: colors.border, true: colors.primary }} thumbColor={exportPrivacyPreferences.keepTitles ? colors.onPrimary : colors.muted} /></View>
+      <View style={styles.exportPrivacyRow}><View style={styles.settingCopy}><Text style={[styles.settingDescription, { color: colors.foreground }]}>Keep marketplace/profile context</Text><Text style={[styles.dataNote, { color: colors.muted }]}>Context can reveal the market lens used.</Text></View><Switch value={exportPrivacyPreferences.keepContext} onValueChange={toggleExportContext} trackColor={{ false: colors.border, true: colors.primary }} thumbColor={exportPrivacyPreferences.keepContext ? colors.onPrimary : colors.muted} /></View>
+      <Text style={[styles.dataNote, { color: colors.muted }]}>Listing IDs, snapshot IDs, item IDs, seller identifiers and operator notes are always redacted in privacy mode. This preference changes export content only; it does not alter stored audits or observations.</Text>
+      {(exportPrivacyPreferences.keepTitles || exportPrivacyPreferences.keepContext) ? <Pressable onPress={resetExportPrivacyPreferences} accessibilityRole="button" accessibilityLabel="Reset export privacy choices" style={({ pressed }) => [styles.reviewButton, { borderColor: colors.warning, alignSelf: "flex-start" }, pressed && styles.pressed]}><Text style={[styles.reviewButtonText, { color: colors.warning }]}>Reset privacy choices</Text></Pressable> : null}
+    </View>
     {failureFilter === "repeated" && (filteredRepeatedAudits.length || filteredRepeatedPending.length) ? <View style={styles.retryResetExportRow}><Pressable onPress={() => void exportRepeated("json")} style={({ pressed }) => [styles.reviewButton, { borderColor: colors.primary }, pressed && styles.pressed]}><Text style={[styles.reviewButtonText, { color: colors.primary }]}>Export JSON</Text></Pressable><Pressable onPress={() => void exportRepeated("markdown")} style={({ pressed }) => [styles.reviewButton, { borderColor: colors.border }, pressed && styles.pressed]}><Text style={[styles.reviewButtonText, { color: colors.muted }]}>Export Markdown</Text></Pressable></View> : null}
     {lastExport ? <View><Text style={[styles.dataNote, { color: colors.muted }]}>Last shared export · {lastExport.format.toUpperCase()} · {lastExport.count} event{lastExport.count === 1 ? "" : "s"} · {lastExport.scopeLabel} · {new Date(lastExport.occurredAt).toLocaleString()}</Text><Pressable onPress={clearLastExport} accessibilityRole="button" accessibilityLabel="Clear last export summary" style={({ pressed }) => [styles.reviewButton, { borderColor: colors.border, alignSelf: "flex-start", marginTop: 6 }, pressed && styles.pressed]}><Text style={[styles.reviewButtonText, { color: colors.muted }]}>Clear export summary</Text></Pressable></View> : null}
     {visiblePending.length ? <View style={[styles.retryResetPending, { borderColor: colors.warning }]}><Text style={[styles.retryResetPendingTitle, { color: colors.warning }]}>Pending account synchronization</Text>{visiblePending.slice(0, 3).map((item) => { const context = listingContext.find((snapshot) => snapshot.providerListingId === item.providerListingId); return <Pressable key={item.resetId} accessibilityRole="button" accessibilityLabel={`Open history for ${context?.title ?? item.providerListingId}`} onPress={() => onOpenListing(item.providerListingId)} style={({ pressed }) => [styles.retryResetRow, pressed && styles.pressed]}><MaterialIcons name="cloud-off" size={14} color={colors.warning} /><View style={styles.settingCopy}><Text style={[styles.settingDescription, { color: colors.foreground }]} numberOfLines={1}>{context?.title ?? item.providerListingId}</Text><Text style={[styles.settingDescription, { color: colors.muted }]} numberOfLines={1}>{context?.profileSlug ? `${context.profileSlug} · ` : ""}{item.providerListingId} · attempt {item.attemptCount} · reset after {item.previousAttemptCount} provider-read attempts{item.lastError ? ` · ${item.lastError}` : ""}</Text><Text style={[styles.settingDescription, { color: colors.muted }]}>Open focused listing history</Text></View><MaterialIcons name="chevron-right" size={16} color={colors.muted} /></Pressable>; })}</View> : null}
@@ -713,6 +717,8 @@ const styles = StyleSheet.create({
   retryResetHistory: { marginTop: 12, paddingTop: 11, borderTopWidth: 1, borderTopColor: "rgba(128,128,128,0.18)" },
   retryResetRow: { flexDirection: "row", alignItems: "flex-start", gap: 7, minHeight: 38, marginTop: 8 },
   retryResetExportRow: { flexDirection: "row", gap: 7, marginTop: 10 },
+  exportPrivacyPanel: { borderRadius: 12, borderWidth: 1, padding: 10, marginTop: 12 },
+  exportPrivacyRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 8 },
   exportOverlay: { flex: 1, alignItems: "center", justifyContent: "center", padding: 20 },
   exportPreviewCard: { width: "100%", maxHeight: "86%", borderRadius: 19, borderWidth: 1, padding: 15 },
   exportPreviewTitle: { fontSize: 16, fontWeight: "900" },
