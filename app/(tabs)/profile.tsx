@@ -518,7 +518,7 @@ function ProviderRetryResetSummary({ colors, authenticated, audits, pending, lis
     const redactedContent = format === "json" ? JSON.stringify(redactedPkg, null, 2) : renderEvidencePackageMarkdown(redactedPkg);
     const scopeLabel = `${failureFilter === "repeated" ? "Repeated failures" : "All resets"} · ${groupFilter === "all" ? "All groups" : groupFilter}`;
     setCopiedExport(null);
-    setExportPreview({ format, content, redactedContent, redacted: false, filename: buildEvidenceFilename("workspace-repeated-provider-retry-resets", format), count: exportAudits.length, scopeLabel });
+    setExportPreview({ format, content, redactedContent, redacted: true, filename: buildEvidenceFilename("workspace-repeated-provider-retry-resets", format), count: exportAudits.length, scopeLabel });
   };
   const toggleExportRedaction = () => setExportPreview((current) => current ? { ...current, redacted: !current.redacted } : current);
   const shareExport = async () => {
