@@ -34,3 +34,7 @@ export function mergeEvidenceExportAudits(existing: readonly EvidenceExportAudit
   for (const audit of incoming) byId.set(audit.exportId, audit);
   return [...byId.values()].sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
 }
+
+export function recentEvidenceExportAudits(audits: readonly EvidenceExportAuditRecord[], limit = 5) {
+  return [...audits].sort((a, b) => b.occurredAt.localeCompare(a.occurredAt)).slice(0, Math.max(0, limit));
+}

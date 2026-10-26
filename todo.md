@@ -151,6 +151,7 @@ R2 full real-data ingestion, R3 response estimation, R4 network feedback and R5 
 - [x] R2.0bk Dedicated privacy controls: Workspace now exposes a persistent Evidence export privacy panel with Keep listing titles and Keep marketplace/profile context switches, an explicit explanation of always-redacted identifiers/notes, and a confirmation-gated Reset privacy choices action that clears only the preference key and updates any open preview.
 - [x] R2.0bl Export audit ledger: authenticated Workspace copy/share actions append idempotent user-scoped export events recording action, format, privacy mode, retention choices, scope and event count; the UI distinguishes account-synced ledger events from local-only activity without storing exported content.
 - [x] R2.0bm Durable export-audit queue: copy/share audit events are persisted locally before account sync, malformed queue entries are ignored, failed writes retain bounded error/attempt metadata, and queued events retry sequentially after authentication restoration or an explicit Retry audit sync action.
+- [x] R2.0bn Compact export history: authenticated Workspace now shows the five newest copy/share audit events with action, format, event count, scope, privacy mode and timestamp only; exported content and provider identifiers remain excluded.
 
 ## Existing boundaries
 - eBay account-deletion delivery does not establish Browse search or listing-stream permissions.

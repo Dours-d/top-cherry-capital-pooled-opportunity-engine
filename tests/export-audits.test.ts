@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildEvidenceExportAudit, mergeEvidenceExportAudits } from "../shared/export-audits";
+import { buildEvidenceExportAudit, mergeEvidenceExportAudits, recentEvidenceExportAudits } from "../shared/export-audits";
 
 describe("evidence export audits", () => {
   it("records action metadata without exported content and normalizes full-mode retention", () => {
@@ -34,5 +34,11 @@ describe("evidence export audits", () => {
     const second = buildEvidenceExportAudit({ action: "shared", format: "json", privacyMode: "redacted", keepTitles: true, keepContext: false, scopeLabel: "Watches", eventCount: 2, occurredAt: "2026-10-26T14:00:00.000Z", exportId: "share-2" });
 
     expect(mergeEvidenceExportAudits([first], [duplicate, second])).toEqual([second, duplicate]);
+  });
+
+  it("presents only the newest bounded audit metadata", () => {
+    const older = buildEvidenceExportAudit({ action: "copied", format: "json", privacyMode: "redacted", keepTitles: false, keepContext: false, scopeLabel: "Older", eventCount: 1, occurredAt: "2026-10-26T12:00:00.000Z", exportId: "older" });
+    const newer = buildEvidenceExportAudit({ action: "shared", format: "markdown", privacyMode: "redacted", keepTitles: true, keepContext: false, scopeLabel: "Newer", eventCount: 2, occurredAt: "2026-10-26T13:00:00.000Z", exportId: "newer" });
+    expect(recentEvidenceExportAudits([older, newer], 1)).toEqual([newer]);
   });
 });
