@@ -147,6 +147,7 @@ R2 full real-data ingestion, R3 response estimation, R4 network feedback and R5 
 - [x] R2.0bg Safe export default: new Workspace evidence previews open redacted by default; revealing identifiers requires an explicit Show identifiers action, while Copy and Confirm share always use the currently visible privacy mode.
 - [x] R2.0bh Field-level privacy: redacted previews now offer Keep titles, retaining listing/scope titles while continuing to redact IDs, seller identifiers and operator notes; the selected title-retention variant drives the visible preview, Copy and Confirm share, with regression coverage for preserved prices and redacted sensitive fields.
 - [x] R2.0bi Context-level privacy: redacted previews now also offer Keep context, retaining marketplace/profile labels while continuing to redact listing/snapshot/item/seller identifiers, titles and operator notes; all title/context combinations drive the same preview, Copy and Confirm share paths and are regression-tested.
+- [x] R2.0bj Privacy preference persistence: title/context retention choices now hydrate from a strictly validated local preference record and apply to future redacted previews; malformed or absent preferences fall back to both retention options off, preserving the safer default.
 
 ## Existing boundaries
 - eBay account-deletion delivery does not establish Browse search or listing-stream permissions.

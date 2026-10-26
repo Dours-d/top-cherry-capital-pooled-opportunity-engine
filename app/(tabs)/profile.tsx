@@ -28,6 +28,7 @@ const OUTCOME_SYNC_AUDIT_STORAGE_KEY = "topCherry.outcomeSyncAudits";
 const OUTCOME_SYNC_AUDIT_QUEUE_STORAGE_KEY = "topCherry.outcomeSyncAuditQueue";
 const SNAPSHOT_FRESHNESS_THRESHOLDS_STORAGE_KEY = "topCherry.snapshotFreshnessThresholds";
 const PROVIDER_RETRY_RESET_LAST_EXPORT_KEY = "topCherry.providerRetryResetLastExport";
+const PROVIDER_RETRY_RESET_EXPORT_PRIVACY_KEY = "topCherry.providerRetryResetExportPrivacy";
 const EBAY_READINESS_ITEMS = [
   { id: "browse", label: "Verify read-only Browse access", detail: "Application-token search is verified for EBAY_GB.", state: "DONE" },
   { id: "details", label: "Verify item-detail characteristics", detail: "getItem PRODUCT details are requested when a live listing opens.", state: "DONE" },
@@ -494,6 +495,7 @@ function ProviderRetryResetSummary({ colors, authenticated, audits, pending, lis
   const [exportPreview, setExportPreview] = useState<{ format: "json" | "markdown"; content: string; redactedContent: string; titlePreservingRedactedContent: string; contextPreservingRedactedContent: string; titleAndContextPreservingRedactedContent: string; redacted: boolean; keepTitles: boolean; keepContext: boolean; filename: string; count: number; scopeLabel: string } | null>(null);
   const [copiedExport, setCopiedExport] = useState<{ format: "json" | "markdown"; occurredAt: string } | null>(null);
   const [lastExport, setLastExport] = useState<{ format: "json" | "markdown"; occurredAt: string; scopeLabel: string; count: number } | null>(null);
+  const [exportPrivacyPreferences, setExportPrivacyPreferences] = useState({ keepTitles: false, keepContext: false });
   useEffect(() => {
     void AsyncStorage.getItem(PROVIDER_RETRY_RESET_LAST_EXPORT_KEY).then((raw) => {
       if (!raw) return;
@@ -506,6 +508,19 @@ function ProviderRetryResetSummary({ colors, authenticated, audits, pending, lis
         }
       } catch {
         // Ignore malformed local metadata; audit records remain unaffected.
+      }
+    }).catch(() => undefined);
+  }, []);
+  useEffect(() => {
+    void AsyncStorage.getItem(PROVIDER_RETRY_RESET_EXPORT_PRIVACY_KEY).then((raw) => {
+      if (!raw) return;
+      try {
+        const value: unknown = JSON.parse(raw);
+        if (!value || typeof value !== "object") return;
+        const candidate = value as Partial<typeof exportPrivacyPreferences>;
+        setExportPrivacyPreferences({ keepTitles: candidate.keepTitles === true, keepContext: candidate.keepContext === true });
+      } catch {
+        // Ignore malformed local privacy preferences; every new export remains redacted by default.
       }
     }).catch(() => undefined);
   }, []);
@@ -524,11 +539,25 @@ function ProviderRetryResetSummary({ colors, authenticated, audits, pending, lis
     const titleAndContextPreservingRedactedContent = format === "json" ? JSON.stringify(titleAndContextPreservingRedactedPkg, null, 2) : renderEvidencePackageMarkdown(titleAndContextPreservingRedactedPkg);
     const scopeLabel = `${failureFilter === "repeated" ? "Repeated failures" : "All resets"} · ${groupFilter === "all" ? "All groups" : groupFilter}`;
     setCopiedExport(null);
-    setExportPreview({ format, content, redactedContent, titlePreservingRedactedContent, contextPreservingRedactedContent, titleAndContextPreservingRedactedContent, redacted: true, keepTitles: false, keepContext: false, filename: buildEvidenceFilename("workspace-repeated-provider-retry-resets", format), count: exportAudits.length, scopeLabel });
+    setExportPreview({ format, content, redactedContent, titlePreservingRedactedContent, contextPreservingRedactedContent, titleAndContextPreservingRedactedContent, redacted: true, keepTitles: exportPrivacyPreferences.keepTitles, keepContext: exportPrivacyPreferences.keepContext, filename: buildEvidenceFilename("workspace-repeated-provider-retry-resets", format), count: exportAudits.length, scopeLabel });
   };
   const toggleExportRedaction = () => setExportPreview((current) => current ? { ...current, redacted: !current.redacted } : current);
-  const toggleExportTitles = () => setExportPreview((current) => current ? { ...current, keepTitles: !current.keepTitles } : current);
-  const toggleExportContext = () => setExportPreview((current) => current ? { ...current, keepContext: !current.keepContext } : current);
+  const toggleExportTitles = () => setExportPreview((current) => {
+    if (!current) return current;
+    const next = { ...current, keepTitles: !current.keepTitles };
+    const preferences = { keepTitles: next.keepTitles, keepContext: next.keepContext };
+    setExportPrivacyPreferences(preferences);
+    void AsyncStorage.setItem(PROVIDER_RETRY_RESET_EXPORT_PRIVACY_KEY, JSON.stringify(preferences)).catch(() => undefined);
+    return next;
+  });
+  const toggleExportContext = () => setExportPreview((current) => {
+    if (!current) return current;
+    const next = { ...current, keepContext: !current.keepContext };
+    const preferences = { keepTitles: next.keepTitles, keepContext: next.keepContext };
+    setExportPrivacyPreferences(preferences);
+    void AsyncStorage.setItem(PROVIDER_RETRY_RESET_EXPORT_PRIVACY_KEY, JSON.stringify(preferences)).catch(() => undefined);
+    return next;
+  });
   const getVisibleExportContent = () => {
     if (!exportPreview) return "";
     if (!exportPreview.redacted) return exportPreview.content;
