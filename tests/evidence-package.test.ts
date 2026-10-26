@@ -100,4 +100,19 @@ describe("evidence package", () => {
     expect(redacted.retryResetAudits[0]).toMatchObject({ resetId: "[redacted]", providerListingId: "[redacted]", note: "[redacted]", previousAttemptCount: 3 });
     expect(JSON.stringify(redacted)).not.toMatch(/v1\|123|Private this|Private reviewer|Private retry/);
   });
+
+  it("can retain titles while redacting identifiers and operator notes", () => {
+    const pkg = buildEvidencePackage({
+      exportedAt: "2026-10-24T11:00:00.000Z",
+      scope: { providerListingId: "v1|123", title: "Example watch", profileSlug: "luxury_watches" },
+      sourceQuality,
+      snapshots: [{ ...snapshot, reviewNote: "Keep this private" }],
+      characteristicAudits: [{ auditId: "audit-1", action: "checked", occurredAt: "2026-10-24T11:00:00.000Z", note: "Private reviewer note" }],
+    });
+    const redacted = redactEvidencePackage(pkg, { redactTitles: false });
+    expect(redacted.scope).toMatchObject({ providerListingId: "[redacted]", title: "Example watch" });
+    expect(redacted.snapshots[0]).toMatchObject({ providerListingId: "[redacted]", title: "Example watch", reviewNote: "[redacted]" });
+    expect(redacted.characteristicAudits[0]).toMatchObject({ auditId: "[redacted]", note: "[redacted]" });
+    expect(JSON.stringify(redacted)).not.toMatch(/v1\|123|Keep this private|Private reviewer/);
+  });
 });

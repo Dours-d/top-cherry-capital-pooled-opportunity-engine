@@ -104,20 +104,21 @@ export function buildEvidencePackage(input: {
 
 export type EvidencePackage = ReturnType<typeof buildEvidencePackage>;
 
-export function redactEvidencePackage(pkg: EvidencePackage): EvidencePackage {
+export function redactEvidencePackage(pkg: EvidencePackage, options: { redactTitles?: boolean } = {}): EvidencePackage {
   const redacted = "[redacted]";
+  const redactTitles = options.redactTitles ?? true;
   return {
     ...pkg,
     scope: {
       ...pkg.scope,
       providerListingId: pkg.scope.providerListingId ? redacted : pkg.scope.providerListingId,
-      title: pkg.scope.title ? redacted : pkg.scope.title,
+      title: redactTitles && pkg.scope.title ? redacted : pkg.scope.title,
     },
     snapshots: pkg.snapshots.map((snapshot) => ({
       ...snapshot,
       snapshotId: redacted,
       providerListingId: redacted,
-      title: redacted,
+      title: redactTitles ? redacted : snapshot.title,
       sellerId: snapshot.sellerId ? redacted : snapshot.sellerId,
       reviewNote: snapshot.reviewNote ? redacted : snapshot.reviewNote,
       characteristicsCheckNote: snapshot.characteristicsCheckNote ? redacted : snapshot.characteristicsCheckNote,
