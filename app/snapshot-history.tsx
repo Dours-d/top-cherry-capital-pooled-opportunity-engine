@@ -1,6 +1,7 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router, useLocalSearchParams } from "expo-router";
+import * as Clipboard from "expo-clipboard";
 import { Modal, Platform, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from "react-native";
 import { useEffect, useRef, useState } from "react";
 
@@ -9,7 +10,9 @@ import { useAuth } from "@/hooks/use-auth";
 import { useColors } from "@/hooks/use-colors";
 import { formatCurrency } from "@/lib/market-data";
 import { trpc } from "@/lib/trpc";
-import { buildEvidenceFilename, buildEvidencePackage, renderEvidencePackageMarkdown } from "@/shared/evidence-package";
+import { buildEvidenceFilename, buildEvidencePackage, redactEvidencePackage, renderEvidencePackageMarkdown } from "@/shared/evidence-package";
+import { buildEvidenceExportAudit } from "@/shared/export-audits";
+import { EVIDENCE_EXPORT_AUDIT_QUEUE_STORAGE_KEY, parsePendingEvidenceExportAudits, queueEvidenceExportAudit, resolveEvidenceExportAudit } from "@/shared/export-audit-queue";
 import { classifyProviderReadError, compareCurrentProviderReadToSnapshot, compareSnapshotToPrior, evaluateEbayItemDetailCoverage, evaluateSnapshotReconciliation, getProviderReadRetryDelayMs, getSnapshotFreshness, PROVIDER_READ_MAX_RETRIES, summarizeSnapshotSourceQuality } from "@/shared/reconciliation-snapshots";
 import { enqueueProviderRetryReset, markProviderRetryResetAttempt, parsePendingProviderRetryResets, PROVIDER_RETRY_RESET_PENDING_KEY, removeProviderRetryReset, shouldSyncRetryResetQueueOnConnectivity, type PendingProviderRetryReset } from "@/shared/provider-retry-resets";
 
@@ -41,6 +44,7 @@ export default function SnapshotHistoryScreen() {
   const characteristicAudits = trpc.reconciliationSnapshots.characteristicCheckAudits.useQuery({ providerListingId }, { enabled: isAuthenticated && Boolean(providerListingId), staleTime: 30_000 });
   const retryResetAudits = trpc.reconciliationSnapshots.retryResetAudits.useQuery({ providerListingId }, { enabled: isAuthenticated && Boolean(providerListingId), staleTime: 30_000 });
   const appendRetryResetAudit = trpc.reconciliationSnapshots.appendRetryResetAudit.useMutation();
+  const appendExportAudit = trpc.evidenceExportAudits.append.useMutation();
   const snapshots = ((snapshotsQuery.data ?? []) as Snapshot[])
     .filter((snapshot) => snapshot.providerListingId === providerListingId)
     .sort((a, b) => new Date(b.sourceFetchedAt).getTime() - new Date(a.sourceFetchedAt).getTime());
@@ -181,9 +185,8 @@ export default function SnapshotHistoryScreen() {
   const latestPendingRetryResetAt = pendingRetryResets.filter((audit) => audit.providerListingId === providerListingId).reduce<string | null>((latest, audit) => !latest || new Date(audit.occurredAt).getTime() > new Date(latest).getTime() ? audit.occurredAt : latest, null);
   const retryResetFilterLabel = retryResetFilter === "all" ? "all statuses" : retryResetFilter === "account-synced" ? "synced only" : "pending only";
   const [shareStatus, setShareStatus] = useState<string | null>(null);
-  const [preview, setPreview] = useState<{ format: "json" | "markdown"; content: string; filename: string } | null>(null);
-  const buildExportContent = (format: "json" | "markdown") => {
-    const payload = buildEvidencePackage({
+  const [preview, setPreview] = useState<{ format: "json" | "markdown"; content: string; redactedContent: string; filename: string; count: number; redacted: boolean } | null>(null);
+  const buildExportPackage = () => buildEvidencePackage({
       exportedAt: new Date().toISOString(),
       scope: { providerListingId, title: title ?? current?.title ?? null, profileSlug: profileSlug ?? null },
       sourceQuality,
@@ -192,20 +195,55 @@ export default function SnapshotHistoryScreen() {
       characteristicAudits: characteristicAudits.data ?? [],
       retryResetAudits: visibleRetryResetAudits,
     });
-    return format === "json" ? JSON.stringify(payload, null, 2) : renderEvidencePackageMarkdown(payload);
+  const getVisiblePreviewContent = () => {
+    if (!preview) return "";
+    return preview.redacted ? preview.redactedContent : preview.content;
   };
   const previewEvidencePackage = (format: "json" | "markdown") => {
     setShareStatus(null);
-    setPreview({ format, content: buildExportContent(format), filename: buildEvidenceFilename(providerListingId, format) });
+    const payload = buildExportPackage();
+    const redactedPayload = redactEvidencePackage(payload);
+    setPreview({ format, content: format === "json" ? JSON.stringify(payload, null, 2) : renderEvidencePackageMarkdown(payload), redactedContent: format === "json" ? JSON.stringify(redactedPayload, null, 2) : renderEvidencePackageMarkdown(redactedPayload), filename: buildEvidenceFilename(providerListingId, format), count: snapshots.length + visibleRetryResetAudits.length, redacted: true });
   };
+  const recordExportAudit = async (action: "copied" | "shared") => {
+    if (!preview) return;
+    const occurredAt = new Date().toISOString();
+    const audit = buildEvidenceExportAudit({ action, format: preview.format, privacyMode: preview.redacted ? "redacted" : "full", keepTitles: false, keepContext: false, scopeLabel: `Focused provider listing history · ${profileSlug ?? "unknown profile"}`, eventCount: preview.count, occurredAt });
+    const raw = await AsyncStorage.getItem(EVIDENCE_EXPORT_AUDIT_QUEUE_STORAGE_KEY);
+    const queued = queueEvidenceExportAudit(parsePendingEvidenceExportAudits(raw), audit, occurredAt);
+    await AsyncStorage.setItem(EVIDENCE_EXPORT_AUDIT_QUEUE_STORAGE_KEY, JSON.stringify(queued));
+    if (!isAuthenticated) return;
+    try {
+      await appendExportAudit.mutateAsync(audit);
+      const remaining = resolveEvidenceExportAudit(queued, audit.exportId, { ok: true }, new Date().toISOString());
+      await AsyncStorage.setItem(EVIDENCE_EXPORT_AUDIT_QUEUE_STORAGE_KEY, JSON.stringify(remaining));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "The export audit server rejected this write.";
+      const failed = resolveEvidenceExportAudit(queued, audit.exportId, { ok: false, error: message }, new Date().toISOString());
+      await AsyncStorage.setItem(EVIDENCE_EXPORT_AUDIT_QUEUE_STORAGE_KEY, JSON.stringify(failed));
+      setShareStatus("Export completed, but its account audit event remains queued for synchronization.");
+    }
+  };
+  const togglePreviewPrivacy = () => setPreview((current) => current ? { ...current, redacted: !current.redacted } : current);
   const shareEvidencePackage = async () => {
     if (!preview) return;
     try {
-      await Share.share({ title: preview.filename, message: preview.content });
+      await Share.share({ title: preview.filename, message: getVisiblePreviewContent() });
+      await recordExportAudit("shared");
       setShareStatus(`${preview.format.toUpperCase()} evidence package prepared for sharing.`);
       setPreview(null);
     } catch {
       setShareStatus("Sharing is unavailable on this device; the persisted evidence remains unchanged.");
+    }
+  };
+  const copyEvidencePackage = async () => {
+    if (!preview) return;
+    try {
+      await Clipboard.setStringAsync(getVisiblePreviewContent());
+      await recordExportAudit("copied");
+      setShareStatus(`${preview.format.toUpperCase()} evidence package copied.`);
+    } catch {
+      setShareStatus("Copy is unavailable on this device; the persisted evidence remains unchanged.");
     }
   };
 
@@ -290,15 +328,18 @@ export default function SnapshotHistoryScreen() {
               <View style={styles.refreshCopy}>
                 <Text style={[styles.auditTitle, { color: colors.foreground }]}>Review export</Text>
                 <Text style={[styles.auditIntro, { color: colors.muted }]}>{preview?.format.toUpperCase()} preview · sharing does not change persisted evidence.</Text>
+                <Text style={[styles.previewMeta, { color: preview?.redacted ? colors.success : colors.warning }]}>{preview?.redacted ? "Privacy mode: identifiers, seller data and notes are redacted." : "Privacy warning: provider identifiers and notes are included."}</Text>
                 <Text style={[styles.previewMeta, { color: colors.muted }]}>{preview?.filename} · {snapshots.length} observation{snapshots.length === 1 ? "" : "s"} · {visibleRetryResetAudits.length} retry-reset audit event{visibleRetryResetAudits.length === 1 ? "" : "s"} included ({retryResetFilterLabel}; {accountRetryResetCount} synced, {pendingRetryResetCount} pending) · last account sync {latestAccountRetryResetAt ? new Date(latestAccountRetryResetAt).toLocaleString() : "none"} · last pending event {latestPendingRetryResetAt ? new Date(latestPendingRetryResetAt).toLocaleString() : "none"} · latest fetch {current ? new Date(current.sourceFetchedAt).toLocaleString() : "unknown"} · current provider read {currentProviderDetail.data ? "included" : "not included"}</Text>
               </View>
               <Pressable onPress={() => setPreview(null)} style={({ pressed }) => [styles.closeButton, pressed && styles.pressed]}><Text style={[styles.closeButtonText, { color: colors.muted }]}>Close</Text></Pressable>
             </View>
             <ScrollView style={[styles.previewBody, { backgroundColor: colors.surface, borderColor: colors.border }]} contentContainerStyle={styles.previewBodyContent}>
-              <Text selectable style={[styles.previewText, { color: colors.foreground }]}>{preview?.content ?? ""}</Text>
+              <Text selectable style={[styles.previewText, { color: colors.foreground }]}>{getVisiblePreviewContent()}</Text>
             </ScrollView>
             <View style={styles.previewActions}>
               <Pressable onPress={() => setPreview(null)} style={({ pressed }) => [styles.previewSecondary, { borderColor: colors.border }, pressed && styles.pressed]}><Text style={[styles.refreshButtonText, { color: colors.muted }]}>Cancel</Text></Pressable>
+              <Pressable onPress={togglePreviewPrivacy} style={({ pressed }) => [styles.previewSecondary, { borderColor: preview?.redacted ? colors.primary : colors.border }, pressed && styles.pressed]}><Text style={[styles.refreshButtonText, { color: preview?.redacted ? colors.primary : colors.muted }]}>{preview?.redacted ? "Show identifiers" : "Redact"}</Text></Pressable>
+              <Pressable onPress={() => void copyEvidencePackage()} style={({ pressed }) => [styles.previewSecondary, { borderColor: colors.border }, pressed && styles.pressed]}><Text style={[styles.refreshButtonText, { color: colors.muted }]}>Copy</Text></Pressable>
               <Pressable onPress={() => void shareEvidencePackage()} style={({ pressed }) => [styles.previewPrimary, { backgroundColor: colors.primary }, pressed && styles.pressed]}><Text style={[styles.refreshButtonText, { color: colors.onPrimary }]}>Share {preview?.format === "markdown" ? "Markdown" : "JSON"}</Text></Pressable>
             </View>
           </View>
