@@ -149,6 +149,7 @@ R2 full real-data ingestion, R3 response estimation, R4 network feedback and R5 
 - [x] R2.0bi Context-level privacy: redacted previews now also offer Keep context, retaining marketplace/profile labels while continuing to redact listing/snapshot/item/seller identifiers, titles and operator notes; all title/context combinations drive the same preview, Copy and Confirm share paths and are regression-tested.
 - [x] R2.0bj Privacy preference persistence: title/context retention choices now hydrate from a strictly validated local preference record and apply to future redacted previews; malformed or absent preferences fall back to both retention options off, preserving the safer default.
 - [x] R2.0bk Dedicated privacy controls: Workspace now exposes a persistent Evidence export privacy panel with Keep listing titles and Keep marketplace/profile context switches, an explicit explanation of always-redacted identifiers/notes, and a confirmation-gated Reset privacy choices action that clears only the preference key and updates any open preview.
+- [x] R2.0bl Export audit ledger: authenticated Workspace copy/share actions append idempotent user-scoped export events recording action, format, privacy mode, retention choices, scope and event count; the UI distinguishes account-synced ledger events from local-only activity without storing exported content.
 
 ## Existing boundaries
 - eBay account-deletion delivery does not establish Browse search or listing-stream permissions.

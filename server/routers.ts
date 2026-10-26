@@ -113,6 +113,18 @@ const providerReadRetryResetListInput = z.object({
   providerListingId: z.string().min(1).max(255).optional(),
 });
 
+const evidenceExportAuditInput = z.object({
+  exportId: z.string().min(1).max(160),
+  action: z.enum(["copied", "shared"]),
+  format: z.enum(["json", "markdown"]),
+  privacyMode: z.enum(["redacted", "full"]),
+  keepTitles: z.boolean(),
+  keepContext: z.boolean(),
+  scopeLabel: z.string().min(1).max(255),
+  eventCount: z.number().int().nonnegative(),
+  occurredAt: z.string().datetime(),
+});
+
 export const appRouter = router({
   system: systemRouter,
   auth: router({
@@ -182,6 +194,10 @@ export const appRouter = router({
     characteristicCheckAudits: protectedProcedure.input(characteristicCheckAuditListInput).query(({ ctx, input }) => db.listCharacteristicCheckAudits(ctx.user.id, input)),
     retryResetAudits: protectedProcedure.input(providerReadRetryResetListInput).query(({ ctx, input }) => db.listProviderReadRetryResets(ctx.user.id, input.providerListingId)),
     appendRetryResetAudit: protectedProcedure.input(providerReadRetryResetInput).mutation(({ ctx, input }) => db.appendProviderReadRetryReset({ userId: ctx.user.id, ...input, occurredAt: new Date(input.occurredAt) })),
+  }),
+  evidenceExportAudits: router({
+    list: protectedProcedure.query(({ ctx }) => db.listEvidenceExportAudits(ctx.user.id)),
+    append: protectedProcedure.input(evidenceExportAuditInput).mutation(({ ctx, input }) => db.appendEvidenceExportAudit({ userId: ctx.user.id, ...input, occurredAt: new Date(input.occurredAt) })),
   }),
   monitoring: router({
     ebay: publicProcedure.query(async () => {

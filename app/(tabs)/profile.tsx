@@ -21,6 +21,7 @@ import { dismissalsFromOutcomeSyncAudits, dismissPendingOutcome, mergeOutcomeSyn
 import { CHARACTERISTIC_CHECK_AUDIT_QUEUE_STORAGE_KEY, enqueueCharacteristicCheck, normalizeCharacteristicCheckQueue, resolveCharacteristicCheck, type PendingCharacteristicCheck } from "@/shared/characteristic-check-audits";
 import { filterProviderRetryResetsByGroup, getProviderRetryResetGroup, parsePendingProviderRetryResets, PROVIDER_RETRY_RESET_PENDING_KEY, type PendingProviderRetryReset } from "@/shared/provider-retry-resets";
 import { buildEvidenceFilename, buildEvidencePackage, redactEvidencePackage, renderEvidencePackageMarkdown } from "@/shared/evidence-package";
+import { buildEvidenceExportAudit } from "@/shared/export-audits";
 
 const EBAY_READINESS_KEY = "topCherry.ebayReadiness";
 const OBSERVATION_REVIEW_STORAGE_KEY = "topCherry.observationReviews";
@@ -470,6 +471,8 @@ function ObservationFollowUpQueue({ colors, followUps, outcomes, recentReviews, 
 }
 
 function ProviderRetryResetSummary({ colors, authenticated, audits, pending, listingContext, onOpenListing }: { colors: ReturnType<typeof useColors>; authenticated: boolean; audits: { resetId: string; providerListingId: string; previousAttemptCount: number; note: string; occurredAt: Date | string }[]; pending: PendingProviderRetryReset[]; listingContext: WorkspaceSnapshot[]; onOpenListing: (providerListingId: string) => void }) {
+  const exportAuditHistory = trpc.evidenceExportAudits.list.useQuery(undefined, { enabled: authenticated });
+  const appendExportAudit = trpc.evidenceExportAudits.append.useMutation();
   const [failureFilter, setFailureFilter] = useState<"all" | "repeated">("all");
   const [groupFilter, setGroupFilter] = useState("all");
   const repeatedAudits = audits.filter((audit) => audit.previousAttemptCount >= 2);
@@ -495,6 +498,7 @@ function ProviderRetryResetSummary({ colors, authenticated, audits, pending, lis
   const [exportPreview, setExportPreview] = useState<{ format: "json" | "markdown"; content: string; redactedContent: string; titlePreservingRedactedContent: string; contextPreservingRedactedContent: string; titleAndContextPreservingRedactedContent: string; redacted: boolean; keepTitles: boolean; keepContext: boolean; filename: string; count: number; scopeLabel: string } | null>(null);
   const [copiedExport, setCopiedExport] = useState<{ format: "json" | "markdown"; occurredAt: string } | null>(null);
   const [lastExport, setLastExport] = useState<{ format: "json" | "markdown"; occurredAt: string; scopeLabel: string; count: number } | null>(null);
+  const [exportAuditSyncError, setExportAuditSyncError] = useState<string | null>(null);
   const [exportPrivacyPreferences, setExportPrivacyPreferences] = useState({ keepTitles: false, keepContext: false });
   useEffect(() => {
     void AsyncStorage.getItem(PROVIDER_RETRY_RESET_LAST_EXPORT_KEY).then((raw) => {
@@ -563,12 +567,22 @@ function ProviderRetryResetSummary({ colors, authenticated, audits, pending, lis
     if (exportPreview.keepContext) return exportPreview.contextPreservingRedactedContent;
     return exportPreview.redactedContent;
   };
+  const recordExportAudit = (action: "copied" | "shared") => {
+    if (!authenticated || !exportPreview) return;
+    const occurredAt = new Date().toISOString();
+    const audit = buildEvidenceExportAudit({ action, format: exportPreview.format, privacyMode: exportPreview.redacted ? "redacted" : "full", keepTitles: exportPreview.redacted && exportPreview.keepTitles, keepContext: exportPreview.redacted && exportPreview.keepContext, scopeLabel: exportPreview.scopeLabel, eventCount: exportPreview.count, occurredAt });
+    void appendExportAudit.mutateAsync(audit).then(() => {
+      setExportAuditSyncError(null);
+      return exportAuditHistory.refetch();
+    }).catch(() => setExportAuditSyncError("The export action is retained locally, but the account audit ledger could not be updated."));
+  };
   const shareExport = async () => {
     if (!exportPreview) return;
     try {
       await Share.share({ title: exportPreview.filename, message: getVisibleExportContent() });
       const completedExport = { format: exportPreview.format, occurredAt: new Date().toISOString(), scopeLabel: exportPreview.scopeLabel, count: exportPreview.count };
       setLastExport(completedExport);
+      recordExportAudit("shared");
       void AsyncStorage.setItem(PROVIDER_RETRY_RESET_LAST_EXPORT_KEY, JSON.stringify(completedExport)).catch(() => undefined);
       setExportPreview(null);
     } catch {
@@ -593,6 +607,7 @@ function ProviderRetryResetSummary({ colors, authenticated, audits, pending, lis
       await Clipboard.setStringAsync(getVisibleExportContent());
       const copiedAt = new Date().toISOString();
       setCopiedExport({ format: exportPreview.format, occurredAt: copiedAt });
+      recordExportAudit("copied");
       Alert.alert("Copied", `${exportPreview.format.toUpperCase()} evidence package copied to the clipboard.`);
     } catch {
       Alert.alert("Copy unavailable", "The evidence package could not be copied; the local and account audit records remain unchanged.");
@@ -615,6 +630,7 @@ function ProviderRetryResetSummary({ colors, authenticated, audits, pending, lis
     </View>
     {failureFilter === "repeated" && (filteredRepeatedAudits.length || filteredRepeatedPending.length) ? <View style={styles.retryResetExportRow}><Pressable onPress={() => void exportRepeated("json")} style={({ pressed }) => [styles.reviewButton, { borderColor: colors.primary }, pressed && styles.pressed]}><Text style={[styles.reviewButtonText, { color: colors.primary }]}>Export JSON</Text></Pressable><Pressable onPress={() => void exportRepeated("markdown")} style={({ pressed }) => [styles.reviewButton, { borderColor: colors.border }, pressed && styles.pressed]}><Text style={[styles.reviewButtonText, { color: colors.muted }]}>Export Markdown</Text></Pressable></View> : null}
     {lastExport ? <View><Text style={[styles.dataNote, { color: colors.muted }]}>Last shared export · {lastExport.format.toUpperCase()} · {lastExport.count} event{lastExport.count === 1 ? "" : "s"} · {lastExport.scopeLabel} · {new Date(lastExport.occurredAt).toLocaleString()}</Text><Pressable onPress={clearLastExport} accessibilityRole="button" accessibilityLabel="Clear last export summary" style={({ pressed }) => [styles.reviewButton, { borderColor: colors.border, alignSelf: "flex-start", marginTop: 6 }, pressed && styles.pressed]}><Text style={[styles.reviewButtonText, { color: colors.muted }]}>Clear export summary</Text></Pressable></View> : null}
+    {authenticated ? <Text style={[styles.dataNote, { color: exportAuditSyncError ? colors.warning : colors.muted }]}>{exportAuditSyncError ?? `${exportAuditHistory.data?.length ?? 0} copy/share export audit event${(exportAuditHistory.data?.length ?? 0) === 1 ? "" : "s"} account-synced. The ledger records the action and privacy mode, not the exported content.`}</Text> : <Text style={[styles.dataNote, { color: colors.muted }]}>Copy/share actions remain on this device until sign-in; no account export ledger is available.</Text>}
     {visiblePending.length ? <View style={[styles.retryResetPending, { borderColor: colors.warning }]}><Text style={[styles.retryResetPendingTitle, { color: colors.warning }]}>Pending account synchronization</Text>{visiblePending.slice(0, 3).map((item) => { const context = listingContext.find((snapshot) => snapshot.providerListingId === item.providerListingId); return <Pressable key={item.resetId} accessibilityRole="button" accessibilityLabel={`Open history for ${context?.title ?? item.providerListingId}`} onPress={() => onOpenListing(item.providerListingId)} style={({ pressed }) => [styles.retryResetRow, pressed && styles.pressed]}><MaterialIcons name="cloud-off" size={14} color={colors.warning} /><View style={styles.settingCopy}><Text style={[styles.settingDescription, { color: colors.foreground }]} numberOfLines={1}>{context?.title ?? item.providerListingId}</Text><Text style={[styles.settingDescription, { color: colors.muted }]} numberOfLines={1}>{context?.profileSlug ? `${context.profileSlug} · ` : ""}{item.providerListingId} · attempt {item.attemptCount} · reset after {item.previousAttemptCount} provider-read attempts{item.lastError ? ` · ${item.lastError}` : ""}</Text><Text style={[styles.settingDescription, { color: colors.muted }]}>Open focused listing history</Text></View><MaterialIcons name="chevron-right" size={16} color={colors.muted} /></Pressable>; })}</View> : null}
     {visibleAudits.length ? <View style={styles.retryResetHistory}><Text style={[styles.reviewHistoryTitle, { color: colors.muted }]}>Recent account audit events</Text>{visibleAudits.map((audit) => { const context = listingContext.find((snapshot) => snapshot.providerListingId === audit.providerListingId); return <Pressable key={audit.resetId} accessibilityRole="button" accessibilityLabel={`Open history for ${context?.title ?? audit.providerListingId}`} onPress={() => onOpenListing(audit.providerListingId)} style={({ pressed }) => [styles.retryResetRow, pressed && styles.pressed]}><MaterialIcons name="restart-alt" size={14} color={colors.primary} /><View style={styles.settingCopy}><Text style={[styles.settingDescription, { color: colors.foreground }]} numberOfLines={1}>{context?.title ?? audit.providerListingId}</Text><Text style={[styles.settingDescription, { color: colors.muted }]} numberOfLines={1}>{context?.profileSlug ? `${context.profileSlug} · ` : ""}{audit.providerListingId} · reopened after {audit.previousAttemptCount} attempt{audit.previousAttemptCount === 1 ? "" : "s"}</Text><Text style={[styles.settingDescription, { color: colors.muted }]}>{new Date(audit.occurredAt).toLocaleString()} · Open focused listing history</Text><Text style={[styles.reviewNoteText, { color: colors.muted }]} numberOfLines={2}>“{audit.note}”</Text></View><MaterialIcons name="chevron-right" size={16} color={colors.muted} /></Pressable>; })}</View> : <Text style={[styles.dataNote, { color: colors.muted }]}>No retry-reset audit events match this filter.</Text>}
   </View>

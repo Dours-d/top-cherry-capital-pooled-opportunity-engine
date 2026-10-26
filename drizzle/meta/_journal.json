@@ -99,6 +99,13 @@
       "when": 1792923823379,
       "tag": "0013_young_hobgoblin",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "5",
+      "when": 1793026656990,
+      "tag": "0014_goofy_sentinels",
+      "breakpoints": true
     }
   ]
 }

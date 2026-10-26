@@ -254,6 +254,31 @@ export const providerReadRetryResets = mysqlTable(
 export type ProviderReadRetryReset = typeof providerReadRetryResets.$inferSelect;
 export type InsertProviderReadRetryReset = typeof providerReadRetryResets.$inferInsert;
 
+export const evidenceExportAudits = mysqlTable(
+  "evidence_export_audits",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    exportId: varchar("exportId", { length: 160 }).notNull(),
+    action: mysqlEnum("action", ["copied", "shared"]).notNull(),
+    format: mysqlEnum("format", ["json", "markdown"]).notNull(),
+    privacyMode: mysqlEnum("privacyMode", ["redacted", "full"]).notNull(),
+    keepTitles: boolean("keepTitles").default(false).notNull(),
+    keepContext: boolean("keepContext").default(false).notNull(),
+    scopeLabel: varchar("scopeLabel", { length: 255 }).notNull(),
+    eventCount: int("eventCount").notNull(),
+    occurredAt: timestamp("occurredAt").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (table) => ({
+    exportKeyIdx: uniqueIndex("evidence_export_audits_user_export_idx").on(table.userId, table.exportId),
+    userOccurredIdx: index("evidence_export_audits_user_occurred_idx").on(table.userId, table.occurredAt),
+  }),
+);
+
+export type EvidenceExportAudit = typeof evidenceExportAudits.$inferSelect;
+export type InsertEvidenceExportAudit = typeof evidenceExportAudits.$inferInsert;
+
 export const ingestionRuns = mysqlTable("ingestion_runs", {
   id: int("id").autoincrement().primaryKey(),
   sourceSlug: varchar("sourceSlug", { length: 64 }).notNull(),

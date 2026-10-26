@@ -1,6 +1,6 @@
 import { and, count, desc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { characteristicCheckAudits, ebayListingEvents, ebayNotificationEvents, InsertCharacteristicCheckAudit, InsertEbayListingEvent, InsertEbayNotificationEvent, InsertListingOutcome, InsertObservationReview, InsertOutcomeSyncAudit, InsertProviderReadRetryReset, InsertReconciliationSnapshot, InsertSavedDeal, InsertThesisContradictionReview, InsertThesisDraftRevision, InsertUser, listingOutcomes, observationReviews, outcomeSyncAudits, providerReadRetryResets, reconciliationSnapshots, savedDeals, thesisContradictionReviews, thesisDraftRevisions, userPreferences, users } from "../drizzle/schema";
+import { characteristicCheckAudits, ebayListingEvents, ebayNotificationEvents, evidenceExportAudits, InsertCharacteristicCheckAudit, InsertEbayListingEvent, InsertEbayNotificationEvent, InsertEvidenceExportAudit, InsertListingOutcome, InsertObservationReview, InsertOutcomeSyncAudit, InsertProviderReadRetryReset, InsertReconciliationSnapshot, InsertSavedDeal, InsertThesisContradictionReview, InsertThesisDraftRevision, InsertUser, listingOutcomes, observationReviews, outcomeSyncAudits, providerReadRetryResets, reconciliationSnapshots, savedDeals, thesisContradictionReviews, thesisDraftRevisions, userPreferences, users } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import { buildEbayMarketSignals } from "../shared/ebay-signals";
 
@@ -232,6 +232,20 @@ export async function listProviderReadRetryResets(userId: number, providerListin
   if (!db) return [];
   const condition = and(eq(providerReadRetryResets.userId, userId), ...(providerListingId ? [eq(providerReadRetryResets.providerListingId, providerListingId)] : []));
   return db.select().from(providerReadRetryResets).where(condition).orderBy(desc(providerReadRetryResets.occurredAt)).limit(limit);
+}
+
+export async function appendEvidenceExportAudit(audit: InsertEvidenceExportAudit) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.insert(evidenceExportAudits).values(audit).onDuplicateKeyUpdate({ set: { exportId: audit.exportId } });
+  const result = await db.select().from(evidenceExportAudits).where(and(eq(evidenceExportAudits.userId, audit.userId), eq(evidenceExportAudits.exportId, audit.exportId))).limit(1);
+  return result[0];
+}
+
+export async function listEvidenceExportAudits(userId: number, limit = 100) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(evidenceExportAudits).where(eq(evidenceExportAudits.userId, userId)).orderBy(desc(evidenceExportAudits.occurredAt)).limit(limit);
 }
 
 export async function insertEbayNotificationEvent(event: InsertEbayNotificationEvent) {
