@@ -68,6 +68,15 @@ export function countCappedEvidenceExportAuditsToTrim(existing: readonly Pending
   return Math.max(0, existing.filter((item) => isEvidenceExportAuditRetryLimitReached(item.attemptCount)).length - maxCapped);
 }
 
+export function summarizeEvidenceExportAuditQueue(existing: readonly PendingEvidenceExportAudit[]) {
+  return {
+    recordCount: existing.length,
+    cappedCount: existing.filter((item) => isEvidenceExportAuditRetryLimitReached(item.attemptCount)).length,
+    recoverableCount: existing.filter((item) => !isEvidenceExportAuditRetryLimitReached(item.attemptCount)).length,
+    serializedSize: JSON.stringify(existing).length,
+  };
+}
+
 function isPendingEvidenceExportAudit(value: unknown): value is PendingEvidenceExportAudit {
   if (!value || typeof value !== "object") return false;
   const item = value as Partial<PendingEvidenceExportAudit>;

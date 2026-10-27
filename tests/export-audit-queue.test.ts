@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildEvidenceExportAudit } from "../shared/export-audits";
-import { countCappedEvidenceExportAuditsToTrim, EVIDENCE_EXPORT_AUDIT_RETRY_LIMIT, isEvidenceExportAuditRetryLimitReached, parseEvidenceExportAuditRetention, parsePendingEvidenceExportAudits, queueEvidenceExportAudit, resetEvidenceExportAuditRetry, resolveEvidenceExportAudit, trimCappedEvidenceExportAudits, type PendingEvidenceExportAudit } from "../shared/export-audit-queue";
+import { countCappedEvidenceExportAuditsToTrim, EVIDENCE_EXPORT_AUDIT_RETRY_LIMIT, isEvidenceExportAuditRetryLimitReached, parseEvidenceExportAuditRetention, parsePendingEvidenceExportAudits, queueEvidenceExportAudit, resetEvidenceExportAuditRetry, resolveEvidenceExportAudit, summarizeEvidenceExportAuditQueue, trimCappedEvidenceExportAudits, type PendingEvidenceExportAudit } from "../shared/export-audit-queue";
 
 describe("evidence export audit queue", () => {
   const audit = buildEvidenceExportAudit({ action: "shared", format: "json", privacyMode: "redacted", keepTitles: false, keepContext: false, scopeLabel: "All groups", eventCount: 2, occurredAt: "2026-10-26T14:00:00.000Z" });
@@ -66,5 +66,17 @@ describe("evidence export audit queue", () => {
     expect(parseEvidenceExportAuditRetention(50)).toBe(50);
     expect(parseEvidenceExportAuditRetention(5)).toBe(25);
     expect(parseEvidenceExportAuditRetention("50")).toBe(25);
+  });
+
+  it("summarizes queue size without exposing record contents", () => {
+    const summary = summarizeEvidenceExportAuditQueue([
+      { ...audit, exportId: "recoverable", attemptCount: 1 },
+      { ...audit, exportId: "capped", attemptCount: EVIDENCE_EXPORT_AUDIT_RETRY_LIMIT },
+    ]);
+    expect(summary).toMatchObject({ recordCount: 2, cappedCount: 1, recoverableCount: 1 });
+    expect(summary.serializedSize).toBe(JSON.stringify([
+      { ...audit, exportId: "recoverable", attemptCount: 1 },
+      { ...audit, exportId: "capped", attemptCount: EVIDENCE_EXPORT_AUDIT_RETRY_LIMIT },
+    ]).length);
   });
 });
