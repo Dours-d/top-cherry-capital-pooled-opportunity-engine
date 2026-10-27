@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildEvidenceExportAudit, mergeEvidenceExportAudits, recentEvidenceExportAudits } from "../shared/export-audits";
+import { buildEvidenceExportAudit, filterEvidenceExportAuditsByWindow, mergeEvidenceExportAudits, recentEvidenceExportAudits } from "../shared/export-audits";
 
 describe("evidence export audits", () => {
   it("records action metadata without exported content and normalizes full-mode retention", () => {
@@ -40,5 +40,15 @@ describe("evidence export audits", () => {
     const older = buildEvidenceExportAudit({ action: "copied", format: "json", privacyMode: "redacted", keepTitles: false, keepContext: false, scopeLabel: "Older", eventCount: 1, occurredAt: "2026-10-26T12:00:00.000Z", exportId: "older" });
     const newer = buildEvidenceExportAudit({ action: "shared", format: "markdown", privacyMode: "redacted", keepTitles: true, keepContext: false, scopeLabel: "Newer", eventCount: 2, occurredAt: "2026-10-26T13:00:00.000Z", exportId: "newer" });
     expect(recentEvidenceExportAudits([older, newer], 1)).toEqual([newer]);
+  });
+
+  it("filters audit history by deterministic rolling windows", () => {
+    const now = "2026-10-27T12:00:00.000Z";
+    const withinSeven = buildEvidenceExportAudit({ action: "copied", format: "json", privacyMode: "redacted", keepTitles: false, keepContext: false, scopeLabel: "Recent", eventCount: 1, occurredAt: "2026-10-23T12:00:00.000Z", exportId: "recent" });
+    const withinThirty = buildEvidenceExportAudit({ action: "shared", format: "json", privacyMode: "redacted", keepTitles: false, keepContext: false, scopeLabel: "Month", eventCount: 1, occurredAt: "2026-10-01T12:00:00.000Z", exportId: "month" });
+    const older = buildEvidenceExportAudit({ action: "shared", format: "json", privacyMode: "redacted", keepTitles: false, keepContext: false, scopeLabel: "Older", eventCount: 1, occurredAt: "2026-08-01T12:00:00.000Z", exportId: "older" });
+    expect(filterEvidenceExportAuditsByWindow([withinSeven, withinThirty, older], "7d", now).map((audit) => audit.exportId)).toEqual(["recent"]);
+    expect(filterEvidenceExportAuditsByWindow([withinSeven, withinThirty, older], "30d", now).map((audit) => audit.exportId)).toEqual(["recent", "month"]);
+    expect(filterEvidenceExportAuditsByWindow([withinSeven, withinThirty, older], "all", now)).toHaveLength(3);
   });
 });
