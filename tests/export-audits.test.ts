@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildEvidenceExportAudit, filterEvidenceExportAuditsByWindow, mergeEvidenceExportAudits, recentEvidenceExportAudits } from "../shared/export-audits";
+import { buildEvidenceExportAudit, filterEvidenceExportAuditsByWindow, mergeEvidenceExportAudits, recentEvidenceExportAudits, renderEvidenceExportAuditCsv } from "../shared/export-audits";
 
 describe("evidence export audits", () => {
   it("records action metadata without exported content and normalizes full-mode retention", () => {
@@ -50,5 +50,13 @@ describe("evidence export audits", () => {
     expect(filterEvidenceExportAuditsByWindow([withinSeven, withinThirty, older], "7d", now).map((audit) => audit.exportId)).toEqual(["recent"]);
     expect(filterEvidenceExportAuditsByWindow([withinSeven, withinThirty, older], "30d", now).map((audit) => audit.exportId)).toEqual(["recent", "month"]);
     expect(filterEvidenceExportAuditsByWindow([withinSeven, withinThirty, older], "all", now)).toHaveLength(3);
+  });
+
+  it("renders metadata-only CSV with safe escaping and no export identifiers", () => {
+    const audit = buildEvidenceExportAudit({ action: "shared", format: "markdown", privacyMode: "redacted", keepTitles: false, keepContext: true, scopeLabel: "Watches, UK", eventCount: 2, occurredAt: "2026-10-27T12:00:00.000Z", exportId: "secret-export-id" });
+    const csv = renderEvidenceExportAuditCsv([{ ...audit, syncStatus: "pending-local" }]);
+    expect(csv).toContain("action,format,privacy_mode,keep_titles,keep_context,scope,event_count,occurred_at,sync_status");
+    expect(csv).toContain('"shared","markdown","redacted","false","true","Watches, UK","2","2026-10-27T12:00:00.000Z","pending-local"');
+    expect(csv).not.toContain("secret-export-id");
   });
 });

@@ -45,3 +45,10 @@ export function filterEvidenceExportAuditsByWindow(audits: readonly EvidenceExpo
   const cutoff = new Date(now).getTime() - (window === "7d" ? 7 : 30) * 24 * 60 * 60 * 1000;
   return audits.filter((audit) => new Date(audit.occurredAt).getTime() >= cutoff);
 }
+
+export function renderEvidenceExportAuditCsv(audits: readonly (EvidenceExportAuditRecord & { syncStatus?: "account-synced" | "pending-local" })[]) {
+  const columns = ["action", "format", "privacy_mode", "keep_titles", "keep_context", "scope", "event_count", "occurred_at", "sync_status"];
+  const escape = (value: string | number | boolean) => `"${String(value).replaceAll('"', '""')}"`;
+  const rows = audits.map((audit) => [audit.action, audit.format, audit.privacyMode, audit.keepTitles, audit.keepContext, audit.scopeLabel, audit.eventCount, audit.occurredAt, audit.syncStatus ?? "account-synced"].map(escape).join(","));
+  return [columns.join(","), ...rows].join("\n");
+}
