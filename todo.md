@@ -170,6 +170,7 @@ R2 full real-data ingestion, R3 response estimation, R4 network feedback and R5 
 - [x] R2.0cd Retention-history clear action: Workspace can clear only the local retention-change timeline after explicit confirmation; queued export audits, account ledger events, privacy preferences and evidence remain unchanged.
 - [x] R2.0ce Local retention-history export: Workspace can copy a local-only CSV containing only old/new capped limits, removal counts and timestamps; export IDs, evidence, operator notes, account data and sync behavior are excluded.
 - [x] R2.0cf Reset-note history clear: Workspace can confirmation-gate removal of local retry-reset notes and timelines while preserving attempts, queued export audits, retention settings, account events and evidence; the transition is covered by pure queue tests.
+- [x] R2.0cg Capped-queue compaction: Workspace offers confirmation-gated removal of retry-limit-reached events older than the current retention setting, using the existing newest-first trim rule; recoverable events and the retention preference remain unchanged.
 ## Existing boundaries
 - eBay account-deletion delivery does not establish Browse search or listing-stream permissions.
 - GitHub source synchronization, hosted CI, database migration, checkpoints, UI deployment and provider access are separate gates.
