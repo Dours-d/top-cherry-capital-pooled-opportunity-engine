@@ -6,6 +6,7 @@ export const EVIDENCE_EXPORT_AUDIT_RETRY_LIMIT = 3;
 export const MAX_EVIDENCE_EXPORT_AUDIT_RESET_HISTORY = 5;
 export const MAX_EVIDENCE_EXPORT_AUDIT_RETENTION_HISTORY = 5;
 export const EVIDENCE_EXPORT_AUDIT_RETENTION_OPTIONS = [10, 25, 50] as const;
+export const EVIDENCE_EXPORT_AUDIT_QUEUE_SOFT_BUDGET = 40000;
 export type EvidenceExportAuditRetention = (typeof EVIDENCE_EXPORT_AUDIT_RETENTION_OPTIONS)[number];
 
 export function parseEvidenceExportAuditRetention(value: unknown): EvidenceExportAuditRetention {
@@ -86,11 +87,15 @@ export function countCappedEvidenceExportAuditsToTrim(existing: readonly Pending
 }
 
 export function summarizeEvidenceExportAuditQueue(existing: readonly PendingEvidenceExportAudit[]) {
+  const serializedSize = JSON.stringify(existing).length;
   return {
     recordCount: existing.length,
     cappedCount: existing.filter((item) => isEvidenceExportAuditRetryLimitReached(item.attemptCount)).length,
     recoverableCount: existing.filter((item) => !isEvidenceExportAuditRetryLimitReached(item.attemptCount)).length,
-    serializedSize: JSON.stringify(existing).length,
+    serializedSize,
+    softBudget: EVIDENCE_EXPORT_AUDIT_QUEUE_SOFT_BUDGET,
+    nearSoftBudget: serializedSize >= EVIDENCE_EXPORT_AUDIT_QUEUE_SOFT_BUDGET * 0.8,
+    overSoftBudget: serializedSize > EVIDENCE_EXPORT_AUDIT_QUEUE_SOFT_BUDGET,
   };
 }
 

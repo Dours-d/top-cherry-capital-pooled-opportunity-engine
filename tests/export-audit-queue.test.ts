@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildEvidenceExportAudit } from "../shared/export-audits";
-import { appendEvidenceExportAuditRetentionHistory, countCappedEvidenceExportAuditsToTrim, EVIDENCE_EXPORT_AUDIT_RETRY_LIMIT, isEvidenceExportAuditRetryLimitReached, parseEvidenceExportAuditRetention, parseEvidenceExportAuditRetentionHistory, parsePendingEvidenceExportAudits, queueEvidenceExportAudit, resetEvidenceExportAuditRetry, resolveEvidenceExportAudit, summarizeEvidenceExportAuditQueue, trimCappedEvidenceExportAudits, type EvidenceExportAuditRetentionChange, type PendingEvidenceExportAudit } from "../shared/export-audit-queue";
+import { appendEvidenceExportAuditRetentionHistory, countCappedEvidenceExportAuditsToTrim, EVIDENCE_EXPORT_AUDIT_QUEUE_SOFT_BUDGET, EVIDENCE_EXPORT_AUDIT_RETRY_LIMIT, isEvidenceExportAuditRetryLimitReached, parseEvidenceExportAuditRetention, parseEvidenceExportAuditRetentionHistory, parsePendingEvidenceExportAudits, queueEvidenceExportAudit, resetEvidenceExportAuditRetry, resolveEvidenceExportAudit, summarizeEvidenceExportAuditQueue, trimCappedEvidenceExportAudits, type EvidenceExportAuditRetentionChange, type PendingEvidenceExportAudit } from "../shared/export-audit-queue";
 
 describe("evidence export audit queue", () => {
   const audit = buildEvidenceExportAudit({ action: "shared", format: "json", privacyMode: "redacted", keepTitles: false, keepContext: false, scopeLabel: "All groups", eventCount: 2, occurredAt: "2026-10-26T14:00:00.000Z" });
@@ -78,6 +78,11 @@ describe("evidence export audit queue", () => {
       { ...audit, exportId: "recoverable", attemptCount: 1 },
       { ...audit, exportId: "capped", attemptCount: EVIDENCE_EXPORT_AUDIT_RETRY_LIMIT },
     ]).length);
+    const near = summarizeEvidenceExportAuditQueue([{ ...audit, attemptCount: 0, scopeLabel: "x".repeat(Math.ceil(EVIDENCE_EXPORT_AUDIT_QUEUE_SOFT_BUDGET * 0.8)) }]);
+    expect(near.nearSoftBudget).toBe(true);
+    expect(near.overSoftBudget).toBe(false);
+    const over = summarizeEvidenceExportAuditQueue([{ ...audit, attemptCount: 0, scopeLabel: "x".repeat(EVIDENCE_EXPORT_AUDIT_QUEUE_SOFT_BUDGET + 1) }]);
+    expect(over.overSoftBudget).toBe(true);
   });
 
   it("keeps only strict, newest-first retention-change history", () => {
