@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildEvidenceExportAudit } from "../shared/export-audits";
-import { appendEvidenceExportAuditRetentionHistory, clearEvidenceExportAuditResetHistory, countCappedEvidenceExportAuditsToTrim, countEvidenceExportAuditResetNotes, EVIDENCE_EXPORT_AUDIT_QUEUE_SOFT_BUDGET, EVIDENCE_EXPORT_AUDIT_RETRY_LIMIT, isEvidenceExportAuditRetryLimitReached, parseEvidenceExportAuditMaintenance, parseEvidenceExportAuditRetention, parseEvidenceExportAuditRetentionHistory, parsePendingEvidenceExportAudits, queueEvidenceExportAudit, renderEvidenceExportAuditRetentionHistoryCsv, resetEvidenceExportAuditRetry, resolveEvidenceExportAudit, summarizeEvidenceExportAuditQueue, trimCappedEvidenceExportAudits, type EvidenceExportAuditRetentionChange, type PendingEvidenceExportAudit } from "../shared/export-audit-queue";
+import { appendEvidenceExportAuditRetentionHistory, checksumEvidenceExportAuditQueue, clearEvidenceExportAuditResetHistory, countCappedEvidenceExportAuditsToTrim, countEvidenceExportAuditResetNotes, EVIDENCE_EXPORT_AUDIT_QUEUE_SOFT_BUDGET, EVIDENCE_EXPORT_AUDIT_RETRY_LIMIT, isEvidenceExportAuditRetryLimitReached, parseEvidenceExportAuditMaintenance, parseEvidenceExportAuditRetention, parseEvidenceExportAuditRetentionHistory, parsePendingEvidenceExportAudits, queueEvidenceExportAudit, renderEvidenceExportAuditRetentionHistoryCsv, resetEvidenceExportAuditRetry, resolveEvidenceExportAudit, summarizeEvidenceExportAuditQueue, trimCappedEvidenceExportAudits, type EvidenceExportAuditRetentionChange, type PendingEvidenceExportAudit } from "../shared/export-audit-queue";
 
 describe("evidence export audit queue", () => {
   const audit = buildEvidenceExportAudit({ action: "shared", format: "json", privacyMode: "redacted", keepTitles: false, keepContext: false, scopeLabel: "All groups", eventCount: 2, occurredAt: "2026-10-26T14:00:00.000Z" });
@@ -110,5 +110,11 @@ describe("evidence export audit queue", () => {
   it("parses only bounded maintenance metadata", () => {
     expect(parseEvidenceExportAuditMaintenance(JSON.stringify({ action: "compacted", removedCount: 3, occurredAt: "2026-10-27T11:00:00.000Z", exportId: "secret" }))).toEqual({ action: "compacted", removedCount: 3, occurredAt: "2026-10-27T11:00:00.000Z" });
     expect(parseEvidenceExportAuditMaintenance(JSON.stringify({ action: "unknown", removedCount: 3, occurredAt: "now" }))).toBeNull();
+  });
+
+  it("produces a stable content-free checksum for integrity comparisons", () => {
+    expect(checksumEvidenceExportAuditQueue("[]")).toBe(checksumEvidenceExportAuditQueue("[]"));
+    expect(checksumEvidenceExportAuditQueue("[]")).not.toBe(checksumEvidenceExportAuditQueue("[1]"));
+    expect(checksumEvidenceExportAuditQueue("[]")).toMatch(/^[0-9a-f]{8}$/);
   });
 });

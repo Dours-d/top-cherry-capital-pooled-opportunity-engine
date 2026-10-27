@@ -8,6 +8,7 @@ export const MAX_EVIDENCE_EXPORT_AUDIT_RETENTION_HISTORY = 5;
 export const EVIDENCE_EXPORT_AUDIT_RETENTION_OPTIONS = [10, 25, 50] as const;
 export const EVIDENCE_EXPORT_AUDIT_QUEUE_SOFT_BUDGET = 40000;
 export const EVIDENCE_EXPORT_AUDIT_MAINTENANCE_STORAGE_KEY = "top-cherry.evidence-export-audit-maintenance.v1";
+export const EVIDENCE_EXPORT_AUDIT_QUEUE_CHECKSUM_STORAGE_KEY = "top-cherry.evidence-export-audit-queue-checksum.v1";
 export type EvidenceExportAuditRetention = (typeof EVIDENCE_EXPORT_AUDIT_RETENTION_OPTIONS)[number];
 
 export function parseEvidenceExportAuditRetention(value: unknown): EvidenceExportAuditRetention {
@@ -25,6 +26,15 @@ export type PendingEvidenceExportAudit = EvidenceExportAuditRecord & {
 export type EvidenceExportAuditResetHistoryEntry = { note: string; occurredAt: string };
 export type EvidenceExportAuditRetentionChange = { from: EvidenceExportAuditRetention; to: EvidenceExportAuditRetention; removedCount: number; occurredAt: string };
 export type EvidenceExportAuditMaintenance = { action: "compacted" | "reset-notes-cleared"; removedCount: number; occurredAt: string };
+
+export function checksumEvidenceExportAuditQueue(serialized: string): string {
+  let hash = 2166136261;
+  for (let index = 0; index < serialized.length; index += 1) {
+    hash ^= serialized.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
 
 export function parseEvidenceExportAuditMaintenance(raw: string | null): EvidenceExportAuditMaintenance | null {
   if (!raw) return null;
