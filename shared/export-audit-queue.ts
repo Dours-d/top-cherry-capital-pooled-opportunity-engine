@@ -2,6 +2,7 @@ import type { EvidenceExportAuditRecord } from "./export-audits";
 
 export const EVIDENCE_EXPORT_AUDIT_QUEUE_STORAGE_KEY = "top-cherry.evidence-export-audit-queue.v1";
 export const MAX_EVIDENCE_EXPORT_AUDIT_ATTEMPTS = 99;
+export const EVIDENCE_EXPORT_AUDIT_RETRY_LIMIT = 3;
 
 export type PendingEvidenceExportAudit = EvidenceExportAuditRecord & {
   attemptCount: number;
@@ -29,6 +30,10 @@ export function queueEvidenceExportAudit(existing: readonly PendingEvidenceExpor
 export function resolveEvidenceExportAudit(existing: readonly PendingEvidenceExportAudit[], exportId: string, result: { ok: true } | { ok: false; error: string }, attemptedAt: string): PendingEvidenceExportAudit[] {
   if (result.ok) return existing.filter((item) => item.exportId !== exportId);
   return existing.map((item) => item.exportId === exportId ? { ...item, attemptCount: Math.min(MAX_EVIDENCE_EXPORT_AUDIT_ATTEMPTS, item.attemptCount + 1), syncError: result.error, lastAttemptAt: attemptedAt } : item);
+}
+
+export function isEvidenceExportAuditRetryLimitReached(attemptCount: number) {
+  return attemptCount >= EVIDENCE_EXPORT_AUDIT_RETRY_LIMIT;
 }
 
 function isPendingEvidenceExportAudit(value: unknown): value is PendingEvidenceExportAudit {

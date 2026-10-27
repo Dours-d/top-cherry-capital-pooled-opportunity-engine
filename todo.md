@@ -157,6 +157,7 @@ R2 full real-data ingestion, R3 response estimation, R4 network feedback and R5 
 - [x] R2.0bq Export activity status filter: Workspace export history now provides All, Synced and Pending filters with counts, applies the five-event cap after filtering, and keeps privacy-safe action/scope metadata as the only displayed history fields.
 - [x] R2.0br Per-event export retry: pending Workspace export-audit rows now expose a single-event Retry this audit action; successful retries remove only that queue entry, while failures preserve its bounded diagnostic metadata and leave other queued events untouched.
 - [x] R2.0bs Retry-attempt visibility: pending export-audit records now retain a backward-compatible bounded attemptCount, increment it only after failed account sync, and display the retry count beside the privacy-safe pending status.
+- [x] R2.0bt Retry-limit state: Workspace stops automatic and per-event export-audit retries after three failed account-sync attempts and labels the event Retry limit reached; capped events remain retained locally for review rather than being silently discarded.
 ## Existing boundaries
 - eBay account-deletion delivery does not establish Browse search or listing-stream permissions.
 - GitHub source synchronization, hosted CI, database migration, checkpoints, UI deployment and provider access are separate gates.
