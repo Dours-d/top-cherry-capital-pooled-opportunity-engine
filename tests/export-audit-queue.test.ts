@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildEvidenceExportAudit } from "../shared/export-audits";
-import { EVIDENCE_EXPORT_AUDIT_RETRY_LIMIT, isEvidenceExportAuditRetryLimitReached, parseEvidenceExportAuditRetention, parsePendingEvidenceExportAudits, queueEvidenceExportAudit, resetEvidenceExportAuditRetry, resolveEvidenceExportAudit, trimCappedEvidenceExportAudits } from "../shared/export-audit-queue";
+import { countCappedEvidenceExportAuditsToTrim, EVIDENCE_EXPORT_AUDIT_RETRY_LIMIT, isEvidenceExportAuditRetryLimitReached, parseEvidenceExportAuditRetention, parsePendingEvidenceExportAudits, queueEvidenceExportAudit, resetEvidenceExportAuditRetry, resolveEvidenceExportAudit, trimCappedEvidenceExportAudits } from "../shared/export-audit-queue";
 
 describe("evidence export audit queue", () => {
   const audit = buildEvidenceExportAudit({ action: "shared", format: "json", privacyMode: "redacted", keepTitles: false, keepContext: false, scopeLabel: "All groups", eventCount: 2, occurredAt: "2026-10-26T14:00:00.000Z" });
@@ -53,6 +53,8 @@ describe("evidence export audit queue", () => {
     const extraCapped = Array.from({ length: 9 }, (_, index) => ({ ...audit, exportId: `extra-${index}`, attemptCount: EVIDENCE_EXPORT_AUDIT_RETRY_LIMIT, occurredAt: `2026-10-${String(4 + index).padStart(2, "0")}T00:00:00.000Z` }));
     expect(trimCappedEvidenceExportAudits([cappedOld, cappedNew, recoverable, ...extraCapped], 10).map((item) => item.exportId)).not.toContain("capped-old");
     expect(trimCappedEvidenceExportAudits([cappedOld, cappedNew, recoverable, ...extraCapped], 10)).toContainEqual(recoverable);
+    expect(countCappedEvidenceExportAuditsToTrim([cappedOld, cappedNew, recoverable, ...extraCapped], 10)).toBe(1);
+    expect(countCappedEvidenceExportAuditsToTrim([cappedOld, cappedNew, recoverable], 10)).toBe(0);
   });
 
   it("defaults malformed retention preferences to the safe middle option", () => {

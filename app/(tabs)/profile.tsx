@@ -22,7 +22,7 @@ import { CHARACTERISTIC_CHECK_AUDIT_QUEUE_STORAGE_KEY, enqueueCharacteristicChec
 import { filterProviderRetryResetsByGroup, getProviderRetryResetGroup, parsePendingProviderRetryResets, PROVIDER_RETRY_RESET_PENDING_KEY, type PendingProviderRetryReset } from "@/shared/provider-retry-resets";
 import { buildEvidenceFilename, buildEvidencePackage, redactEvidencePackage, renderEvidencePackageMarkdown } from "@/shared/evidence-package";
 import { buildEvidenceExportAudit, filterEvidenceExportAuditsByWindow, recentEvidenceExportAudits, renderEvidenceExportAuditCsv, type EvidenceExportAuditWindow } from "@/shared/export-audits";
-import { EVIDENCE_EXPORT_AUDIT_QUEUE_STORAGE_KEY, EVIDENCE_EXPORT_AUDIT_RETENTION_OPTIONS, isEvidenceExportAuditRetryLimitReached, parseEvidenceExportAuditRetention, parsePendingEvidenceExportAudits, queueEvidenceExportAudit, resetEvidenceExportAuditRetry, resolveEvidenceExportAudit, trimCappedEvidenceExportAudits, type EvidenceExportAuditRetention, type PendingEvidenceExportAudit } from "@/shared/export-audit-queue";
+import { countCappedEvidenceExportAuditsToTrim, EVIDENCE_EXPORT_AUDIT_QUEUE_STORAGE_KEY, EVIDENCE_EXPORT_AUDIT_RETENTION_OPTIONS, isEvidenceExportAuditRetryLimitReached, parseEvidenceExportAuditRetention, parsePendingEvidenceExportAudits, queueEvidenceExportAudit, resetEvidenceExportAuditRetry, resolveEvidenceExportAudit, trimCappedEvidenceExportAudits, type EvidenceExportAuditRetention, type PendingEvidenceExportAudit } from "@/shared/export-audit-queue";
 
 const EBAY_READINESS_KEY = "topCherry.ebayReadiness";
 const OBSERVATION_REVIEW_STORAGE_KEY = "topCherry.observationReviews";
@@ -559,9 +559,20 @@ function ProviderRetryResetSummary({ colors, authenticated, audits, pending, lis
     void AsyncStorage.setItem(EVIDENCE_EXPORT_AUDIT_QUEUE_STORAGE_KEY, JSON.stringify(trimmed));
   };
   const changeCappedExportAuditRetention = (retention: EvidenceExportAuditRetention) => {
-    setCappedExportAuditRetention(retention);
-    void AsyncStorage.setItem(EVIDENCE_EXPORT_AUDIT_RETENTION_KEY, JSON.stringify(retention)).catch(() => undefined);
-    persistPendingExportAudits(trimCappedEvidenceExportAudits(pendingExportAudits, retention));
+    const applyRetention = () => {
+      setCappedExportAuditRetention(retention);
+      void AsyncStorage.setItem(EVIDENCE_EXPORT_AUDIT_RETENTION_KEY, JSON.stringify(retention)).catch(() => undefined);
+      persistPendingExportAudits(trimCappedEvidenceExportAudits(pendingExportAudits, retention));
+    };
+    const removedCount = countCappedEvidenceExportAuditsToTrim(pendingExportAudits, retention);
+    if (retention < cappedExportAuditRetention && removedCount > 0) {
+      Alert.alert("Reduce capped audit retention?", `${removedCount} retry-limit-reached local event${removedCount === 1 ? "" : "s"} will be removed. Recoverable queued events will remain.`, [
+        { text: "Cancel", style: "cancel" },
+        { text: `Remove ${removedCount}`, style: "destructive", onPress: applyRetention },
+      ]);
+      return;
+    }
+    applyRetention();
   };
   const retryPendingExportAudits = async () => {
     if (!authenticated || retryingExportAudits || !pendingExportAudits.length) return;
