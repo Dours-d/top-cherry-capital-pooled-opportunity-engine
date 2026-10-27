@@ -4,6 +4,7 @@ export const EVIDENCE_EXPORT_AUDIT_QUEUE_STORAGE_KEY = "top-cherry.evidence-expo
 export const MAX_EVIDENCE_EXPORT_AUDIT_ATTEMPTS = 99;
 export const EVIDENCE_EXPORT_AUDIT_RETRY_LIMIT = 3;
 export const MAX_EVIDENCE_EXPORT_AUDIT_RESET_HISTORY = 5;
+export const MAX_EVIDENCE_EXPORT_AUDIT_RETENTION_HISTORY = 5;
 export const EVIDENCE_EXPORT_AUDIT_RETENTION_OPTIONS = [10, 25, 50] as const;
 export type EvidenceExportAuditRetention = (typeof EVIDENCE_EXPORT_AUDIT_RETENTION_OPTIONS)[number];
 
@@ -20,6 +21,22 @@ export type PendingEvidenceExportAudit = EvidenceExportAuditRecord & {
 };
 
 export type EvidenceExportAuditResetHistoryEntry = { note: string; occurredAt: string };
+export type EvidenceExportAuditRetentionChange = { from: EvidenceExportAuditRetention; to: EvidenceExportAuditRetention; removedCount: number; occurredAt: string };
+
+export function parseEvidenceExportAuditRetentionHistory(value: unknown): EvidenceExportAuditRetentionChange[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter(isEvidenceExportAuditRetentionChange).slice(0, MAX_EVIDENCE_EXPORT_AUDIT_RETENTION_HISTORY);
+}
+
+export function appendEvidenceExportAuditRetentionHistory(existing: readonly EvidenceExportAuditRetentionChange[], entry: EvidenceExportAuditRetentionChange) {
+  return [entry, ...existing].slice(0, MAX_EVIDENCE_EXPORT_AUDIT_RETENTION_HISTORY);
+}
+
+function isEvidenceExportAuditRetentionChange(value: unknown): value is EvidenceExportAuditRetentionChange {
+  if (!value || typeof value !== "object") return false;
+  const entry = value as Record<string, unknown>;
+  return parseEvidenceExportAuditRetention(entry.from) === entry.from && parseEvidenceExportAuditRetention(entry.to) === entry.to && typeof entry.removedCount === "number" && Number.isInteger(entry.removedCount) && entry.removedCount >= 0 && typeof entry.occurredAt === "string";
+}
 
 export function parsePendingEvidenceExportAudits(raw: string | null): PendingEvidenceExportAudit[] {
   if (!raw) return [];

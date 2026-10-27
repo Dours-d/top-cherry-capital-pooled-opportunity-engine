@@ -165,6 +165,7 @@ R2 full real-data ingestion, R3 response estimation, R4 network feedback and R5 
 - [x] R2.0by Retention reduction confirmation: lowering the capped-event limit now presents the exact number of retry-limit-reached records to be removed; cancellation leaves both the preference and queue unchanged, while recoverable events remain protected.
 - [x] R2.0bz Local reset timeline: each operator-noted retry-limit reset now retains a bounded five-entry timestamp/note history on the local queue record and displays it in Workspace; reset history is excluded from account-ledger payloads, privacy-safe history rows and CSV exports.
 - [x] R2.0ca Local queue storage indicator: Workspace now reports privacy-safe serialized queue size, total records, capped records and recoverable records without exposing IDs, notes or evidence content.
+- [x] R2.0cb Local retention-change audit trail: Workspace persists the five newest local retention changes with old/new limits, removal count and timestamp; malformed entries are ignored, and this operational history remains excluded from account sync and CSV exports.
 ## Existing boundaries
 - eBay account-deletion delivery does not establish Browse search or listing-stream permissions.
 - GitHub source synchronization, hosted CI, database migration, checkpoints, UI deployment and provider access are separate gates.

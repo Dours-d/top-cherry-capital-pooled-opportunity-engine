@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildEvidenceExportAudit } from "../shared/export-audits";
-import { countCappedEvidenceExportAuditsToTrim, EVIDENCE_EXPORT_AUDIT_RETRY_LIMIT, isEvidenceExportAuditRetryLimitReached, parseEvidenceExportAuditRetention, parsePendingEvidenceExportAudits, queueEvidenceExportAudit, resetEvidenceExportAuditRetry, resolveEvidenceExportAudit, summarizeEvidenceExportAuditQueue, trimCappedEvidenceExportAudits, type PendingEvidenceExportAudit } from "../shared/export-audit-queue";
+import { appendEvidenceExportAuditRetentionHistory, countCappedEvidenceExportAuditsToTrim, EVIDENCE_EXPORT_AUDIT_RETRY_LIMIT, isEvidenceExportAuditRetryLimitReached, parseEvidenceExportAuditRetention, parseEvidenceExportAuditRetentionHistory, parsePendingEvidenceExportAudits, queueEvidenceExportAudit, resetEvidenceExportAuditRetry, resolveEvidenceExportAudit, summarizeEvidenceExportAuditQueue, trimCappedEvidenceExportAudits, type EvidenceExportAuditRetentionChange, type PendingEvidenceExportAudit } from "../shared/export-audit-queue";
 
 describe("evidence export audit queue", () => {
   const audit = buildEvidenceExportAudit({ action: "shared", format: "json", privacyMode: "redacted", keepTitles: false, keepContext: false, scopeLabel: "All groups", eventCount: 2, occurredAt: "2026-10-26T14:00:00.000Z" });
@@ -78,5 +78,13 @@ describe("evidence export audit queue", () => {
       { ...audit, exportId: "recoverable", attemptCount: 1 },
       { ...audit, exportId: "capped", attemptCount: EVIDENCE_EXPORT_AUDIT_RETRY_LIMIT },
     ]).length);
+  });
+
+  it("keeps only strict, newest-first retention-change history", () => {
+    const entries: EvidenceExportAuditRetentionChange[] = Array.from({ length: 6 }, (_, index) => ({ from: 25, to: 10, removedCount: index, occurredAt: `2026-10-27T10:0${index}:00.000Z` }));
+    const history = entries.reduce((current, entry) => appendEvidenceExportAuditRetentionHistory(current, entry), [] as EvidenceExportAuditRetentionChange[]);
+    expect(history).toHaveLength(5);
+    expect(history[0].removedCount).toBe(5);
+    expect(parseEvidenceExportAuditRetentionHistory([...history, { from: 5, to: 10, removedCount: 0, occurredAt: "bad" }])).toEqual(history);
   });
 });
