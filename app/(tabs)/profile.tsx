@@ -22,7 +22,7 @@ import { CHARACTERISTIC_CHECK_AUDIT_QUEUE_STORAGE_KEY, enqueueCharacteristicChec
 import { filterProviderRetryResetsByGroup, getProviderRetryResetGroup, parsePendingProviderRetryResets, PROVIDER_RETRY_RESET_PENDING_KEY, type PendingProviderRetryReset } from "@/shared/provider-retry-resets";
 import { buildEvidenceFilename, buildEvidencePackage, redactEvidencePackage, renderEvidencePackageMarkdown } from "@/shared/evidence-package";
 import { buildEvidenceExportAudit, filterEvidenceExportAuditsByWindow, recentEvidenceExportAudits, renderEvidenceExportAuditCsv, type EvidenceExportAuditWindow } from "@/shared/export-audits";
-import { EVIDENCE_EXPORT_AUDIT_QUEUE_STORAGE_KEY, isEvidenceExportAuditRetryLimitReached, parsePendingEvidenceExportAudits, queueEvidenceExportAudit, resetEvidenceExportAuditRetry, resolveEvidenceExportAudit, type PendingEvidenceExportAudit } from "@/shared/export-audit-queue";
+import { EVIDENCE_EXPORT_AUDIT_QUEUE_STORAGE_KEY, EVIDENCE_EXPORT_AUDIT_RETENTION_OPTIONS, isEvidenceExportAuditRetryLimitReached, parseEvidenceExportAuditRetention, parsePendingEvidenceExportAudits, queueEvidenceExportAudit, resetEvidenceExportAuditRetry, resolveEvidenceExportAudit, trimCappedEvidenceExportAudits, type EvidenceExportAuditRetention, type PendingEvidenceExportAudit } from "@/shared/export-audit-queue";
 
 const EBAY_READINESS_KEY = "topCherry.ebayReadiness";
 const OBSERVATION_REVIEW_STORAGE_KEY = "topCherry.observationReviews";
@@ -31,6 +31,7 @@ const OUTCOME_SYNC_AUDIT_QUEUE_STORAGE_KEY = "topCherry.outcomeSyncAuditQueue";
 const SNAPSHOT_FRESHNESS_THRESHOLDS_STORAGE_KEY = "topCherry.snapshotFreshnessThresholds";
 const PROVIDER_RETRY_RESET_LAST_EXPORT_KEY = "topCherry.providerRetryResetLastExport";
 const PROVIDER_RETRY_RESET_EXPORT_PRIVACY_KEY = "topCherry.providerRetryResetExportPrivacy";
+const EVIDENCE_EXPORT_AUDIT_RETENTION_KEY = "topCherry.evidenceExportAuditRetention";
 const EBAY_READINESS_ITEMS = [
   { id: "browse", label: "Verify read-only Browse access", detail: "Application-token search is verified for EBAY_GB.", state: "DONE" },
   { id: "details", label: "Verify item-detail characteristics", detail: "getItem PRODUCT details are requested when a live listing opens.", state: "DONE" },
@@ -520,6 +521,7 @@ function ProviderRetryResetSummary({ colors, authenticated, audits, pending, lis
   const [retryingExportAudits, setRetryingExportAudits] = useState(false);
   const [retryResetTarget, setRetryResetTarget] = useState<string | null>(null);
   const [retryResetNote, setRetryResetNote] = useState("");
+  const [cappedExportAuditRetention, setCappedExportAuditRetention] = useState<EvidenceExportAuditRetention>(25);
   const pendingExportAuditIds = new Set(pendingExportAudits.map((audit) => audit.exportId));
   const [exportAuditFilter, setExportAuditFilter] = useState<"all" | "account-synced" | "pending-local">("all");
   const [exportAuditWindow, setExportAuditWindow] = useState<EvidenceExportAuditWindow>("all");
@@ -531,7 +533,12 @@ function ProviderRetryResetSummary({ colors, authenticated, audits, pending, lis
   const filteredExportAudits = exportAuditFilter === "all" ? windowedExportAudits : windowedExportAudits.filter((audit) => exportAuditFilter === "pending-local" ? pendingExportAuditIds.has(audit.exportId) : !pendingExportAuditIds.has(audit.exportId));
   const recentExportAudits = recentEvidenceExportAudits(filteredExportAudits);
   useEffect(() => {
-    void AsyncStorage.getItem(EVIDENCE_EXPORT_AUDIT_QUEUE_STORAGE_KEY).then((raw) => setPendingExportAudits(parsePendingEvidenceExportAudits(raw))).catch(() => setPendingExportAudits([]));
+    void Promise.all([AsyncStorage.getItem(EVIDENCE_EXPORT_AUDIT_QUEUE_STORAGE_KEY), AsyncStorage.getItem(EVIDENCE_EXPORT_AUDIT_RETENTION_KEY)]).then(([rawQueue, rawRetention]) => {
+      let retention = 25 as EvidenceExportAuditRetention;
+      try { retention = parseEvidenceExportAuditRetention(rawRetention ? JSON.parse(rawRetention) : null); } catch { /* Keep the safe default. */ }
+      setCappedExportAuditRetention(retention);
+      setPendingExportAudits(trimCappedEvidenceExportAudits(parsePendingEvidenceExportAudits(rawQueue), retention));
+    }).catch(() => setPendingExportAudits([]));
   }, []);
   useEffect(() => {
     void AsyncStorage.getItem(PROVIDER_RETRY_RESET_EXPORT_PRIVACY_KEY).then((raw) => {
@@ -547,8 +554,14 @@ function ProviderRetryResetSummary({ colors, authenticated, audits, pending, lis
     }).catch(() => undefined);
   }, []);
   const persistPendingExportAudits = (queue: PendingEvidenceExportAudit[]) => {
-    setPendingExportAudits(queue);
-    void AsyncStorage.setItem(EVIDENCE_EXPORT_AUDIT_QUEUE_STORAGE_KEY, JSON.stringify(queue));
+    const trimmed = trimCappedEvidenceExportAudits(queue, cappedExportAuditRetention);
+    setPendingExportAudits(trimmed);
+    void AsyncStorage.setItem(EVIDENCE_EXPORT_AUDIT_QUEUE_STORAGE_KEY, JSON.stringify(trimmed));
+  };
+  const changeCappedExportAuditRetention = (retention: EvidenceExportAuditRetention) => {
+    setCappedExportAuditRetention(retention);
+    void AsyncStorage.setItem(EVIDENCE_EXPORT_AUDIT_RETENTION_KEY, JSON.stringify(retention)).catch(() => undefined);
+    persistPendingExportAudits(trimCappedEvidenceExportAudits(pendingExportAudits, retention));
   };
   const retryPendingExportAudits = async () => {
     if (!authenticated || retryingExportAudits || !pendingExportAudits.length) return;
@@ -716,7 +729,7 @@ function ProviderRetryResetSummary({ colors, authenticated, audits, pending, lis
       <View style={styles.readinessHeader}><View style={styles.settingCopy}><Text style={[styles.settingTitle, { color: colors.foreground }]}>Evidence export privacy</Text><Text style={[styles.settingDescription, { color: colors.muted }]}>Identifiers and operator notes remain redacted unless explicitly revealed in an export preview.</Text></View><MaterialIcons name="privacy-tip" size={19} color={colors.primary} /></View>
       <View style={styles.exportPrivacyRow}><View style={styles.settingCopy}><Text style={[styles.settingDescription, { color: colors.foreground }]}>Keep listing titles</Text><Text style={[styles.dataNote, { color: colors.muted }]}>Titles can help recognize the research subject.</Text></View><Switch value={exportPrivacyPreferences.keepTitles} onValueChange={toggleExportTitles} trackColor={{ false: colors.border, true: colors.primary }} thumbColor={exportPrivacyPreferences.keepTitles ? colors.onPrimary : colors.muted} /></View>
       <View style={styles.exportPrivacyRow}><View style={styles.settingCopy}><Text style={[styles.settingDescription, { color: colors.foreground }]}>Keep marketplace/profile context</Text><Text style={[styles.dataNote, { color: colors.muted }]}>Context can reveal the market lens used.</Text></View><Switch value={exportPrivacyPreferences.keepContext} onValueChange={toggleExportContext} trackColor={{ false: colors.border, true: colors.primary }} thumbColor={exportPrivacyPreferences.keepContext ? colors.onPrimary : colors.muted} /></View>
-      <Text style={[styles.dataNote, { color: colors.muted }]}>Listing IDs, snapshot IDs, item IDs, seller identifiers and operator notes are always redacted in privacy mode. This preference changes export content only; it does not alter stored audits or observations.</Text>
+      <Text style={[styles.dataNote, { color: colors.muted }]}>Listing IDs, snapshot IDs, item IDs, seller identifiers and operator notes are always redacted in privacy mode. This preference changes export content only; it does not alter stored audits or observations.</Text><Text style={[styles.settingDescription, { color: colors.foreground, marginTop: 8 }]}>Capped local audit retention</Text><Text style={[styles.dataNote, { color: colors.muted }]}>Only events at the retry limit can be trimmed. Recoverable queued events are always retained.</Text><View style={styles.filterRow}>{EVIDENCE_EXPORT_AUDIT_RETENTION_OPTIONS.map((retention) => <Pressable key={retention} onPress={() => changeCappedExportAuditRetention(retention)} accessibilityRole="button" accessibilityLabel={`Retain up to ${retention} capped local export audits`} style={({ pressed }) => [styles.filterChip, { backgroundColor: cappedExportAuditRetention === retention ? colors.primary : colors.background, borderColor: colors.border }, pressed && styles.pressed]}><Text style={[styles.filterChipText, { color: cappedExportAuditRetention === retention ? colors.onPrimary : colors.muted }]}>{retention} capped</Text></Pressable>)}</View>
       {(exportPrivacyPreferences.keepTitles || exportPrivacyPreferences.keepContext) ? <Pressable onPress={resetExportPrivacyPreferences} accessibilityRole="button" accessibilityLabel="Reset export privacy choices" style={({ pressed }) => [styles.reviewButton, { borderColor: colors.warning, alignSelf: "flex-start" }, pressed && styles.pressed]}><Text style={[styles.reviewButtonText, { color: colors.warning }]}>Reset privacy choices</Text></Pressable> : null}
     </View>
     {failureFilter === "repeated" && (filteredRepeatedAudits.length || filteredRepeatedPending.length) ? <View style={styles.retryResetExportRow}><Pressable onPress={() => void exportRepeated("json")} style={({ pressed }) => [styles.reviewButton, { borderColor: colors.primary }, pressed && styles.pressed]}><Text style={[styles.reviewButtonText, { color: colors.primary }]}>Export JSON</Text></Pressable><Pressable onPress={() => void exportRepeated("markdown")} style={({ pressed }) => [styles.reviewButton, { borderColor: colors.border }, pressed && styles.pressed]}><Text style={[styles.reviewButtonText, { color: colors.muted }]}>Export Markdown</Text></Pressable></View> : null}

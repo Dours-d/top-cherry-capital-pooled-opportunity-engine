@@ -161,6 +161,7 @@ R2 full real-data ingestion, R3 response estimation, R4 network feedback and R5 
 - [x] R2.0bu Export date windows: Workspace export activity now supports deterministic All time, 7 days and 30 days windows in combination with status filters; counts and the five-event cap apply after both filters, with an explicit no-match state.
 - [x] R2.0bv Operator-noted retry reset: capped local export-audit events can be reset individually only after a non-empty, locally retained operator note; the reset clears the selected attempt count and failure diagnostic, excludes the note from account ledger payloads, and leaves other queue entries unchanged.
 - [x] R2.0bw Metadata-only audit CSV: Workspace can copy the active, bounded export-history view as CSV with action, format, privacy mode, retention flags, scope, count, timestamp and sync status only; export IDs, evidence content and operator notes are excluded.
+- [x] R2.0bx Capped-event retention controls: Workspace persists a strict 10/25/50 capped-local-event retention choice, trims only retry-limit-reached events during hydration and queue writes, and always preserves recoverable pending events.
 ## Existing boundaries
 - eBay account-deletion delivery does not establish Browse search or listing-stream permissions.
 - GitHub source synchronization, hosted CI, database migration, checkpoints, UI deployment and provider access are separate gates.

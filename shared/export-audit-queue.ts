@@ -3,6 +3,12 @@ import type { EvidenceExportAuditRecord } from "./export-audits";
 export const EVIDENCE_EXPORT_AUDIT_QUEUE_STORAGE_KEY = "top-cherry.evidence-export-audit-queue.v1";
 export const MAX_EVIDENCE_EXPORT_AUDIT_ATTEMPTS = 99;
 export const EVIDENCE_EXPORT_AUDIT_RETRY_LIMIT = 3;
+export const EVIDENCE_EXPORT_AUDIT_RETENTION_OPTIONS = [10, 25, 50] as const;
+export type EvidenceExportAuditRetention = (typeof EVIDENCE_EXPORT_AUDIT_RETENTION_OPTIONS)[number];
+
+export function parseEvidenceExportAuditRetention(value: unknown): EvidenceExportAuditRetention {
+  return value === 10 || value === 25 || value === 50 ? value : 25;
+}
 
 export type PendingEvidenceExportAudit = EvidenceExportAuditRecord & {
   attemptCount: number;
@@ -45,6 +51,12 @@ export function resetEvidenceExportAuditRetry(existing: readonly PendingEvidence
     const { syncError: _syncError, ...withoutSyncError } = item;
     return { ...withoutSyncError, attemptCount: 0, retryResetNote: normalizedNote, lastAttemptAt: resetAt };
   });
+}
+
+export function trimCappedEvidenceExportAudits(existing: readonly PendingEvidenceExportAudit[], maxCapped: EvidenceExportAuditRetention): PendingEvidenceExportAudit[] {
+  const capped = existing.filter((item) => isEvidenceExportAuditRetryLimitReached(item.attemptCount)).sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
+  const retainedIds = new Set(capped.slice(0, maxCapped).map((item) => item.exportId));
+  return existing.filter((item) => !isEvidenceExportAuditRetryLimitReached(item.attemptCount) || retainedIds.has(item.exportId));
 }
 
 function isPendingEvidenceExportAudit(value: unknown): value is PendingEvidenceExportAudit {
