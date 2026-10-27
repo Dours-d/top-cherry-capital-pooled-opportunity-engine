@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildEvidenceExportAudit } from "../shared/export-audits";
-import { EVIDENCE_EXPORT_AUDIT_RETRY_LIMIT, isEvidenceExportAuditRetryLimitReached, parsePendingEvidenceExportAudits, queueEvidenceExportAudit, resolveEvidenceExportAudit } from "../shared/export-audit-queue";
+import { EVIDENCE_EXPORT_AUDIT_RETRY_LIMIT, isEvidenceExportAuditRetryLimitReached, parsePendingEvidenceExportAudits, queueEvidenceExportAudit, resetEvidenceExportAuditRetry, resolveEvidenceExportAudit } from "../shared/export-audit-queue";
 
 describe("evidence export audit queue", () => {
   const audit = buildEvidenceExportAudit({ action: "shared", format: "json", privacyMode: "redacted", keepTitles: false, keepContext: false, scopeLabel: "All groups", eventCount: 2, occurredAt: "2026-10-26T14:00:00.000Z" });
@@ -34,5 +34,15 @@ describe("evidence export audit queue", () => {
     expect(isEvidenceExportAuditRetryLimitReached(EVIDENCE_EXPORT_AUDIT_RETRY_LIMIT)).toBe(true);
     const finalRetry = { ...audit, attemptCount: EVIDENCE_EXPORT_AUDIT_RETRY_LIMIT - 1 };
     expect(resolveEvidenceExportAudit([finalRetry], audit.exportId, { ok: false, error: "offline" }, "2026-10-26T14:05:00.000Z")[0].attemptCount).toBe(EVIDENCE_EXPORT_AUDIT_RETRY_LIMIT);
+  });
+
+  it("requires a note and resets only the selected local event", () => {
+    const capped = { ...audit, attemptCount: EVIDENCE_EXPORT_AUDIT_RETRY_LIMIT, syncError: "offline" };
+    const other = { ...audit, exportId: "other", attemptCount: 1 };
+    expect(resetEvidenceExportAuditRetry([capped], audit.exportId, "   ", "2026-10-26T14:06:00.000Z")).toEqual([capped]);
+    const reset = resetEvidenceExportAuditRetry([capped, other], audit.exportId, "Investigate provider outage", "2026-10-26T14:06:00.000Z");
+    expect(reset[0]).toMatchObject({ exportId: audit.exportId, attemptCount: 0, retryResetNote: "Investigate provider outage", lastAttemptAt: "2026-10-26T14:06:00.000Z" });
+    expect(reset[0]).not.toHaveProperty("syncError");
+    expect(reset[1]).toEqual(other);
   });
 });
