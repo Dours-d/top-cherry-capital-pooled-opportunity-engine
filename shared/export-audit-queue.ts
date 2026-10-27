@@ -7,6 +7,7 @@ export const MAX_EVIDENCE_EXPORT_AUDIT_RESET_HISTORY = 5;
 export const MAX_EVIDENCE_EXPORT_AUDIT_RETENTION_HISTORY = 5;
 export const EVIDENCE_EXPORT_AUDIT_RETENTION_OPTIONS = [10, 25, 50] as const;
 export const EVIDENCE_EXPORT_AUDIT_QUEUE_SOFT_BUDGET = 40000;
+export const EVIDENCE_EXPORT_AUDIT_MAINTENANCE_STORAGE_KEY = "top-cherry.evidence-export-audit-maintenance.v1";
 export type EvidenceExportAuditRetention = (typeof EVIDENCE_EXPORT_AUDIT_RETENTION_OPTIONS)[number];
 
 export function parseEvidenceExportAuditRetention(value: unknown): EvidenceExportAuditRetention {
@@ -23,6 +24,19 @@ export type PendingEvidenceExportAudit = EvidenceExportAuditRecord & {
 
 export type EvidenceExportAuditResetHistoryEntry = { note: string; occurredAt: string };
 export type EvidenceExportAuditRetentionChange = { from: EvidenceExportAuditRetention; to: EvidenceExportAuditRetention; removedCount: number; occurredAt: string };
+export type EvidenceExportAuditMaintenance = { action: "compacted" | "reset-notes-cleared"; removedCount: number; occurredAt: string };
+
+export function parseEvidenceExportAuditMaintenance(raw: string | null): EvidenceExportAuditMaintenance | null {
+  if (!raw) return null;
+  try {
+    const value: unknown = JSON.parse(raw);
+    if (!value || typeof value !== "object") return null;
+    const item = value as Record<string, unknown>;
+    return (item.action === "compacted" || item.action === "reset-notes-cleared") && typeof item.removedCount === "number" && Number.isInteger(item.removedCount) && item.removedCount >= 0 && typeof item.occurredAt === "string" ? { action: item.action, removedCount: item.removedCount, occurredAt: item.occurredAt } : null;
+  } catch {
+    return null;
+  }
+}
 
 export function parseEvidenceExportAuditRetentionHistory(value: unknown): EvidenceExportAuditRetentionChange[] {
   if (!Array.isArray(value)) return [];

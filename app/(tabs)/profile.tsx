@@ -22,7 +22,7 @@ import { CHARACTERISTIC_CHECK_AUDIT_QUEUE_STORAGE_KEY, enqueueCharacteristicChec
 import { filterProviderRetryResetsByGroup, getProviderRetryResetGroup, parsePendingProviderRetryResets, PROVIDER_RETRY_RESET_PENDING_KEY, type PendingProviderRetryReset } from "@/shared/provider-retry-resets";
 import { buildEvidenceFilename, buildEvidencePackage, redactEvidencePackage, renderEvidencePackageMarkdown } from "@/shared/evidence-package";
 import { buildEvidenceExportAudit, filterEvidenceExportAuditsByWindow, recentEvidenceExportAudits, renderEvidenceExportAuditCsv, type EvidenceExportAuditWindow } from "@/shared/export-audits";
-import { appendEvidenceExportAuditRetentionHistory, clearEvidenceExportAuditResetHistory, countCappedEvidenceExportAuditsToTrim, countEvidenceExportAuditResetNotes, EVIDENCE_EXPORT_AUDIT_QUEUE_STORAGE_KEY, EVIDENCE_EXPORT_AUDIT_RETENTION_OPTIONS, isEvidenceExportAuditRetryLimitReached, parseEvidenceExportAuditRetention, parseEvidenceExportAuditRetentionHistory, parsePendingEvidenceExportAudits, queueEvidenceExportAudit, renderEvidenceExportAuditRetentionHistoryCsv, resetEvidenceExportAuditRetry, resolveEvidenceExportAudit, summarizeEvidenceExportAuditQueue, trimCappedEvidenceExportAudits, type EvidenceExportAuditRetention, type EvidenceExportAuditRetentionChange, type PendingEvidenceExportAudit } from "@/shared/export-audit-queue";
+import { appendEvidenceExportAuditRetentionHistory, clearEvidenceExportAuditResetHistory, countCappedEvidenceExportAuditsToTrim, countEvidenceExportAuditResetNotes, EVIDENCE_EXPORT_AUDIT_MAINTENANCE_STORAGE_KEY, EVIDENCE_EXPORT_AUDIT_QUEUE_STORAGE_KEY, EVIDENCE_EXPORT_AUDIT_RETENTION_OPTIONS, isEvidenceExportAuditRetryLimitReached, parseEvidenceExportAuditMaintenance, parseEvidenceExportAuditRetention, parseEvidenceExportAuditRetentionHistory, parsePendingEvidenceExportAudits, queueEvidenceExportAudit, renderEvidenceExportAuditRetentionHistoryCsv, resetEvidenceExportAuditRetry, resolveEvidenceExportAudit, summarizeEvidenceExportAuditQueue, trimCappedEvidenceExportAudits, type EvidenceExportAuditMaintenance, type EvidenceExportAuditRetention, type EvidenceExportAuditRetentionChange, type PendingEvidenceExportAudit } from "@/shared/export-audit-queue";
 
 const EBAY_READINESS_KEY = "topCherry.ebayReadiness";
 const OBSERVATION_REVIEW_STORAGE_KEY = "topCherry.observationReviews";
@@ -524,6 +524,7 @@ function ProviderRetryResetSummary({ colors, authenticated, audits, pending, lis
   const [retryResetNote, setRetryResetNote] = useState("");
   const [cappedExportAuditRetention, setCappedExportAuditRetention] = useState<EvidenceExportAuditRetention>(25);
   const [retentionChangeHistory, setRetentionChangeHistory] = useState<EvidenceExportAuditRetentionChange[]>([]);
+  const [lastQueueMaintenance, setLastQueueMaintenance] = useState<EvidenceExportAuditMaintenance | null>(null);
   const pendingExportAuditIds = new Set(pendingExportAudits.map((audit) => audit.exportId));
   const [exportAuditFilter, setExportAuditFilter] = useState<"all" | "account-synced" | "pending-local">("all");
   const [exportAuditWindow, setExportAuditWindow] = useState<EvidenceExportAuditWindow>("all");
@@ -538,11 +539,12 @@ function ProviderRetryResetSummary({ colors, authenticated, audits, pending, lis
   const filteredExportAudits = exportAuditFilter === "all" ? windowedExportAudits : windowedExportAudits.filter((audit) => exportAuditFilter === "pending-local" ? pendingExportAuditIds.has(audit.exportId) : !pendingExportAuditIds.has(audit.exportId));
   const recentExportAudits = recentEvidenceExportAudits(filteredExportAudits);
   useEffect(() => {
-    void Promise.all([AsyncStorage.getItem(EVIDENCE_EXPORT_AUDIT_QUEUE_STORAGE_KEY), AsyncStorage.getItem(EVIDENCE_EXPORT_AUDIT_RETENTION_KEY), AsyncStorage.getItem(EVIDENCE_EXPORT_AUDIT_RETENTION_HISTORY_KEY)]).then(([rawQueue, rawRetention, rawRetentionHistory]) => {
+    void Promise.all([AsyncStorage.getItem(EVIDENCE_EXPORT_AUDIT_QUEUE_STORAGE_KEY), AsyncStorage.getItem(EVIDENCE_EXPORT_AUDIT_RETENTION_KEY), AsyncStorage.getItem(EVIDENCE_EXPORT_AUDIT_RETENTION_HISTORY_KEY), AsyncStorage.getItem(EVIDENCE_EXPORT_AUDIT_MAINTENANCE_STORAGE_KEY)]).then(([rawQueue, rawRetention, rawRetentionHistory, rawMaintenance]) => {
       let retention = 25 as EvidenceExportAuditRetention;
       try { retention = parseEvidenceExportAuditRetention(rawRetention ? JSON.parse(rawRetention) : null); } catch { /* Keep the safe default. */ }
       setCappedExportAuditRetention(retention);
       try { setRetentionChangeHistory(parseEvidenceExportAuditRetentionHistory(rawRetentionHistory ? JSON.parse(rawRetentionHistory) : null)); } catch { setRetentionChangeHistory([]); }
+      setLastQueueMaintenance(parseEvidenceExportAuditMaintenance(rawMaintenance));
       setPendingExportAudits(trimCappedEvidenceExportAudits(parsePendingEvidenceExportAudits(rawQueue), retention));
     }).catch(() => setPendingExportAudits([]));
   }, []);
@@ -600,18 +602,23 @@ function ProviderRetryResetSummary({ colors, authenticated, audits, pending, lis
       Alert.alert("Copy unavailable", "The local retention-history CSV could not be copied; local history remains unchanged.");
     }
   };
+  const recordQueueMaintenance = (action: EvidenceExportAuditMaintenance["action"], removedCount: number) => {
+    const maintenance: EvidenceExportAuditMaintenance = { action, removedCount, occurredAt: new Date().toISOString() };
+    setLastQueueMaintenance(maintenance);
+    void AsyncStorage.setItem(EVIDENCE_EXPORT_AUDIT_MAINTENANCE_STORAGE_KEY, JSON.stringify(maintenance)).catch(() => undefined);
+  };
   const clearLocalResetNotes = () => {
     if (!localResetNoteCount) return;
     Alert.alert("Clear local reset notes?", `This removes ${localResetNoteCount} local reset-note entr${localResetNoteCount === 1 ? "y" : "ies"} and timeline entries. Retry attempts, queued audits, retention settings, account events and evidence remain unchanged.`, [
       { text: "Cancel", style: "cancel" },
-      { text: "Clear notes", style: "destructive", onPress: () => { const cleared = clearEvidenceExportAuditResetHistory(pendingExportAudits); setPendingExportAudits(cleared); void AsyncStorage.setItem(EVIDENCE_EXPORT_AUDIT_QUEUE_STORAGE_KEY, JSON.stringify(cleared)).catch(() => undefined); } },
+      { text: "Clear notes", style: "destructive", onPress: () => { const cleared = clearEvidenceExportAuditResetHistory(pendingExportAudits); setPendingExportAudits(cleared); void AsyncStorage.setItem(EVIDENCE_EXPORT_AUDIT_QUEUE_STORAGE_KEY, JSON.stringify(cleared)).catch(() => undefined); recordQueueMaintenance("reset-notes-cleared", localResetNoteCount); } },
     ]);
   };
   const compactCappedExportAudits = () => {
     if (!cappedRecordsToCompact) return;
     Alert.alert("Compact capped local audits?", `${cappedRecordsToCompact} retry-limit-reached event${cappedRecordsToCompact === 1 ? "" : "s"} older than the current ${cappedExportAuditRetention}-event retention will be removed. Recoverable events will remain.`, [
       { text: "Cancel", style: "cancel" },
-      { text: "Compact queue", style: "destructive", onPress: () => persistPendingExportAudits(trimCappedEvidenceExportAudits(pendingExportAudits, cappedExportAuditRetention)) },
+      { text: "Compact queue", style: "destructive", onPress: () => { persistPendingExportAudits(trimCappedEvidenceExportAudits(pendingExportAudits, cappedExportAuditRetention)); recordQueueMaintenance("compacted", cappedRecordsToCompact); } },
     ]);
   };
   const retryPendingExportAudits = async () => {
@@ -781,6 +788,7 @@ function ProviderRetryResetSummary({ colors, authenticated, audits, pending, lis
       <View style={styles.exportPrivacyRow}><View style={styles.settingCopy}><Text style={[styles.settingDescription, { color: colors.foreground }]}>Keep listing titles</Text><Text style={[styles.dataNote, { color: colors.muted }]}>Titles can help recognize the research subject.</Text></View><Switch value={exportPrivacyPreferences.keepTitles} onValueChange={toggleExportTitles} trackColor={{ false: colors.border, true: colors.primary }} thumbColor={exportPrivacyPreferences.keepTitles ? colors.onPrimary : colors.muted} /></View>
       <View style={styles.exportPrivacyRow}><View style={styles.settingCopy}><Text style={[styles.settingDescription, { color: colors.foreground }]}>Keep marketplace/profile context</Text><Text style={[styles.dataNote, { color: colors.muted }]}>Context can reveal the market lens used.</Text></View><Switch value={exportPrivacyPreferences.keepContext} onValueChange={toggleExportContext} trackColor={{ false: colors.border, true: colors.primary }} thumbColor={exportPrivacyPreferences.keepContext ? colors.onPrimary : colors.muted} /></View>
       <Text style={[styles.dataNote, { color: colors.muted }]}>Listing IDs, snapshot IDs, item IDs, seller identifiers and operator notes are always redacted in privacy mode. This preference changes export content only; it does not alter stored audits or observations.</Text><Text style={[styles.settingDescription, { color: colors.foreground, marginTop: 8 }]}>Capped local audit retention</Text><Text style={[styles.dataNote, { color: colors.muted }]}>Only events at the retry limit can be trimmed. Recoverable queued events are always retained.</Text><View style={styles.filterRow}>{EVIDENCE_EXPORT_AUDIT_RETENTION_OPTIONS.map((retention) => <Pressable key={retention} onPress={() => changeCappedExportAuditRetention(retention)} accessibilityRole="button" accessibilityLabel={`Retain up to ${retention} capped local export audits`} style={({ pressed }) => [styles.filterChip, { backgroundColor: cappedExportAuditRetention === retention ? colors.primary : colors.background, borderColor: colors.border }, pressed && styles.pressed]}><Text style={[styles.filterChipText, { color: cappedExportAuditRetention === retention ? colors.onPrimary : colors.muted }]}>{retention} capped</Text></Pressable>)}</View>
+      {lastQueueMaintenance ? <Text style={[styles.dataNote, { color: colors.muted }]}>{lastQueueMaintenance.action === "compacted" ? "Last local maintenance: queue compacted" : "Last local maintenance: reset notes cleared"} · {lastQueueMaintenance.removedCount} local entr{lastQueueMaintenance.removedCount === 1 ? "y" : "ies"} · {new Date(lastQueueMaintenance.occurredAt).toLocaleString()}. No removed IDs, evidence or notes are retained.</Text> : null}
       {cappedRecordsToCompact ? <Pressable onPress={compactCappedExportAudits} accessibilityRole="button" accessibilityLabel="Compact older capped local export audits" style={({ pressed }) => [styles.reviewButton, { borderColor: colors.warning, alignSelf: "flex-start", marginTop: 5 }, pressed && styles.pressed]}><Text style={[styles.reviewButtonText, { color: colors.warning }]}>Compact {cappedRecordsToCompact} older capped audit{cappedRecordsToCompact === 1 ? "" : "s"}</Text></Pressable> : null}
       {retentionChangeHistory.length ? <View><Text style={[styles.settingDescription, { color: colors.foreground, marginTop: 8 }]}>Local retention changes</Text>{retentionChangeHistory.map((change) => <Text key={`${change.occurredAt}-${change.from}-${change.to}`} style={[styles.dataNote, { color: colors.muted }]} numberOfLines={2}>{new Date(change.occurredAt).toLocaleString()} · {change.from} → {change.to} capped · {change.removedCount} removed</Text>)}<View style={styles.clearActionRow}><Pressable onPress={() => void copyRetentionChangeHistoryCsv()} accessibilityRole="button" accessibilityLabel="Copy local retention history CSV" style={({ pressed }) => [styles.reviewButton, { borderColor: colors.border, marginLeft: 0 }, pressed && styles.pressed]}><Text style={[styles.reviewButtonText, { color: colors.muted }]}>Copy CSV</Text></Pressable><Pressable onPress={clearRetentionChangeHistory} accessibilityRole="button" accessibilityLabel="Clear local retention change history" style={({ pressed }) => [styles.reviewButton, { borderColor: colors.border }, pressed && styles.pressed]}><Text style={[styles.reviewButtonText, { color: colors.muted }]}>Clear history</Text></Pressable></View></View> : null}
       {localResetNoteCount ? <Pressable onPress={clearLocalResetNotes} accessibilityRole="button" accessibilityLabel="Clear local reset notes" style={({ pressed }) => [styles.reviewButton, { borderColor: colors.border, alignSelf: "flex-start", marginTop: 5 }, pressed && styles.pressed]}><Text style={[styles.reviewButtonText, { color: colors.muted }]}>Clear local reset notes</Text></Pressable> : null}
