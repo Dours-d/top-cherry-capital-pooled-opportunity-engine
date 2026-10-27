@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildEvidenceExportAudit } from "../shared/export-audits";
-import { appendEvidenceExportAuditRetentionHistory, countCappedEvidenceExportAuditsToTrim, EVIDENCE_EXPORT_AUDIT_QUEUE_SOFT_BUDGET, EVIDENCE_EXPORT_AUDIT_RETRY_LIMIT, isEvidenceExportAuditRetryLimitReached, parseEvidenceExportAuditRetention, parseEvidenceExportAuditRetentionHistory, parsePendingEvidenceExportAudits, queueEvidenceExportAudit, resetEvidenceExportAuditRetry, resolveEvidenceExportAudit, summarizeEvidenceExportAuditQueue, trimCappedEvidenceExportAudits, type EvidenceExportAuditRetentionChange, type PendingEvidenceExportAudit } from "../shared/export-audit-queue";
+import { appendEvidenceExportAuditRetentionHistory, countCappedEvidenceExportAuditsToTrim, EVIDENCE_EXPORT_AUDIT_QUEUE_SOFT_BUDGET, EVIDENCE_EXPORT_AUDIT_RETRY_LIMIT, isEvidenceExportAuditRetryLimitReached, parseEvidenceExportAuditRetention, parseEvidenceExportAuditRetentionHistory, parsePendingEvidenceExportAudits, queueEvidenceExportAudit, renderEvidenceExportAuditRetentionHistoryCsv, resetEvidenceExportAuditRetry, resolveEvidenceExportAudit, summarizeEvidenceExportAuditQueue, trimCappedEvidenceExportAudits, type EvidenceExportAuditRetentionChange, type PendingEvidenceExportAudit } from "../shared/export-audit-queue";
 
 describe("evidence export audit queue", () => {
   const audit = buildEvidenceExportAudit({ action: "shared", format: "json", privacyMode: "redacted", keepTitles: false, keepContext: false, scopeLabel: "All groups", eventCount: 2, occurredAt: "2026-10-26T14:00:00.000Z" });
@@ -91,5 +91,12 @@ describe("evidence export audit queue", () => {
     expect(history).toHaveLength(5);
     expect(history[0].removedCount).toBe(5);
     expect(parseEvidenceExportAuditRetentionHistory([...history, { from: 5, to: 10, removedCount: 0, occurredAt: "bad" }])).toEqual(history);
+  });
+
+  it("renders local retention history as a metadata-only CSV", () => {
+    const csv = renderEvidenceExportAuditRetentionHistoryCsv([{ from: 25, to: 10, removedCount: 2, occurredAt: "2026-10-27T10:00:00.000Z" }]);
+    expect(csv).toBe("from_capped_limit,to_capped_limit,removed_count,occurred_at\n\"25\",\"10\",\"2\",\"2026-10-27T10:00:00.000Z\"");
+    expect(csv).not.toContain("exportId");
+    expect(csv).not.toContain("note");
   });
 });

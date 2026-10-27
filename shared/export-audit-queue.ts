@@ -33,6 +33,11 @@ export function appendEvidenceExportAuditRetentionHistory(existing: readonly Evi
   return [entry, ...existing].slice(0, MAX_EVIDENCE_EXPORT_AUDIT_RETENTION_HISTORY);
 }
 
+export function renderEvidenceExportAuditRetentionHistoryCsv(history: readonly EvidenceExportAuditRetentionChange[]) {
+  const escape = (value: string | number) => `"${String(value).replaceAll('"', '""')}"`;
+  return ["from_capped_limit,to_capped_limit,removed_count,occurred_at", ...history.map((change) => [change.from, change.to, change.removedCount, change.occurredAt].map(escape).join(","))].join("\n");
+}
+
 function isEvidenceExportAuditRetentionChange(value: unknown): value is EvidenceExportAuditRetentionChange {
   if (!value || typeof value !== "object") return false;
   const entry = value as Record<string, unknown>;
