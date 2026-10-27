@@ -81,6 +81,14 @@ export function resetEvidenceExportAuditRetry(existing: readonly PendingEvidence
   });
 }
 
+export function countEvidenceExportAuditResetNotes(existing: readonly PendingEvidenceExportAudit[]) {
+  return existing.reduce((count, item) => count + (item.retryResetHistory?.length ?? (item.retryResetNote ? 1 : 0)), 0);
+}
+
+export function clearEvidenceExportAuditResetHistory(existing: readonly PendingEvidenceExportAudit[]): PendingEvidenceExportAudit[] {
+  return existing.map(({ retryResetNote: _retryResetNote, retryResetHistory: _retryResetHistory, ...item }) => item);
+}
+
 export function trimCappedEvidenceExportAudits(existing: readonly PendingEvidenceExportAudit[], maxCapped: EvidenceExportAuditRetention): PendingEvidenceExportAudit[] {
   const capped = existing.filter((item) => isEvidenceExportAuditRetryLimitReached(item.attemptCount)).sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
   const retainedIds = new Set(capped.slice(0, maxCapped).map((item) => item.exportId));

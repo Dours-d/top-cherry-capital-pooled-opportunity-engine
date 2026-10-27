@@ -169,6 +169,7 @@ R2 full real-data ingestion, R3 response estimation, R4 network feedback and R5 
 - [x] R2.0cc Local queue soft-budget warning: Workspace marks the queue as approaching or exceeding an explicit 40,000-character product soft budget, recommends retention reduction or sync retry, and clearly states that this is not a device storage quota.
 - [x] R2.0cd Retention-history clear action: Workspace can clear only the local retention-change timeline after explicit confirmation; queued export audits, account ledger events, privacy preferences and evidence remain unchanged.
 - [x] R2.0ce Local retention-history export: Workspace can copy a local-only CSV containing only old/new capped limits, removal counts and timestamps; export IDs, evidence, operator notes, account data and sync behavior are excluded.
+- [x] R2.0cf Reset-note history clear: Workspace can confirmation-gate removal of local retry-reset notes and timelines while preserving attempts, queued export audits, retention settings, account events and evidence; the transition is covered by pure queue tests.
 ## Existing boundaries
 - eBay account-deletion delivery does not establish Browse search or listing-stream permissions.
 - GitHub source synchronization, hosted CI, database migration, checkpoints, UI deployment and provider access are separate gates.
