@@ -3,6 +3,7 @@ import type { EvidenceExportAuditRecord } from "./export-audits";
 export const EVIDENCE_EXPORT_AUDIT_QUEUE_STORAGE_KEY = "top-cherry.evidence-export-audit-queue.v1";
 export const MAX_EVIDENCE_EXPORT_AUDIT_ATTEMPTS = 99;
 export const EVIDENCE_EXPORT_AUDIT_RETRY_LIMIT = 3;
+export const MAX_EVIDENCE_EXPORT_AUDIT_RESET_HISTORY = 5;
 export const EVIDENCE_EXPORT_AUDIT_RETENTION_OPTIONS = [10, 25, 50] as const;
 export type EvidenceExportAuditRetention = (typeof EVIDENCE_EXPORT_AUDIT_RETENTION_OPTIONS)[number];
 
@@ -15,7 +16,10 @@ export type PendingEvidenceExportAudit = EvidenceExportAuditRecord & {
   syncError?: string;
   lastAttemptAt?: string;
   retryResetNote?: string;
+  retryResetHistory?: EvidenceExportAuditResetHistoryEntry[];
 };
+
+export type EvidenceExportAuditResetHistoryEntry = { note: string; occurredAt: string };
 
 export function parsePendingEvidenceExportAudits(raw: string | null): PendingEvidenceExportAudit[] {
   if (!raw) return [];
@@ -49,7 +53,8 @@ export function resetEvidenceExportAuditRetry(existing: readonly PendingEvidence
   return existing.map((item) => {
     if (item.exportId !== exportId) return item;
     const { syncError: _syncError, ...withoutSyncError } = item;
-    return { ...withoutSyncError, attemptCount: 0, retryResetNote: normalizedNote, lastAttemptAt: resetAt };
+    const retryResetHistory = [...(item.retryResetHistory ?? []), { note: normalizedNote, occurredAt: resetAt }].slice(-MAX_EVIDENCE_EXPORT_AUDIT_RESET_HISTORY);
+    return { ...withoutSyncError, attemptCount: 0, retryResetNote: normalizedNote, retryResetHistory, lastAttemptAt: resetAt };
   });
 }
 
@@ -66,7 +71,7 @@ export function countCappedEvidenceExportAuditsToTrim(existing: readonly Pending
 function isPendingEvidenceExportAudit(value: unknown): value is PendingEvidenceExportAudit {
   if (!value || typeof value !== "object") return false;
   const item = value as Partial<PendingEvidenceExportAudit>;
-  return typeof item.exportId === "string" && (item.action === "copied" || item.action === "shared") && (item.format === "json" || item.format === "markdown") && (item.privacyMode === "redacted" || item.privacyMode === "full") && typeof item.keepTitles === "boolean" && typeof item.keepContext === "boolean" && typeof item.scopeLabel === "string" && typeof item.eventCount === "number" && Number.isInteger(item.eventCount) && item.eventCount >= 0 && (item.attemptCount === undefined || (typeof item.attemptCount === "number" && Number.isInteger(item.attemptCount) && item.attemptCount >= 0 && item.attemptCount <= MAX_EVIDENCE_EXPORT_AUDIT_ATTEMPTS)) && (item.retryResetNote === undefined || (typeof item.retryResetNote === "string" && item.retryResetNote.length <= 240)) && typeof item.occurredAt === "string";
+  return typeof item.exportId === "string" && (item.action === "copied" || item.action === "shared") && (item.format === "json" || item.format === "markdown") && (item.privacyMode === "redacted" || item.privacyMode === "full") && typeof item.keepTitles === "boolean" && typeof item.keepContext === "boolean" && typeof item.scopeLabel === "string" && typeof item.eventCount === "number" && Number.isInteger(item.eventCount) && item.eventCount >= 0 && (item.attemptCount === undefined || (typeof item.attemptCount === "number" && Number.isInteger(item.attemptCount) && item.attemptCount >= 0 && item.attemptCount <= MAX_EVIDENCE_EXPORT_AUDIT_ATTEMPTS)) && (item.retryResetNote === undefined || (typeof item.retryResetNote === "string" && item.retryResetNote.length <= 240)) && (item.retryResetHistory === undefined || (Array.isArray(item.retryResetHistory) && item.retryResetHistory.length <= MAX_EVIDENCE_EXPORT_AUDIT_RESET_HISTORY && item.retryResetHistory.every((entry) => Boolean(entry) && typeof entry === "object" && typeof entry.note === "string" && entry.note.length <= 240 && typeof entry.occurredAt === "string"))) && typeof item.occurredAt === "string";
 }
 
 function normalizeAttemptCount(value: number | undefined) {

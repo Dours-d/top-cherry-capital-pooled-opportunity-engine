@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildEvidenceExportAudit } from "../shared/export-audits";
-import { countCappedEvidenceExportAuditsToTrim, EVIDENCE_EXPORT_AUDIT_RETRY_LIMIT, isEvidenceExportAuditRetryLimitReached, parseEvidenceExportAuditRetention, parsePendingEvidenceExportAudits, queueEvidenceExportAudit, resetEvidenceExportAuditRetry, resolveEvidenceExportAudit, trimCappedEvidenceExportAudits } from "../shared/export-audit-queue";
+import { countCappedEvidenceExportAuditsToTrim, EVIDENCE_EXPORT_AUDIT_RETRY_LIMIT, isEvidenceExportAuditRetryLimitReached, parseEvidenceExportAuditRetention, parsePendingEvidenceExportAudits, queueEvidenceExportAudit, resetEvidenceExportAuditRetry, resolveEvidenceExportAudit, trimCappedEvidenceExportAudits, type PendingEvidenceExportAudit } from "../shared/export-audit-queue";
 
 describe("evidence export audit queue", () => {
   const audit = buildEvidenceExportAudit({ action: "shared", format: "json", privacyMode: "redacted", keepTitles: false, keepContext: false, scopeLabel: "All groups", eventCount: 2, occurredAt: "2026-10-26T14:00:00.000Z" });
@@ -41,9 +41,13 @@ describe("evidence export audit queue", () => {
     const other = { ...audit, exportId: "other", attemptCount: 1 };
     expect(resetEvidenceExportAuditRetry([capped], audit.exportId, "   ", "2026-10-26T14:06:00.000Z")).toEqual([capped]);
     const reset = resetEvidenceExportAuditRetry([capped, other], audit.exportId, "Investigate provider outage", "2026-10-26T14:06:00.000Z");
-    expect(reset[0]).toMatchObject({ exportId: audit.exportId, attemptCount: 0, retryResetNote: "Investigate provider outage", lastAttemptAt: "2026-10-26T14:06:00.000Z" });
+    expect(reset[0]).toMatchObject({ exportId: audit.exportId, attemptCount: 0, retryResetNote: "Investigate provider outage", lastAttemptAt: "2026-10-26T14:06:00.000Z", retryResetHistory: [{ note: "Investigate provider outage", occurredAt: "2026-10-26T14:06:00.000Z" }] });
     expect(reset[0]).not.toHaveProperty("syncError");
     expect(reset[1]).toEqual(other);
+    let withHistory: PendingEvidenceExportAudit[] = [{ ...capped, attemptCount: EVIDENCE_EXPORT_AUDIT_RETRY_LIMIT }];
+    for (let index = 0; index < 6; index += 1) withHistory = resetEvidenceExportAuditRetry(withHistory, audit.exportId, `note-${index}`, `2026-10-26T14:0${index}:00.000Z`);
+    expect(withHistory[0].retryResetHistory).toHaveLength(5);
+    expect(withHistory[0].retryResetHistory?.[0].note).toBe("note-1");
   });
 
   it("retains recoverable events and trims only the oldest capped events", () => {
