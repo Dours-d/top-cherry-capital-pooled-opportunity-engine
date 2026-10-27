@@ -155,6 +155,7 @@ R2 full real-data ingestion, R3 response estimation, R4 network feedback and R5 
 - [x] R2.0bo Focused-history export parity: snapshot history now opens redacted-by-default JSON/Markdown previews, supports explicit identifier reveal plus copy/share, and appends the same bounded export-audit metadata to the shared local/account queue without exporting valuation, execution, custody or pooled-fund fields.
 - [x] R2.0bp Pending export visibility: Workspace recent export activity now merges queued focused-history events with account history, deduplicates by export ID, and labels each item Pending local or Account synced without revealing exported content or provider identifiers.
 - [x] R2.0bq Export activity status filter: Workspace export history now provides All, Synced and Pending filters with counts, applies the five-event cap after filtering, and keeps privacy-safe action/scope metadata as the only displayed history fields.
+- [x] R2.0br Per-event export retry: pending Workspace export-audit rows now expose a single-event Retry this audit action; successful retries remove only that queue entry, while failures preserve its bounded diagnostic metadata and leave other queued events untouched.
 ## Existing boundaries
 - eBay account-deletion delivery does not establish Browse search or listing-stream permissions.
 - GitHub source synchronization, hosted CI, database migration, checkpoints, UI deployment and provider access are separate gates.
