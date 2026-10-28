@@ -29,7 +29,7 @@ export type EvidenceExportAuditResetHistoryEntry = { note: string; occurredAt: s
 export type EvidenceExportAuditRetentionChange = { from: EvidenceExportAuditRetention; to: EvidenceExportAuditRetention; removedCount: number; occurredAt: string };
 export type EvidenceExportAuditMaintenance = { action: "compacted" | "reset-notes-cleared"; removedCount: number; occurredAt: string };
 export type EvidenceExportAuditIntegrity = { status: "verified" | "review-needed"; checkedAt: string };
-export type EvidenceExportAuditSyncHealth = { lastSuccessfulAt?: string; lastFailedAt?: string };
+export type EvidenceExportAuditSyncHealth = { lastSuccessfulAt?: string; lastFailedAt?: string; successfulDays?: Record<string, number> };
 
 export function checksumEvidenceExportAuditQueue(serialized: string): string {
   let hash = 2166136261;
@@ -60,10 +60,19 @@ export function parseEvidenceExportAuditSyncHealth(raw: string | null): Evidence
     const item = value as Record<string, unknown>;
     const lastSuccessfulAt = typeof item.lastSuccessfulAt === "string" && !Number.isNaN(Date.parse(item.lastSuccessfulAt)) ? item.lastSuccessfulAt : undefined;
     const lastFailedAt = typeof item.lastFailedAt === "string" && !Number.isNaN(Date.parse(item.lastFailedAt)) ? item.lastFailedAt : undefined;
-    return lastSuccessfulAt || lastFailedAt ? { ...(lastSuccessfulAt ? { lastSuccessfulAt } : {}), ...(lastFailedAt ? { lastFailedAt } : {}) } : null;
+    const rawDays = item.successfulDays;
+    const successfulDays = rawDays && typeof rawDays === "object" && !Array.isArray(rawDays) ? Object.fromEntries(Object.entries(rawDays).filter(([day, count]) => /^\d{4}-\d{2}-\d{2}$/.test(day) && typeof count === "number" && Number.isInteger(count) && count >= 1 && count <= 999).sort(([a], [b]) => b.localeCompare(a)).slice(0, 7)) as Record<string, number> : undefined;
+    return lastSuccessfulAt || lastFailedAt || successfulDays && Object.keys(successfulDays).length ? { ...(lastSuccessfulAt ? { lastSuccessfulAt } : {}), ...(lastFailedAt ? { lastFailedAt } : {}), ...(successfulDays && Object.keys(successfulDays).length ? { successfulDays } : {}) } : null;
   } catch {
     return null;
   }
+}
+
+export function recordEvidenceExportAuditSyncSuccess(health: EvidenceExportAuditSyncHealth | null, occurredAt: string): EvidenceExportAuditSyncHealth {
+  const day = new Date(occurredAt).toISOString().slice(0, 10);
+  const days = { ...(health?.successfulDays ?? {}), [day]: (health?.successfulDays?.[day] ?? 0) + 1 };
+  const successfulDays = Object.fromEntries(Object.entries(days).sort(([a], [b]) => b.localeCompare(a)).slice(0, 7));
+  return { ...(health ?? {}), lastSuccessfulAt: occurredAt, successfulDays };
 }
 
 export function parseEvidenceExportAuditMaintenance(raw: string | null): EvidenceExportAuditMaintenance | null {
