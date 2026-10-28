@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildEvidenceExportAudit } from "../shared/export-audits";
-import { appendEvidenceExportAuditRetentionHistory, checksumEvidenceExportAuditQueue, clearEvidenceExportAuditResetHistory, countCappedEvidenceExportAuditsToTrim, countEvidenceExportAuditResetNotes, EVIDENCE_EXPORT_AUDIT_QUEUE_SOFT_BUDGET, EVIDENCE_EXPORT_AUDIT_RETRY_LIMIT, isEvidenceExportAuditRetryLimitReached, parseEvidenceExportAuditIntegrity, parseEvidenceExportAuditMaintenance, parseEvidenceExportAuditRetention, parseEvidenceExportAuditRetentionHistory, parseEvidenceExportAuditSyncHealth, parsePendingEvidenceExportAudits, queueEvidenceExportAudit, recordEvidenceExportAuditSyncSuccess, renderEvidenceExportAuditRetentionHistoryCsv, resetEvidenceExportAuditRetry, resolveEvidenceExportAudit, summarizeEvidenceExportAuditQueue, trimCappedEvidenceExportAudits, type EvidenceExportAuditRetentionChange, type PendingEvidenceExportAudit } from "../shared/export-audit-queue";
+import { appendEvidenceExportAuditRetentionHistory, checksumEvidenceExportAuditQueue, clearEvidenceExportAuditResetHistory, countCappedEvidenceExportAuditsToTrim, countEvidenceExportAuditResetNotes, EVIDENCE_EXPORT_AUDIT_QUEUE_SOFT_BUDGET, EVIDENCE_EXPORT_AUDIT_RETRY_LIMIT, isEvidenceExportAuditRetryLimitReached, parseEvidenceExportAuditIntegrity, parseEvidenceExportAuditMaintenance, parseEvidenceExportAuditRetention, parseEvidenceExportAuditRetentionHistory, parseEvidenceExportAuditSyncHealth, parsePendingEvidenceExportAudits, queueEvidenceExportAudit, recordEvidenceExportAuditSyncFailure, recordEvidenceExportAuditSyncSuccess, renderEvidenceExportAuditRetentionHistoryCsv, resetEvidenceExportAuditRetry, resolveEvidenceExportAudit, summarizeEvidenceExportAuditQueue, trimCappedEvidenceExportAudits, type EvidenceExportAuditRetentionChange, type PendingEvidenceExportAudit } from "../shared/export-audit-queue";
 
 describe("evidence export audit queue", () => {
   const audit = buildEvidenceExportAudit({ action: "shared", format: "json", privacyMode: "redacted", keepTitles: false, keepContext: false, scopeLabel: "All groups", eventCount: 2, occurredAt: "2026-10-26T14:00:00.000Z" });
@@ -125,7 +125,7 @@ describe("evidence export audit queue", () => {
   });
 
   it("parses only local sync-health timestamps", () => {
-    expect(parseEvidenceExportAuditSyncHealth(JSON.stringify({ lastSuccessfulAt: "2026-10-28T09:00:00.000Z", lastFailedAt: "2026-10-28T09:05:00.000Z", exportId: "secret" }))).toEqual({ lastSuccessfulAt: "2026-10-28T09:00:00.000Z", lastFailedAt: "2026-10-28T09:05:00.000Z" });
+    expect(parseEvidenceExportAuditSyncHealth(JSON.stringify({ lastSuccessfulAt: "2026-10-28T09:00:00.000Z", lastFailedAt: "2026-10-28T09:05:00.000Z", successfulDays: { "2026-10-28": 2 }, failedDays: { "2026-10-28": 1 }, exportId: "secret" }))).toEqual({ lastSuccessfulAt: "2026-10-28T09:00:00.000Z", lastFailedAt: "2026-10-28T09:05:00.000Z", successfulDays: { "2026-10-28": 2 }, failedDays: { "2026-10-28": 1 } });
     expect(parseEvidenceExportAuditSyncHealth(JSON.stringify({ lastSuccessfulAt: "not-a-date" }))).toBeNull();
   });
 
@@ -138,5 +138,16 @@ describe("evidence export audit queue", () => {
     expect(final.successfulDays?.["2026-10-27"]).toBe(1);
     expect(final.successfulDays?.["2026-10-21"]).toBe(1);
     expect(Object.keys(final.successfulDays ?? {})).toHaveLength(7);
+  });
+
+  it("keeps only seven newest daily failure buckets", () => {
+    const first = recordEvidenceExportAuditSyncFailure(null, "2026-10-20T09:00:00.000Z");
+    const sameDay = recordEvidenceExportAuditSyncFailure(first, "2026-10-20T10:00:00.000Z");
+    const withEightDays = recordEvidenceExportAuditSyncFailure(sameDay, "2026-10-21T09:00:00.000Z");
+    const final = [22, 23, 24, 25, 26, 27].reduce((health, day) => recordEvidenceExportAuditSyncFailure(health, `2026-10-${day}T09:00:00.000Z`), withEightDays);
+    expect(final.failedDays?.["2026-10-20"]).toBeUndefined();
+    expect(final.failedDays?.["2026-10-27"]).toBe(1);
+    expect(final.failedDays?.["2026-10-21"]).toBe(1);
+    expect(Object.keys(final.failedDays ?? {})).toHaveLength(7);
   });
 });

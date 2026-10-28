@@ -179,6 +179,7 @@ R2 full real-data ingestion, R3 response estimation, R4 network feedback and R5 
 - [x] R2.0cm Local sync-health indicator: Workspace persists only last successful and last failed account-ledger retry timestamps, displays them with the current pending count, updates them on bulk or single-event retry outcomes, and excludes server diagnostics, queue content and identifiers.
 - [x] R2.0cn Local health refresh: Workspace exposes a user-triggered Refresh local health action that re-reads the checksum and sync metadata, updates the integrity timestamp/status, and leaves queue records, account audits and sync payloads unchanged.
 - [x] R2.0co Daily sync-success history: local sync health now retains only seven newest UTC date buckets with success counts, aggregates repeated successes per day, and displays the bounded summary without event IDs, evidence, server errors or sync payloads.
+- [x] R2.0cp Daily sync-failure history: local sync health now retains only seven newest UTC failure date buckets with counts, aggregates repeated failures per day, and displays the bounded warning summary without error text, event IDs, evidence or sync payloads.
 ## Existing boundaries
 - eBay account-deletion delivery does not establish Browse search or listing-stream permissions.
 - GitHub source synchronization, hosted CI, database migration, checkpoints, UI deployment and provider access are separate gates.
