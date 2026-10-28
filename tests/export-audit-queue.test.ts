@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildEvidenceExportAudit } from "../shared/export-audits";
-import { appendEvidenceExportAuditRetentionHistory, checksumEvidenceExportAuditQueue, clearEvidenceExportAuditResetHistory, countCappedEvidenceExportAuditsToTrim, countEvidenceExportAuditResetNotes, EVIDENCE_EXPORT_AUDIT_QUEUE_SOFT_BUDGET, EVIDENCE_EXPORT_AUDIT_RETRY_LIMIT, isEvidenceExportAuditRetryLimitReached, parseEvidenceExportAuditIntegrity, parseEvidenceExportAuditMaintenance, parseEvidenceExportAuditRetention, parseEvidenceExportAuditRetentionHistory, parseEvidenceExportAuditSyncHealth, parseEvidenceExportAuditSyncHealthClearedAt, parsePendingEvidenceExportAudits, queueEvidenceExportAudit, recordEvidenceExportAuditSyncFailure, recordEvidenceExportAuditSyncSuccess, renderEvidenceExportAuditRetentionHistoryCsv, renderEvidenceExportAuditSyncHealthClearedAtCsv, renderEvidenceExportAuditSyncHealthCsv, resetEvidenceExportAuditRetry, resolveEvidenceExportAudit, summarizeEvidenceExportAuditQueue, trimCappedEvidenceExportAudits, type EvidenceExportAuditRetentionChange, type PendingEvidenceExportAudit } from "../shared/export-audit-queue";
+import { appendEvidenceExportAuditMaintenanceHistory, appendEvidenceExportAuditRetentionHistory, checksumEvidenceExportAuditQueue, clearEvidenceExportAuditResetHistory, countCappedEvidenceExportAuditsToTrim, countEvidenceExportAuditResetNotes, EVIDENCE_EXPORT_AUDIT_QUEUE_SOFT_BUDGET, EVIDENCE_EXPORT_AUDIT_RETRY_LIMIT, isEvidenceExportAuditRetryLimitReached, parseEvidenceExportAuditIntegrity, parseEvidenceExportAuditMaintenance, parseEvidenceExportAuditMaintenanceHistory, parseEvidenceExportAuditRetention, parseEvidenceExportAuditRetentionHistory, parseEvidenceExportAuditSyncHealth, parseEvidenceExportAuditSyncHealthClearedAt, parsePendingEvidenceExportAudits, queueEvidenceExportAudit, recordEvidenceExportAuditSyncFailure, recordEvidenceExportAuditSyncSuccess, renderEvidenceExportAuditRetentionHistoryCsv, renderEvidenceExportAuditSyncHealthClearedAtCsv, renderEvidenceExportAuditSyncHealthCsv, resetEvidenceExportAuditRetry, resolveEvidenceExportAudit, summarizeEvidenceExportAuditQueue, trimCappedEvidenceExportAudits, type EvidenceExportAuditMaintenance, type EvidenceExportAuditRetentionChange, type PendingEvidenceExportAudit } from "../shared/export-audit-queue";
 
 describe("evidence export audit queue", () => {
   const audit = buildEvidenceExportAudit({ action: "shared", format: "json", privacyMode: "redacted", keepTitles: false, keepContext: false, scopeLabel: "All groups", eventCount: 2, occurredAt: "2026-10-26T14:00:00.000Z" });
@@ -110,6 +110,14 @@ describe("evidence export audit queue", () => {
   it("parses only bounded maintenance metadata", () => {
     expect(parseEvidenceExportAuditMaintenance(JSON.stringify({ action: "compacted", removedCount: 3, occurredAt: "2026-10-27T11:00:00.000Z", exportId: "secret" }))).toEqual({ action: "compacted", removedCount: 3, occurredAt: "2026-10-27T11:00:00.000Z" });
     expect(parseEvidenceExportAuditMaintenance(JSON.stringify({ action: "unknown", removedCount: 3, occurredAt: "now" }))).toBeNull();
+  });
+
+  it("parses legacy and array maintenance records newest-first and bounds them", () => {
+    const entries: EvidenceExportAuditMaintenance[] = Array.from({ length: 6 }, (_, index) => ({ action: "compacted", removedCount: index, occurredAt: `2026-10-2${index + 1}T11:00:00.000Z` }));
+    expect(parseEvidenceExportAuditMaintenanceHistory(JSON.stringify(entries))).toHaveLength(5);
+    expect(parseEvidenceExportAuditMaintenanceHistory(JSON.stringify(entries))[0]?.occurredAt).toBe("2026-10-26T11:00:00.000Z");
+    expect(parseEvidenceExportAuditMaintenanceHistory(JSON.stringify(entries.slice(0, 1)))).toEqual([entries[0]]);
+    expect(appendEvidenceExportAuditMaintenanceHistory(entries.slice(0, 1), { action: "reset-notes-cleared", removedCount: 1, occurredAt: "2026-10-30T11:00:00.000Z" })).toHaveLength(2);
   });
 
   it("produces a stable content-free checksum for integrity comparisons", () => {

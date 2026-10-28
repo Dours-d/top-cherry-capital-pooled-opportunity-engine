@@ -8,6 +8,7 @@ export const MAX_EVIDENCE_EXPORT_AUDIT_RETENTION_HISTORY = 5;
 export const EVIDENCE_EXPORT_AUDIT_RETENTION_OPTIONS = [10, 25, 50] as const;
 export const EVIDENCE_EXPORT_AUDIT_QUEUE_SOFT_BUDGET = 40000;
 export const EVIDENCE_EXPORT_AUDIT_MAINTENANCE_STORAGE_KEY = "top-cherry.evidence-export-audit-maintenance.v1";
+export const MAX_EVIDENCE_EXPORT_AUDIT_MAINTENANCE_HISTORY = 5;
 export const EVIDENCE_EXPORT_AUDIT_QUEUE_CHECKSUM_STORAGE_KEY = "top-cherry.evidence-export-audit-queue-checksum.v1";
 export const EVIDENCE_EXPORT_AUDIT_QUEUE_INTEGRITY_STORAGE_KEY = "top-cherry.evidence-export-audit-queue-integrity.v1";
 export const EVIDENCE_EXPORT_AUDIT_SYNC_HEALTH_STORAGE_KEY = "top-cherry.evidence-export-audit-sync-health.v1";
@@ -110,6 +111,27 @@ export function parseEvidenceExportAuditMaintenance(raw: string | null): Evidenc
   } catch {
     return null;
   }
+}
+
+export function parseEvidenceExportAuditMaintenanceHistory(raw: string | null): EvidenceExportAuditMaintenance[] {
+  if (!raw) return [];
+  try {
+    const value: unknown = JSON.parse(raw);
+    const entries = Array.isArray(value) ? value : [value];
+    return entries
+      .map((entry) => parseEvidenceExportAuditMaintenance(JSON.stringify(entry)))
+      .filter((entry): entry is EvidenceExportAuditMaintenance => entry !== null)
+      .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt))
+      .slice(0, MAX_EVIDENCE_EXPORT_AUDIT_MAINTENANCE_HISTORY);
+  } catch {
+    return [];
+  }
+}
+
+export function appendEvidenceExportAuditMaintenanceHistory(existing: readonly EvidenceExportAuditMaintenance[], entry: EvidenceExportAuditMaintenance) {
+  return [entry, ...existing]
+    .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt))
+    .slice(0, MAX_EVIDENCE_EXPORT_AUDIT_MAINTENANCE_HISTORY);
 }
 
 export function parseEvidenceExportAuditRetentionHistory(value: unknown): EvidenceExportAuditRetentionChange[] {
