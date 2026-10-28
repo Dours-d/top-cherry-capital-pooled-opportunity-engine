@@ -11,6 +11,7 @@ export const EVIDENCE_EXPORT_AUDIT_MAINTENANCE_STORAGE_KEY = "top-cherry.evidenc
 export const EVIDENCE_EXPORT_AUDIT_QUEUE_CHECKSUM_STORAGE_KEY = "top-cherry.evidence-export-audit-queue-checksum.v1";
 export const EVIDENCE_EXPORT_AUDIT_QUEUE_INTEGRITY_STORAGE_KEY = "top-cherry.evidence-export-audit-queue-integrity.v1";
 export const EVIDENCE_EXPORT_AUDIT_SYNC_HEALTH_STORAGE_KEY = "top-cherry.evidence-export-audit-sync-health.v1";
+export const EVIDENCE_EXPORT_AUDIT_SYNC_HEALTH_CLEARED_AT_STORAGE_KEY = "top-cherry.evidence-export-audit-sync-health-cleared-at.v1";
 export type EvidenceExportAuditRetention = (typeof EVIDENCE_EXPORT_AUDIT_RETENTION_OPTIONS)[number];
 
 export function parseEvidenceExportAuditRetention(value: unknown): EvidenceExportAuditRetention {
@@ -30,6 +31,12 @@ export type EvidenceExportAuditRetentionChange = { from: EvidenceExportAuditRete
 export type EvidenceExportAuditMaintenance = { action: "compacted" | "reset-notes-cleared"; removedCount: number; occurredAt: string };
 export type EvidenceExportAuditIntegrity = { status: "verified" | "review-needed"; checkedAt: string };
 export type EvidenceExportAuditSyncHealth = { lastSuccessfulAt?: string; lastFailedAt?: string; successfulDays?: Record<string, number>; failedDays?: Record<string, number> };
+
+export function parseEvidenceExportAuditSyncHealthClearedAt(raw: string | null): string | null {
+  if (!raw || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(raw)) return null;
+  const timestamp = Date.parse(raw);
+  return Number.isNaN(timestamp) ? null : new Date(timestamp).toISOString();
+}
 
 export function checksumEvidenceExportAuditQueue(serialized: string): string {
   let hash = 2166136261;
