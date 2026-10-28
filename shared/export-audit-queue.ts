@@ -76,6 +76,11 @@ export function recordEvidenceExportAuditSyncSuccess(health: EvidenceExportAudit
   return { ...(health ?? {}), lastSuccessfulAt: occurredAt, successfulDays };
 }
 
+export function renderEvidenceExportAuditSyncHealthCsv(health: EvidenceExportAuditSyncHealth): string {
+  const dates = [...new Set([...Object.keys(health.successfulDays ?? {}), ...Object.keys(health.failedDays ?? {})])].sort().reverse().slice(0, 7);
+  return ["date,successful_syncs,failed_syncs", ...dates.map((day) => `${day},${health.successfulDays?.[day] ?? 0},${health.failedDays?.[day] ?? 0}`)].join("\n");
+}
+
 export function recordEvidenceExportAuditSyncFailure(health: EvidenceExportAuditSyncHealth | null, occurredAt: string): EvidenceExportAuditSyncHealth {
   const day = new Date(occurredAt).toISOString().slice(0, 10);
   const days = { ...(health?.failedDays ?? {}), [day]: (health?.failedDays?.[day] ?? 0) + 1 };
