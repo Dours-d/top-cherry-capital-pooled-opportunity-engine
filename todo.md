@@ -187,6 +187,7 @@ R2 full real-data ingestion, R3 response estimation, R4 network feedback and R5 
 - [x] R2.0cu Reset-trace preview: Workspace now previews the exact two-line local CSV payload before copying, with explicit Close and Copy actions; preview content contains only the cleared_at timestamp.
 - [x] R2.0cv Reset-trace copy trace: successful reset-trace copies now persist and display only the latest local copy timestamp; failed clipboard/storage writes do not claim success, and no CSV content or account audit event is retained.
 - [x] R2.0cw Copy timestamp clear: Workspace can confirmation-gate removal of only the local reset-trace copy timestamp; reset-trace content, queue records, sync health, integrity metadata, privacy settings and account-ledger events remain unchanged.
+- [x] R2.0cx Local maintenance summary: Workspace now shows the latest local maintenance category and removed count, plus whether reset-trace and copy-timestamp metadata are retained; the summary contains no identifiers, notes or evidence.
 ## Existing boundaries
 - eBay account-deletion delivery does not establish Browse search or listing-stream permissions.
 - GitHub source synchronization, hosted CI, database migration, checkpoints, UI deployment and provider access are separate gates.
