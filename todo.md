@@ -185,6 +185,7 @@ R2 full real-data ingestion, R3 response estimation, R4 network feedback and R5 
 - [x] R2.0cs Health reset trace: Workspace retains only the timestamp of the latest local health-history clear, with strict parsing and no restored sync details.
 - [x] R2.0ct Local reset-trace CSV: Workspace can copy a CSV containing only the latest local health-history cleared timestamp; queue records, sync counts, diagnostics, identifiers, evidence and account-ledger data are excluded.
 - [x] R2.0cu Reset-trace preview: Workspace now previews the exact two-line local CSV payload before copying, with explicit Close and Copy actions; preview content contains only the cleared_at timestamp.
+- [x] R2.0cv Reset-trace copy trace: successful reset-trace copies now persist and display only the latest local copy timestamp; failed clipboard/storage writes do not claim success, and no CSV content or account audit event is retained.
 ## Existing boundaries
 - eBay account-deletion delivery does not establish Browse search or listing-stream permissions.
 - GitHub source synchronization, hosted CI, database migration, checkpoints, UI deployment and provider access are separate gates.
