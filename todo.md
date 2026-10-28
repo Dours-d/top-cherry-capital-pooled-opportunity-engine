@@ -175,6 +175,7 @@ R2 full real-data ingestion, R3 response estimation, R4 network feedback and R5 
 - [x] R2.0ci Compact audit summary: authenticated Workspace now shows retained, capped, recoverable and serialized-character counts in a four-cell privacy-safe card; the existing soft-budget warning remains separate and no identifiers, evidence or notes are included.
 - [x] R2.0cj Local queue integrity check: Workspace stores a deterministic content-free checksum beside the local export-audit queue, compares it on hydration, and shows a non-sensitive review warning on mismatch or malformed changes; ordinary queue writes refresh the checksum and no queue content is transmitted by the check.
 - [x] R2.0ck Integrity-baseline rebuild: when a mismatch warning is active, Workspace offers a confirmation-gated action that recalculates only the checksum for the current queue; records, evidence, notes, retention, account audits and sync state remain unchanged, and failures keep the warning visible.
+- [x] R2.0cl Integrity-check timestamp: Workspace persists strict local-only verified/review-needed status metadata with the latest check timestamp, refreshes it after hydration, queue writes and successful baseline rebuilds, and displays no queue content or identifiers.
 ## Existing boundaries
 - eBay account-deletion delivery does not establish Browse search or listing-stream permissions.
 - GitHub source synchronization, hosted CI, database migration, checkpoints, UI deployment and provider access are separate gates.
