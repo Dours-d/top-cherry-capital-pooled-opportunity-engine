@@ -88,6 +88,10 @@ export function renderEvidenceExportAuditSyncHealthCsv(health: EvidenceExportAud
   return ["date,successful_syncs,failed_syncs", ...dates.map((day) => `${day},${health.successfulDays?.[day] ?? 0},${health.failedDays?.[day] ?? 0}`)].join("\n");
 }
 
+export function renderEvidenceExportAuditSyncHealthClearedAtCsv(clearedAt: string): string {
+  return `cleared_at\n${clearedAt}`;
+}
+
 export function recordEvidenceExportAuditSyncFailure(health: EvidenceExportAuditSyncHealth | null, occurredAt: string): EvidenceExportAuditSyncHealth {
   const day = new Date(occurredAt).toISOString().slice(0, 10);
   const days = { ...(health?.failedDays ?? {}), [day]: (health?.failedDays?.[day] ?? 0) + 1 };

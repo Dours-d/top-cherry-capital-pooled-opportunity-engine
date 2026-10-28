@@ -183,6 +183,7 @@ R2 full real-data ingestion, R3 response estimation, R4 network feedback and R5 
 - [x] R2.0cq Local sync-health CSV: Workspace can copy a local-only CSV containing the seven newest UTC dates with successful and failed sync counts; timestamps, diagnostics, queue content, identifiers and account payloads are excluded.
 - [x] R2.0cr Sync-health history reset: Workspace can clear only local sync-health timestamps and daily counts after explicit confirmation; queue records, evidence, account ledger events and integrity metadata remain unchanged.
 - [x] R2.0cs Health reset trace: Workspace retains only the timestamp of the latest local health-history clear, with strict parsing and no restored sync details.
+- [x] R2.0ct Local reset-trace CSV: Workspace can copy a CSV containing only the latest local health-history cleared timestamp; queue records, sync counts, diagnostics, identifiers, evidence and account-ledger data are excluded.
 ## Existing boundaries
 - eBay account-deletion delivery does not establish Browse search or listing-stream permissions.
 - GitHub source synchronization, hosted CI, database migration, checkpoints, UI deployment and provider access are separate gates.
