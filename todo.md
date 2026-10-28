@@ -177,6 +177,7 @@ R2 full real-data ingestion, R3 response estimation, R4 network feedback and R5 
 - [x] R2.0ck Integrity-baseline rebuild: when a mismatch warning is active, Workspace offers a confirmation-gated action that recalculates only the checksum for the current queue; records, evidence, notes, retention, account audits and sync state remain unchanged, and failures keep the warning visible.
 - [x] R2.0cl Integrity-check timestamp: Workspace persists strict local-only verified/review-needed status metadata with the latest check timestamp, refreshes it after hydration, queue writes and successful baseline rebuilds, and displays no queue content or identifiers.
 - [x] R2.0cm Local sync-health indicator: Workspace persists only last successful and last failed account-ledger retry timestamps, displays them with the current pending count, updates them on bulk or single-event retry outcomes, and excludes server diagnostics, queue content and identifiers.
+- [x] R2.0cn Local health refresh: Workspace exposes a user-triggered Refresh local health action that re-reads the checksum and sync metadata, updates the integrity timestamp/status, and leaves queue records, account audits and sync payloads unchanged.
 ## Existing boundaries
 - eBay account-deletion delivery does not establish Browse search or listing-stream permissions.
 - GitHub source synchronization, hosted CI, database migration, checkpoints, UI deployment and provider access are separate gates.
