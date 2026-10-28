@@ -189,6 +189,7 @@ R2 full real-data ingestion, R3 response estimation, R4 network feedback and R5 
 - [x] R2.0cw Copy timestamp clear: Workspace can confirmation-gate removal of only the local reset-trace copy timestamp; reset-trace content, queue records, sync health, integrity metadata, privacy settings and account-ledger events remain unchanged.
 - [x] R2.0cx Local maintenance summary: Workspace now shows the latest local maintenance category and removed count, plus whether reset-trace and copy-timestamp metadata are retained; the summary contains no identifiers, notes or evidence.
 - [x] R2.0cy Bounded maintenance history: local maintenance storage now accepts the legacy single-record shape and the new newest-first five-entry array, displays the bounded category/count/timestamp list, and keeps all entries local-only and excluded from account sync/export payloads.
+- [x] R2.0cz Maintenance-history clear: Workspace can confirmation-gate removal of only the local maintenance timeline; queue data, reset traces, copy timestamps, sync health, integrity metadata, privacy settings and account-ledger events remain unchanged.
 ## Existing boundaries
 - eBay account-deletion delivery does not establish Browse search or listing-stream permissions.
 - GitHub source synchronization, hosted CI, database migration, checkpoints, UI deployment and provider access are separate gates.
