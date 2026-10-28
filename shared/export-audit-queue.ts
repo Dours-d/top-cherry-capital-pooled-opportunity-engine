@@ -10,6 +10,7 @@ export const EVIDENCE_EXPORT_AUDIT_QUEUE_SOFT_BUDGET = 40000;
 export const EVIDENCE_EXPORT_AUDIT_MAINTENANCE_STORAGE_KEY = "top-cherry.evidence-export-audit-maintenance.v1";
 export const EVIDENCE_EXPORT_AUDIT_QUEUE_CHECKSUM_STORAGE_KEY = "top-cherry.evidence-export-audit-queue-checksum.v1";
 export const EVIDENCE_EXPORT_AUDIT_QUEUE_INTEGRITY_STORAGE_KEY = "top-cherry.evidence-export-audit-queue-integrity.v1";
+export const EVIDENCE_EXPORT_AUDIT_SYNC_HEALTH_STORAGE_KEY = "top-cherry.evidence-export-audit-sync-health.v1";
 export type EvidenceExportAuditRetention = (typeof EVIDENCE_EXPORT_AUDIT_RETENTION_OPTIONS)[number];
 
 export function parseEvidenceExportAuditRetention(value: unknown): EvidenceExportAuditRetention {
@@ -28,6 +29,7 @@ export type EvidenceExportAuditResetHistoryEntry = { note: string; occurredAt: s
 export type EvidenceExportAuditRetentionChange = { from: EvidenceExportAuditRetention; to: EvidenceExportAuditRetention; removedCount: number; occurredAt: string };
 export type EvidenceExportAuditMaintenance = { action: "compacted" | "reset-notes-cleared"; removedCount: number; occurredAt: string };
 export type EvidenceExportAuditIntegrity = { status: "verified" | "review-needed"; checkedAt: string };
+export type EvidenceExportAuditSyncHealth = { lastSuccessfulAt?: string; lastFailedAt?: string };
 
 export function checksumEvidenceExportAuditQueue(serialized: string): string {
   let hash = 2166136261;
@@ -45,6 +47,20 @@ export function parseEvidenceExportAuditIntegrity(raw: string | null): EvidenceE
     if (!value || typeof value !== "object") return null;
     const item = value as Record<string, unknown>;
     return (item.status === "verified" || item.status === "review-needed") && typeof item.checkedAt === "string" && !Number.isNaN(Date.parse(item.checkedAt)) ? { status: item.status, checkedAt: item.checkedAt } : null;
+  } catch {
+    return null;
+  }
+}
+
+export function parseEvidenceExportAuditSyncHealth(raw: string | null): EvidenceExportAuditSyncHealth | null {
+  if (!raw) return null;
+  try {
+    const value: unknown = JSON.parse(raw);
+    if (!value || typeof value !== "object") return null;
+    const item = value as Record<string, unknown>;
+    const lastSuccessfulAt = typeof item.lastSuccessfulAt === "string" && !Number.isNaN(Date.parse(item.lastSuccessfulAt)) ? item.lastSuccessfulAt : undefined;
+    const lastFailedAt = typeof item.lastFailedAt === "string" && !Number.isNaN(Date.parse(item.lastFailedAt)) ? item.lastFailedAt : undefined;
+    return lastSuccessfulAt || lastFailedAt ? { ...(lastSuccessfulAt ? { lastSuccessfulAt } : {}), ...(lastFailedAt ? { lastFailedAt } : {}) } : null;
   } catch {
     return null;
   }
