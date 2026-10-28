@@ -134,6 +134,14 @@ export function appendEvidenceExportAuditMaintenanceHistory(existing: readonly E
     .slice(0, MAX_EVIDENCE_EXPORT_AUDIT_MAINTENANCE_HISTORY);
 }
 
+export function renderEvidenceExportAuditMaintenanceHistoryCsv(history: readonly EvidenceExportAuditMaintenance[]) {
+  const escape = (value: string | number) => `"${String(value).replaceAll('"', '""')}"`;
+  return [
+    "action,removed_count,occurred_at",
+    ...history.slice(0, MAX_EVIDENCE_EXPORT_AUDIT_MAINTENANCE_HISTORY).map((entry) => `${escape(entry.action)},${entry.removedCount},${escape(entry.occurredAt)}`),
+  ].join("\n");
+}
+
 export function parseEvidenceExportAuditRetentionHistory(value: unknown): EvidenceExportAuditRetentionChange[] {
   if (!Array.isArray(value)) return [];
   return value.filter(isEvidenceExportAuditRetentionChange).slice(0, MAX_EVIDENCE_EXPORT_AUDIT_RETENTION_HISTORY);
