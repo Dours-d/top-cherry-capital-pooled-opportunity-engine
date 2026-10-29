@@ -35,7 +35,17 @@ export type EvidenceExportAuditResetHistoryEntry = { note: string; occurredAt: s
 export type EvidenceExportAuditRetentionChange = { from: EvidenceExportAuditRetention; to: EvidenceExportAuditRetention; removedCount: number; occurredAt: string };
 export type EvidenceExportAuditMaintenance = { action: "compacted" | "reset-notes-cleared"; removedCount: number; occurredAt: string };
 export type EvidenceExportAuditIntegrity = { status: "verified" | "review-needed"; checkedAt: string };
+export type EvidenceExportAuditIntegrityFilter = "all" | EvidenceExportAuditIntegrity["status"];
 export type EvidenceExportAuditSyncHealth = { lastSuccessfulAt?: string; lastFailedAt?: string; successfulDays?: Record<string, number>; failedDays?: Record<string, number> };
+
+export function filterEvidenceExportAuditQueueByIntegrity(
+  queue: PendingEvidenceExportAudit[],
+  integrity: EvidenceExportAuditIntegrity | null,
+  filter: EvidenceExportAuditIntegrityFilter,
+): PendingEvidenceExportAudit[] {
+  if (filter === "all" || integrity?.status === filter) return queue;
+  return [];
+}
 
 export function parseEvidenceExportAuditSyncHealthClearedAt(raw: string | null): string | null {
   if (!raw || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(raw)) return null;

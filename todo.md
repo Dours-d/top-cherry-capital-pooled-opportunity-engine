@@ -196,6 +196,7 @@ R2 full real-data ingestion, R3 response estimation, R4 network feedback and R5 
 - [x] R2.0dd Copy-count reset trace: clearing the local maintenance CSV copy count now records a strictly validated reset timestamp, displays it independently of the count/timestamp, and reports when count removal or reset-trace persistence fails; history, CSV content and account-ledger events remain unchanged.
 - [x] R2.0de Copy-count reset-trace clear: Workspace now offers a confirmation-gated action to remove only the local copy-count reset timestamp; the count, last-copy timestamp, maintenance history, CSV content and account-ledger events remain unchanged.
 - [x] R2.0df Consolidated maintenance panel: Workspace now groups privacy-safe local maintenance metadata status into a dedicated panel showing bounded history count, CSV copy count and copy-timestamp state, with an explicit statement that each control is independently scoped and never clears evidence or account-ledger data.
+- [x] R2.0dg Integrity-status queue filter: Workspace now offers All, Verified and Review needed views based on the single queue-level checksum status; filtered summaries show matching counts or an explicit no-match/unknown state, while the underlying queue, evidence, maintenance controls and account-ledger paths remain unchanged.
 ## Existing boundaries
 - eBay account-deletion delivery does not establish Browse search or listing-stream permissions.
 - GitHub source synchronization, hosted CI, database migration, checkpoints, UI deployment and provider access are separate gates.

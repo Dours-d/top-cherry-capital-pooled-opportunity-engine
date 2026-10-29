@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildEvidenceExportAudit } from "../shared/export-audits";
-import { appendEvidenceExportAuditMaintenanceHistory, appendEvidenceExportAuditRetentionHistory, checksumEvidenceExportAuditQueue, clearEvidenceExportAuditResetHistory, countCappedEvidenceExportAuditsToTrim, countEvidenceExportAuditResetNotes, EVIDENCE_EXPORT_AUDIT_QUEUE_SOFT_BUDGET, EVIDENCE_EXPORT_AUDIT_RETRY_LIMIT, isEvidenceExportAuditRetryLimitReached, parseEvidenceExportAuditIntegrity, parseEvidenceExportAuditMaintenance, parseEvidenceExportAuditMaintenanceCsvCopyCount, parseEvidenceExportAuditMaintenanceHistory, parseEvidenceExportAuditRetention, parseEvidenceExportAuditRetentionHistory, parseEvidenceExportAuditSyncHealth, parseEvidenceExportAuditSyncHealthClearedAt, parsePendingEvidenceExportAudits, queueEvidenceExportAudit, recordEvidenceExportAuditSyncFailure, recordEvidenceExportAuditSyncSuccess, renderEvidenceExportAuditMaintenanceHistoryCsv, renderEvidenceExportAuditRetentionHistoryCsv, renderEvidenceExportAuditSyncHealthClearedAtCsv, renderEvidenceExportAuditSyncHealthCsv, resetEvidenceExportAuditRetry, resolveEvidenceExportAudit, summarizeEvidenceExportAuditQueue, trimCappedEvidenceExportAudits, type EvidenceExportAuditMaintenance, type EvidenceExportAuditRetentionChange, type PendingEvidenceExportAudit } from "../shared/export-audit-queue";
+import { appendEvidenceExportAuditMaintenanceHistory, appendEvidenceExportAuditRetentionHistory, checksumEvidenceExportAuditQueue, clearEvidenceExportAuditResetHistory, countCappedEvidenceExportAuditsToTrim, countEvidenceExportAuditResetNotes, EVIDENCE_EXPORT_AUDIT_QUEUE_SOFT_BUDGET, EVIDENCE_EXPORT_AUDIT_RETRY_LIMIT, filterEvidenceExportAuditQueueByIntegrity, isEvidenceExportAuditRetryLimitReached, parseEvidenceExportAuditIntegrity, parseEvidenceExportAuditMaintenance, parseEvidenceExportAuditMaintenanceCsvCopyCount, parseEvidenceExportAuditMaintenanceHistory, parseEvidenceExportAuditRetention, parseEvidenceExportAuditRetentionHistory, parseEvidenceExportAuditSyncHealth, parseEvidenceExportAuditSyncHealthClearedAt, parsePendingEvidenceExportAudits, queueEvidenceExportAudit, recordEvidenceExportAuditSyncFailure, recordEvidenceExportAuditSyncSuccess, renderEvidenceExportAuditMaintenanceHistoryCsv, renderEvidenceExportAuditRetentionHistoryCsv, renderEvidenceExportAuditSyncHealthClearedAtCsv, renderEvidenceExportAuditSyncHealthCsv, resetEvidenceExportAuditRetry, resolveEvidenceExportAudit, summarizeEvidenceExportAuditQueue, trimCappedEvidenceExportAudits, type EvidenceExportAuditMaintenance, type EvidenceExportAuditRetentionChange, type PendingEvidenceExportAudit } from "../shared/export-audit-queue";
 
 describe("evidence export audit queue", () => {
   const audit = buildEvidenceExportAudit({ action: "shared", format: "json", privacyMode: "redacted", keepTitles: false, keepContext: false, scopeLabel: "All groups", eventCount: 2, occurredAt: "2026-10-26T14:00:00.000Z" });
@@ -145,6 +145,16 @@ describe("evidence export audit queue", () => {
     expect(parseEvidenceExportAuditIntegrity(JSON.stringify({ status: "review-needed", checkedAt: "2026-10-28T09:00:00.000Z", exportId: "secret" }))).toEqual({ status: "review-needed", checkedAt: "2026-10-28T09:00:00.000Z" });
     expect(parseEvidenceExportAuditIntegrity(JSON.stringify({ status: "unknown", checkedAt: "2026-10-28T09:00:00.000Z" }))).toBeNull();
     expect(parseEvidenceExportAuditIntegrity(JSON.stringify({ status: "verified", checkedAt: "not-a-date" }))).toBeNull();
+  });
+
+  it("filters the queue by the global integrity status without mutating records", () => {
+    const queue = [{ ...audit, exportId: "queued", attemptCount: 0 }];
+    const verified = { status: "verified" as const, checkedAt: "2026-10-28T09:00:00.000Z" };
+    expect(filterEvidenceExportAuditQueueByIntegrity(queue, verified, "all")).toEqual(queue);
+    expect(filterEvidenceExportAuditQueueByIntegrity(queue, verified, "verified")).toEqual(queue);
+    expect(filterEvidenceExportAuditQueueByIntegrity(queue, verified, "review-needed")).toEqual([]);
+    expect(filterEvidenceExportAuditQueueByIntegrity(queue, null, "verified")).toEqual([]);
+    expect(queue).toEqual([{ ...audit, exportId: "queued", attemptCount: 0 }]);
   });
 
   it("parses only local sync-health timestamps", () => {
