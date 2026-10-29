@@ -11,6 +11,7 @@ export const EVIDENCE_EXPORT_AUDIT_MAINTENANCE_STORAGE_KEY = "top-cherry.evidenc
 export const MAX_EVIDENCE_EXPORT_AUDIT_MAINTENANCE_HISTORY = 5;
 export const EVIDENCE_EXPORT_AUDIT_QUEUE_CHECKSUM_STORAGE_KEY = "top-cherry.evidence-export-audit-queue-checksum.v1";
 export const EVIDENCE_EXPORT_AUDIT_QUEUE_INTEGRITY_STORAGE_KEY = "top-cherry.evidence-export-audit-queue-integrity.v1";
+export const EVIDENCE_EXPORT_AUDIT_INTEGRITY_FILTER_STORAGE_KEY = "top-cherry.evidence-export-audit-integrity-filter.v1";
 export const EVIDENCE_EXPORT_AUDIT_SYNC_HEALTH_STORAGE_KEY = "top-cherry.evidence-export-audit-sync-health.v1";
 export const EVIDENCE_EXPORT_AUDIT_SYNC_HEALTH_CLEARED_AT_STORAGE_KEY = "top-cherry.evidence-export-audit-sync-health-cleared-at.v1";
 export const EVIDENCE_EXPORT_AUDIT_SYNC_HEALTH_TRACE_COPIED_AT_STORAGE_KEY = "top-cherry.evidence-export-audit-sync-health-trace-copied-at.v1";
@@ -18,6 +19,11 @@ export const EVIDENCE_EXPORT_AUDIT_MAINTENANCE_CSV_COPIED_AT_STORAGE_KEY = "top-
 export const EVIDENCE_EXPORT_AUDIT_MAINTENANCE_CSV_COPY_COUNT_STORAGE_KEY = "top-cherry.evidence-export-audit-maintenance-csv-copy-count.v1";
 export const EVIDENCE_EXPORT_AUDIT_MAINTENANCE_CSV_COPY_COUNT_RESET_AT_STORAGE_KEY = "top-cherry.evidence-export-audit-maintenance-csv-copy-count-reset-at.v1";
 export type EvidenceExportAuditRetention = (typeof EVIDENCE_EXPORT_AUDIT_RETENTION_OPTIONS)[number];
+export type EvidenceExportAuditIntegrityFilter = "all" | "verified" | "review-needed";
+
+export function parseEvidenceExportAuditIntegrityFilter(raw: string | null): EvidenceExportAuditIntegrityFilter {
+  return raw === "verified" || raw === "review-needed" ? raw : "all";
+}
 
 export function parseEvidenceExportAuditRetention(value: unknown): EvidenceExportAuditRetention {
   return value === 10 || value === 25 || value === 50 ? value : 25;
@@ -35,7 +41,6 @@ export type EvidenceExportAuditResetHistoryEntry = { note: string; occurredAt: s
 export type EvidenceExportAuditRetentionChange = { from: EvidenceExportAuditRetention; to: EvidenceExportAuditRetention; removedCount: number; occurredAt: string };
 export type EvidenceExportAuditMaintenance = { action: "compacted" | "reset-notes-cleared"; removedCount: number; occurredAt: string };
 export type EvidenceExportAuditIntegrity = { status: "verified" | "review-needed"; checkedAt: string };
-export type EvidenceExportAuditIntegrityFilter = "all" | EvidenceExportAuditIntegrity["status"];
 export type EvidenceExportAuditSyncHealth = { lastSuccessfulAt?: string; lastFailedAt?: string; successfulDays?: Record<string, number>; failedDays?: Record<string, number> };
 export type EvidenceExportAuditSyncHealthTrendEntry = { date: string; successful: number; failed: number };
 export type EvidenceExportAuditMaintenanceChecklistItem = { key: string; affected: string; preserved: string };
