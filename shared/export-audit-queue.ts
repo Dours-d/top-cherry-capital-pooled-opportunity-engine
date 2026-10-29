@@ -38,6 +38,23 @@ export type EvidenceExportAuditIntegrity = { status: "verified" | "review-needed
 export type EvidenceExportAuditIntegrityFilter = "all" | EvidenceExportAuditIntegrity["status"];
 export type EvidenceExportAuditSyncHealth = { lastSuccessfulAt?: string; lastFailedAt?: string; successfulDays?: Record<string, number>; failedDays?: Record<string, number> };
 export type EvidenceExportAuditSyncHealthTrendEntry = { date: string; successful: number; failed: number };
+export type EvidenceExportAuditMaintenanceChecklistItem = { key: string; affected: string; preserved: string };
+
+export function buildEvidenceExportAuditMaintenanceChecklist(input: {
+  cappedRecords: number;
+  resetNotes: number;
+  maintenanceHistory: number;
+  hasSyncHealth: boolean;
+  hasCopyMetadata: boolean;
+}): EvidenceExportAuditMaintenanceChecklistItem[] {
+  return [
+    { key: "compact", affected: `${input.cappedRecords} retry-limit-reached local queue record${input.cappedRecords === 1 ? "" : "s"}`, preserved: "recoverable queue records, evidence and account-ledger events" },
+    { key: "reset-notes", affected: `${input.resetNotes} local retry-reset note${input.resetNotes === 1 ? "" : "s"}`, preserved: "queue attempts, audit metadata, evidence and account-ledger events" },
+    { key: "maintenance-history", affected: `${input.maintenanceHistory} local maintenance histor${input.maintenanceHistory === 1 ? "y entry" : "y entries"}`, preserved: "queue records, reset traces, evidence and account-ledger events" },
+    { key: "sync-health", affected: input.hasSyncHealth ? "local sync timestamps, daily counts and trend buckets" : "no stored sync-health history", preserved: "queue records, integrity status, evidence and account-ledger events" },
+    { key: "copy-metadata", affected: input.hasCopyMetadata ? "local CSV copy counts and timestamps" : "no stored CSV copy metadata", preserved: "maintenance history, CSV content, evidence and account-ledger events" },
+  ];
+}
 
 export function buildEvidenceExportAuditSyncHealthTrend(
   health: EvidenceExportAuditSyncHealth | null,

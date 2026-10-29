@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildEvidenceExportAudit } from "../shared/export-audits";
-import { appendEvidenceExportAuditMaintenanceHistory, appendEvidenceExportAuditRetentionHistory, buildEvidenceExportAuditSyncHealthTrend, checksumEvidenceExportAuditQueue, clearEvidenceExportAuditResetHistory, countCappedEvidenceExportAuditsToTrim, countEvidenceExportAuditResetNotes, EVIDENCE_EXPORT_AUDIT_QUEUE_SOFT_BUDGET, EVIDENCE_EXPORT_AUDIT_RETRY_LIMIT, filterEvidenceExportAuditQueueByIntegrity, isEvidenceExportAuditRetryLimitReached, parseEvidenceExportAuditIntegrity, parseEvidenceExportAuditMaintenance, parseEvidenceExportAuditMaintenanceCsvCopyCount, parseEvidenceExportAuditMaintenanceHistory, parseEvidenceExportAuditRetention, parseEvidenceExportAuditRetentionHistory, parseEvidenceExportAuditSyncHealth, parseEvidenceExportAuditSyncHealthClearedAt, parsePendingEvidenceExportAudits, queueEvidenceExportAudit, recordEvidenceExportAuditSyncFailure, recordEvidenceExportAuditSyncSuccess, renderEvidenceExportAuditMaintenanceHistoryCsv, renderEvidenceExportAuditRetentionHistoryCsv, renderEvidenceExportAuditSyncHealthClearedAtCsv, renderEvidenceExportAuditSyncHealthCsv, resetEvidenceExportAuditRetry, resolveEvidenceExportAudit, summarizeEvidenceExportAuditQueue, trimCappedEvidenceExportAudits, type EvidenceExportAuditMaintenance, type EvidenceExportAuditRetentionChange, type PendingEvidenceExportAudit } from "../shared/export-audit-queue";
+import { appendEvidenceExportAuditMaintenanceHistory, appendEvidenceExportAuditRetentionHistory, buildEvidenceExportAuditMaintenanceChecklist, buildEvidenceExportAuditSyncHealthTrend, checksumEvidenceExportAuditQueue, clearEvidenceExportAuditResetHistory, countCappedEvidenceExportAuditsToTrim, countEvidenceExportAuditResetNotes, EVIDENCE_EXPORT_AUDIT_QUEUE_SOFT_BUDGET, EVIDENCE_EXPORT_AUDIT_RETRY_LIMIT, filterEvidenceExportAuditQueueByIntegrity, isEvidenceExportAuditRetryLimitReached, parseEvidenceExportAuditIntegrity, parseEvidenceExportAuditMaintenance, parseEvidenceExportAuditMaintenanceCsvCopyCount, parseEvidenceExportAuditMaintenanceHistory, parseEvidenceExportAuditRetention, parseEvidenceExportAuditRetentionHistory, parseEvidenceExportAuditSyncHealth, parseEvidenceExportAuditSyncHealthClearedAt, parsePendingEvidenceExportAudits, queueEvidenceExportAudit, recordEvidenceExportAuditSyncFailure, recordEvidenceExportAuditSyncSuccess, renderEvidenceExportAuditMaintenanceHistoryCsv, renderEvidenceExportAuditRetentionHistoryCsv, renderEvidenceExportAuditSyncHealthClearedAtCsv, renderEvidenceExportAuditSyncHealthCsv, resetEvidenceExportAuditRetry, resolveEvidenceExportAudit, summarizeEvidenceExportAuditQueue, trimCappedEvidenceExportAudits, type EvidenceExportAuditMaintenance, type EvidenceExportAuditRetentionChange, type PendingEvidenceExportAudit } from "../shared/export-audit-queue";
 
 describe("evidence export audit queue", () => {
   const audit = buildEvidenceExportAudit({ action: "shared", format: "json", privacyMode: "redacted", keepTitles: false, keepContext: false, scopeLabel: "All groups", eventCount: 2, occurredAt: "2026-10-26T14:00:00.000Z" });
@@ -208,5 +208,14 @@ describe("evidence export audit queue", () => {
     expect(trend[4]).toEqual({ date: "2026-10-26", successful: 0, failed: 3 });
     expect(trend[6]).toEqual({ date: "2026-10-28", successful: 2, failed: 0 });
     expect(buildEvidenceExportAuditSyncHealthTrend(null, "not-a-date")).toEqual([]);
+  });
+
+  it("builds a maintenance checklist with affected counts and protected scopes", () => {
+    const checklist = buildEvidenceExportAuditMaintenanceChecklist({ cappedRecords: 2, resetNotes: 1, maintenanceHistory: 3, hasSyncHealth: true, hasCopyMetadata: false });
+    expect(checklist).toHaveLength(5);
+    expect(checklist[0]).toEqual({ key: "compact", affected: "2 retry-limit-reached local queue records", preserved: "recoverable queue records, evidence and account-ledger events" });
+    expect(checklist[3].affected).toContain("local sync timestamps");
+    expect(checklist[4].affected).toBe("no stored CSV copy metadata");
+    expect(checklist.every((item) => item.preserved.includes("evidence") && item.preserved.includes("account-ledger"))).toBe(true);
   });
 });
