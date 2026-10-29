@@ -51,6 +51,7 @@ export default function ProfileScreen() {
   const remoteOutcomes = trpc.listingOutcomes.list.useQuery(undefined, { enabled: isAuthenticated });
   const remoteOutcomeAudits = trpc.outcomeSyncAudits.list.useQuery(undefined, { enabled: isAuthenticated });
   const remoteSnapshots = trpc.reconciliationSnapshots.list.useQuery(undefined, { enabled: isAuthenticated });
+  const remoteResearchListings = trpc.researchListings.list.useQuery(undefined, { enabled: isAuthenticated });
   const remoteRetryResetAudits = trpc.reconciliationSnapshots.retryResetAudits.useQuery({ providerListingId: undefined }, { enabled: isAuthenticated });
   const syncReview = trpc.observationReviews.upsert.useMutation();
   const syncOutcome = trpc.listingOutcomes.upsert.useMutation();
@@ -347,6 +348,7 @@ export default function ProfileScreen() {
             } catch { return undefined; }
           });
         }} />
+        <ResearchListingStoreView colors={colors} authenticated={isAuthenticated} listings={(remoteResearchListings.data ?? []) as ResearchListingRecord[]} />
         <ReconciliationSnapshotQueue colors={colors} authenticated={isAuthenticated} snapshots={remoteSnapshots.data ?? []} reviewing={reviewSnapshot.isPending} checkingCharacteristics={checkSnapshotCharacteristics.isPending} pendingCharacteristicChecks={pendingCharacteristicChecks} freshnessThresholds={snapshotFreshnessThresholds} onCycleFreshnessThreshold={cycleSnapshotFreshnessThreshold} onRetryCharacteristicChecks={() => void retryPendingCharacteristicChecks()} onReview={(snapshotId, status, note) => void markSnapshotReviewed(snapshotId, status, note)} onReviewMany={(snapshotIds, note) => markSnapshotsReviewed(snapshotIds, note)} onCheckCharacteristics={(snapshotId, note) => markSnapshotCharacteristicsChecked(snapshotId, note)} onCheckCharacteristicsMany={(snapshotIds, note) => markSnapshotsCharacteristicsChecked(snapshotIds, note)} />
         <ProviderRetryResetSummary colors={colors} authenticated={isAuthenticated} audits={remoteRetryResetAudits.data ?? []} pending={pendingProviderRetryResets} listingContext={(remoteSnapshots.data ?? []) as WorkspaceSnapshot[]} onOpenListing={(providerListingId) => { const context = (remoteSnapshots.data ?? []).find((snapshot) => snapshot.providerListingId === providerListingId) as WorkspaceSnapshot | undefined; router.push({ pathname: "/snapshot-history", params: { providerListingId, title: context?.title ?? providerListingId, profileSlug: context?.profileSlug ?? "" } }); }} />
         <SyncedOutcomeHistory colors={colors} outcomes={followUpOutcomes} authenticated={isAuthenticated} auditCount={outcomeSyncAudits.length} pendingAuditSyncs={pendingOutcomeAuditRecords.length} pendingSyncs={pendingOutcomeSyncs} pendingRecords={pendingOutcomeRecords} dismissedRecords={dismissedOutcomeRecords} onRetryPending={() => void retryPendingOutcomeSync()} onRetryAudit={() => void retryPendingOutcomeAuditSync()} onClearPending={(outcomeId, note) => void clearPendingOutcome(outcomeId, note)} onRestorePending={(outcomeId, note) => void restoreDismissedOutcome(outcomeId, note)} retrying={syncOutcome.isPending} retryingAudit={syncOutcomeAudit.isPending} />
@@ -433,6 +435,29 @@ type WorkspaceSnapshot = {
   characteristicsCheckedAt: Date | string | null;
   characteristicsCheckNote: string | null;
 };
+
+type ResearchListingRecord = {
+  marketplaceId: string;
+  query: string;
+  providerListingId: string;
+  profileSlug: string;
+  title: string;
+  askingPrice: number;
+  currency: string | null;
+  condition: string;
+  firstObservedAt: Date | string;
+  lastObservedAt: Date | string;
+  observationCount: number;
+};
+
+function ResearchListingStoreView({ colors, authenticated, listings }: { colors: ReturnType<typeof useColors>; authenticated: boolean; listings: ResearchListingRecord[] }) {
+  return <View style={[styles.snapshotQueueCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+    <View style={styles.readinessHeader}><View style={styles.settingCopy}><Text style={[styles.settingTitle, { color: colors.foreground }]}>Canonical research listings</Text><Text style={[styles.settingDescription, { color: colors.muted }]}>{authenticated ? `${listings.length} provider listing${listings.length === 1 ? "" : "s"} · read-only index` : "Sign in to view your canonical research listing index"}</Text></View><MaterialIcons name="inventory-2" size={20} color={colors.primary} /></View>
+    <Text style={[styles.dataNote, { color: colors.muted }]}>Each row consolidates observations for one marketplace/provider listing. It preserves asking-price evidence and provenance only; it is not a stock, value, allocation or execution record.</Text>
+    {authenticated && listings.length ? listings.slice(0, 8).map((listing) => <View key={`${listing.marketplaceId}:${listing.providerListingId}`} style={[styles.snapshotRow, { borderTopColor: colors.border }]}><View style={styles.settingCopy}><Text style={[styles.settingTitle, { color: colors.foreground }]} numberOfLines={1}>{listing.title}</Text><Text style={[styles.settingDescription, { color: colors.muted }]} numberOfLines={1}>{listing.marketplaceId} · {listing.profileSlug} · {listing.condition}</Text><Text style={[styles.settingDescription, { color: colors.muted }]} numberOfLines={1}>Query: {listing.query} · {listing.observationCount} observation{listing.observationCount === 1 ? "" : "s"}</Text><Text style={[styles.settingDescription, { color: colors.muted }]} numberOfLines={1}>Observed {new Date(listing.firstObservedAt).toLocaleDateString()} → {new Date(listing.lastObservedAt).toLocaleDateString()}</Text></View><Text style={[styles.researchListingPrice, { color: colors.foreground }]}>{formatCurrency(listing.askingPrice, listing.currency ?? undefined)}</Text></View>) : <Text style={[styles.dataNote, { color: colors.muted }]}>{authenticated ? "No canonical listings have been reconciled yet. Save a provider page from Reconcile to create the first row." : "Canonical listings are account-scoped and are not shown while signed out."}</Text>}
+    {authenticated && listings.length > 8 ? <Text style={[styles.dataNote, { color: colors.muted, marginTop: 8 }]}>Showing the eight most recently observed listings.</Text> : null}
+  </View>;
+}
 
 function ReconciliationSnapshotQueue({ colors, authenticated, snapshots, reviewing, checkingCharacteristics, pendingCharacteristicChecks, freshnessThresholds, onCycleFreshnessThreshold, onRetryCharacteristicChecks, onReview, onReviewMany, onCheckCharacteristics, onCheckCharacteristicsMany }: { colors: ReturnType<typeof useColors>; authenticated: boolean; snapshots: WorkspaceSnapshot[]; reviewing: boolean; checkingCharacteristics: boolean; pendingCharacteristicChecks: PendingCharacteristicCheck[]; freshnessThresholds: Record<string, SnapshotFreshnessThreshold>; onCycleFreshnessThreshold: (marketplaceId: string) => void; onRetryCharacteristicChecks: () => void; onReview: (snapshotId: string, status: "reviewed" | "superseded", note: string) => void; onReviewMany: (snapshotIds: string[], note: string) => Promise<void>; onCheckCharacteristics: (snapshotId: string, note: string) => Promise<void>; onCheckCharacteristicsMany: (snapshotIds: string[], note: string) => Promise<void> }) {
   const [filter, setFilter] = useState<"observed" | "reviewed" | "superseded">("observed");
@@ -1100,6 +1125,7 @@ const styles = StyleSheet.create({
   retryResetHistory: { marginTop: 12, paddingTop: 11, borderTopWidth: 1, borderTopColor: "rgba(128,128,128,0.18)" },
   retryResetRow: { flexDirection: "row", alignItems: "flex-start", gap: 7, minHeight: 38, marginTop: 8 },
   retryResetExportRow: { flexDirection: "row", gap: 7, marginTop: 10 },
+  researchListingPrice: { fontSize: 13, fontWeight: "900", marginLeft: 8 },
   exportPrivacyPanel: { borderRadius: 12, borderWidth: 1, padding: 10, marginTop: 12 },
   auditSummaryGrid: { flexDirection: "row", borderRadius: 10, borderWidth: 1, paddingVertical: 8, marginBottom: 8 },
   auditSummaryCell: { flex: 1, alignItems: "center", borderRightWidth: 1, borderRightColor: "rgba(128,128,128,0.18)" },
