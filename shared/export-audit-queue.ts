@@ -16,6 +16,7 @@ export const EVIDENCE_EXPORT_AUDIT_SYNC_HEALTH_CLEARED_AT_STORAGE_KEY = "top-che
 export const EVIDENCE_EXPORT_AUDIT_SYNC_HEALTH_TRACE_COPIED_AT_STORAGE_KEY = "top-cherry.evidence-export-audit-sync-health-trace-copied-at.v1";
 export const EVIDENCE_EXPORT_AUDIT_MAINTENANCE_CSV_COPIED_AT_STORAGE_KEY = "top-cherry.evidence-export-audit-maintenance-csv-copied-at.v1";
 export const EVIDENCE_EXPORT_AUDIT_MAINTENANCE_CSV_COPY_COUNT_STORAGE_KEY = "top-cherry.evidence-export-audit-maintenance-csv-copy-count.v1";
+export const EVIDENCE_EXPORT_AUDIT_MAINTENANCE_CSV_COPY_COUNT_RESET_AT_STORAGE_KEY = "top-cherry.evidence-export-audit-maintenance-csv-copy-count-reset-at.v1";
 export type EvidenceExportAuditRetention = (typeof EVIDENCE_EXPORT_AUDIT_RETENTION_OPTIONS)[number];
 
 export function parseEvidenceExportAuditRetention(value: unknown): EvidenceExportAuditRetention {
