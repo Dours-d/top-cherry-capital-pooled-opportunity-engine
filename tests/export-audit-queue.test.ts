@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildEvidenceExportAudit } from "../shared/export-audits";
-import { appendEvidenceExportAuditMaintenanceHistory, appendEvidenceExportAuditRetentionHistory, checksumEvidenceExportAuditQueue, clearEvidenceExportAuditResetHistory, countCappedEvidenceExportAuditsToTrim, countEvidenceExportAuditResetNotes, EVIDENCE_EXPORT_AUDIT_QUEUE_SOFT_BUDGET, EVIDENCE_EXPORT_AUDIT_RETRY_LIMIT, isEvidenceExportAuditRetryLimitReached, parseEvidenceExportAuditIntegrity, parseEvidenceExportAuditMaintenance, parseEvidenceExportAuditMaintenanceHistory, parseEvidenceExportAuditRetention, parseEvidenceExportAuditRetentionHistory, parseEvidenceExportAuditSyncHealth, parseEvidenceExportAuditSyncHealthClearedAt, parsePendingEvidenceExportAudits, queueEvidenceExportAudit, recordEvidenceExportAuditSyncFailure, recordEvidenceExportAuditSyncSuccess, renderEvidenceExportAuditMaintenanceHistoryCsv, renderEvidenceExportAuditRetentionHistoryCsv, renderEvidenceExportAuditSyncHealthClearedAtCsv, renderEvidenceExportAuditSyncHealthCsv, resetEvidenceExportAuditRetry, resolveEvidenceExportAudit, summarizeEvidenceExportAuditQueue, trimCappedEvidenceExportAudits, type EvidenceExportAuditMaintenance, type EvidenceExportAuditRetentionChange, type PendingEvidenceExportAudit } from "../shared/export-audit-queue";
+import { appendEvidenceExportAuditMaintenanceHistory, appendEvidenceExportAuditRetentionHistory, checksumEvidenceExportAuditQueue, clearEvidenceExportAuditResetHistory, countCappedEvidenceExportAuditsToTrim, countEvidenceExportAuditResetNotes, EVIDENCE_EXPORT_AUDIT_QUEUE_SOFT_BUDGET, EVIDENCE_EXPORT_AUDIT_RETRY_LIMIT, isEvidenceExportAuditRetryLimitReached, parseEvidenceExportAuditIntegrity, parseEvidenceExportAuditMaintenance, parseEvidenceExportAuditMaintenanceCsvCopyCount, parseEvidenceExportAuditMaintenanceHistory, parseEvidenceExportAuditRetention, parseEvidenceExportAuditRetentionHistory, parseEvidenceExportAuditSyncHealth, parseEvidenceExportAuditSyncHealthClearedAt, parsePendingEvidenceExportAudits, queueEvidenceExportAudit, recordEvidenceExportAuditSyncFailure, recordEvidenceExportAuditSyncSuccess, renderEvidenceExportAuditMaintenanceHistoryCsv, renderEvidenceExportAuditRetentionHistoryCsv, renderEvidenceExportAuditSyncHealthClearedAtCsv, renderEvidenceExportAuditSyncHealthCsv, resetEvidenceExportAuditRetry, resolveEvidenceExportAudit, summarizeEvidenceExportAuditQueue, trimCappedEvidenceExportAudits, type EvidenceExportAuditMaintenance, type EvidenceExportAuditRetentionChange, type PendingEvidenceExportAudit } from "../shared/export-audit-queue";
 
 describe("evidence export audit queue", () => {
   const audit = buildEvidenceExportAudit({ action: "shared", format: "json", privacyMode: "redacted", keepTitles: false, keepContext: false, scopeLabel: "All groups", eventCount: 2, occurredAt: "2026-10-26T14:00:00.000Z" });
@@ -125,6 +125,14 @@ describe("evidence export audit queue", () => {
     expect(csv).toBe('action,removed_count,occurred_at\n"compacted",2,"2026-10-28T12:00:00.000Z"');
     expect(csv).not.toContain("exportId");
     expect(csv).not.toContain("note");
+  });
+
+  it("strictly parses the maintenance CSV copy count", () => {
+    expect(parseEvidenceExportAuditMaintenanceCsvCopyCount("3")).toBe(3);
+    expect(parseEvidenceExportAuditMaintenanceCsvCopyCount("9999")).toBe(9999);
+    expect(parseEvidenceExportAuditMaintenanceCsvCopyCount("-1")).toBe(0);
+    expect(parseEvidenceExportAuditMaintenanceCsvCopyCount("3.5")).toBe(0);
+    expect(parseEvidenceExportAuditMaintenanceCsvCopyCount("not-a-count")).toBe(0);
   });
 
   it("produces a stable content-free checksum for integrity comparisons", () => {

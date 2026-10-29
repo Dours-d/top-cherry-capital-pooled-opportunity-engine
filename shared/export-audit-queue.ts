@@ -15,6 +15,7 @@ export const EVIDENCE_EXPORT_AUDIT_SYNC_HEALTH_STORAGE_KEY = "top-cherry.evidenc
 export const EVIDENCE_EXPORT_AUDIT_SYNC_HEALTH_CLEARED_AT_STORAGE_KEY = "top-cherry.evidence-export-audit-sync-health-cleared-at.v1";
 export const EVIDENCE_EXPORT_AUDIT_SYNC_HEALTH_TRACE_COPIED_AT_STORAGE_KEY = "top-cherry.evidence-export-audit-sync-health-trace-copied-at.v1";
 export const EVIDENCE_EXPORT_AUDIT_MAINTENANCE_CSV_COPIED_AT_STORAGE_KEY = "top-cherry.evidence-export-audit-maintenance-csv-copied-at.v1";
+export const EVIDENCE_EXPORT_AUDIT_MAINTENANCE_CSV_COPY_COUNT_STORAGE_KEY = "top-cherry.evidence-export-audit-maintenance-csv-copy-count.v1";
 export type EvidenceExportAuditRetention = (typeof EVIDENCE_EXPORT_AUDIT_RETENTION_OPTIONS)[number];
 
 export function parseEvidenceExportAuditRetention(value: unknown): EvidenceExportAuditRetention {
@@ -39,6 +40,12 @@ export function parseEvidenceExportAuditSyncHealthClearedAt(raw: string | null):
   if (!raw || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(raw)) return null;
   const timestamp = Date.parse(raw);
   return Number.isNaN(timestamp) ? null : new Date(timestamp).toISOString();
+}
+
+export function parseEvidenceExportAuditMaintenanceCsvCopyCount(raw: string | null): number {
+  if (!raw) return 0;
+  const count = Number(raw);
+  return Number.isInteger(count) && count >= 0 && count <= 9999 ? count : 0;
 }
 
 export function checksumEvidenceExportAuditQueue(serialized: string): string {
