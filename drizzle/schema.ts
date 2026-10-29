@@ -210,6 +210,39 @@ export const reconciliationSnapshots = mysqlTable(
 export type ReconciliationSnapshot = typeof reconciliationSnapshots.$inferSelect;
 export type InsertReconciliationSnapshot = typeof reconciliationSnapshots.$inferInsert;
 
+export const researchListings = mysqlTable(
+  "research_listings",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    sourceSlug: varchar("sourceSlug", { length: 64 }).notNull(),
+    marketplaceId: varchar("marketplaceId", { length: 64 }).notNull(),
+    query: varchar("query", { length: 255 }).notNull(),
+    providerListingId: varchar("providerListingId", { length: 255 }).notNull(),
+    profileSlug: varchar("profileSlug", { length: 64 }).notNull(),
+    title: varchar("title", { length: 255 }).notNull(),
+    askingPrice: double("askingPrice").notNull(),
+    currency: varchar("currency", { length: 3 }),
+    condition: varchar("condition", { length: 128 }).notNull(),
+    location: varchar("location", { length: 255 }),
+    sellerId: varchar("sellerId", { length: 255 }),
+    sourceUrl: text("sourceUrl"),
+    latestSnapshotId: varchar("latestSnapshotId", { length: 160 }).notNull(),
+    firstObservedAt: timestamp("firstObservedAt").notNull(),
+    lastObservedAt: timestamp("lastObservedAt").notNull(),
+    observationCount: int("observationCount").default(1).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (table) => ({
+    listingKeyIdx: uniqueIndex("research_listings_user_marketplace_provider_idx").on(table.userId, table.marketplaceId, table.providerListingId),
+    userObservedIdx: index("research_listings_user_last_observed_idx").on(table.userId, table.lastObservedAt),
+  }),
+);
+
+export type ResearchListing = typeof researchListings.$inferSelect;
+export type InsertResearchListing = typeof researchListings.$inferInsert;
+
 export const characteristicCheckAudits = mysqlTable(
   "characteristic_check_audits",
   {

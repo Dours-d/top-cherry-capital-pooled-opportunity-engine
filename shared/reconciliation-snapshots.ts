@@ -217,3 +217,24 @@ export function buildEbayReconciliationSnapshot(input: {
     reconciliationStatus: "observed",
   };
 }
+
+export function buildResearchListingFromSnapshot(snapshot: ReconciliationSnapshotInput) {
+  return {
+    sourceSlug: snapshot.sourceSlug,
+    marketplaceId: snapshot.marketplaceId,
+    query: snapshot.query,
+    providerListingId: snapshot.providerListingId,
+    profileSlug: snapshot.profileSlug,
+    title: snapshot.title,
+    askingPrice: snapshot.askingPrice,
+    ...(snapshot.currency ? { currency: snapshot.currency } : {}),
+    condition: snapshot.condition,
+    ...(snapshot.location ? { location: snapshot.location } : {}),
+    ...(snapshot.sellerId ? { sellerId: snapshot.sellerId } : {}),
+    ...(snapshot.sourceUrl ? { sourceUrl: snapshot.sourceUrl } : {}),
+    latestSnapshotId: snapshot.snapshotId,
+    firstObservedAt: snapshot.sourceFetchedAt,
+    lastObservedAt: snapshot.sourceFetchedAt,
+    observationCount: 1,
+  };
+}

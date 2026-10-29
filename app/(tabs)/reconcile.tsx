@@ -27,7 +27,9 @@ export default function ReconcileScreen() {
     { enabled: Boolean(selectedItemId), staleTime: 60_000, refetchOnWindowFocus: false, retry: 1 },
   );
   const snapshots = trpc.reconciliationSnapshots.list.useQuery(undefined, { enabled: isAuthenticated, staleTime: 30_000 });
+  const researchListings = trpc.researchListings.list.useQuery(undefined, { enabled: isAuthenticated, staleTime: 30_000 });
   const saveSnapshot = trpc.reconciliationSnapshots.upsert.useMutation();
+  const reconcileResearchListing = trpc.researchListings.reconcile.useMutation();
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const listings = useMemo(
     () => mapLiveEbayListings((browse.data?.listings ?? []).map((listing) => ({ ...listing, profileSlug: activeSlug }))),
@@ -46,9 +48,12 @@ export default function ReconcileScreen() {
     setSaveState("saving");
     try {
       for (const listing of browse.data.listings) {
-        await saveSnapshot.mutateAsync(buildEbayReconciliationSnapshot({ listing, marketplaceId: browse.data.marketplaceId, query: searchTerm, profileSlug: activeSlug, sourceFetchedAt: browse.data.fetchedAt }));
+        const snapshot = buildEbayReconciliationSnapshot({ listing, marketplaceId: browse.data.marketplaceId, query: searchTerm, profileSlug: activeSlug, sourceFetchedAt: browse.data.fetchedAt });
+        await saveSnapshot.mutateAsync(snapshot);
+        await reconcileResearchListing.mutateAsync(snapshot);
       }
       await snapshots.refetch();
+      await researchListings.refetch();
       setSaveState("saved");
     } catch {
       setSaveState("error");
@@ -100,7 +105,7 @@ export default function ReconcileScreen() {
               <Metric label="Redundant" value={String(redundancy.redundantRows)} colors={colors} />
             </View>
             <View style={[styles.persistenceCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <View style={styles.persistenceCopy}><Text style={[styles.persistenceTitle, { color: colors.foreground }]}>Observation snapshot</Text><Text style={[styles.persistenceText, { color: colors.muted }]}>{isAuthenticated ? `${snapshots.data?.length ?? 0} snapshots in your account` : "Sign in to persist this provider page for review"}</Text></View>
+              <View style={styles.persistenceCopy}><Text style={[styles.persistenceTitle, { color: colors.foreground }]}>Research listing store</Text><Text style={[styles.persistenceText, { color: colors.muted }]}>{isAuthenticated ? `${researchListings.data?.length ?? 0} listings · ${snapshots.data?.length ?? 0} observations in your account` : "Sign in to reconcile this provider page into your research store"}</Text></View>
               {isAuthenticated ? <Pressable onPress={() => void saveCurrentSnapshot()} disabled={saveState === "saving" || !listings.length} style={({ pressed }) => [styles.saveButton, { backgroundColor: colors.primary }, (!listings.length || saveState === "saving") && styles.disabled, pressed && styles.pressed]}><Text style={[styles.saveButtonText, { color: colors.onPrimary }]}>{saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : "Save page"}</Text></Pressable> : null}
             </View>
             {saveState === "error" ? <Text style={[styles.saveError, { color: colors.error }]}>Some rows could not be persisted. The provider page remains available for retry.</Text> : null}

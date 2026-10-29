@@ -1,0 +1,1 @@
+ALTER TABLE `research_listings` ADD `query` varchar(255) NOT NULL;

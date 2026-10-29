@@ -1,6 +1,6 @@
 import { and, count, desc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { characteristicCheckAudits, ebayListingEvents, ebayNotificationEvents, evidenceExportAudits, InsertCharacteristicCheckAudit, InsertEbayListingEvent, InsertEbayNotificationEvent, InsertEvidenceExportAudit, InsertListingOutcome, InsertObservationReview, InsertOutcomeSyncAudit, InsertProviderReadRetryReset, InsertReconciliationSnapshot, InsertSavedDeal, InsertThesisContradictionReview, InsertThesisDraftRevision, InsertUser, listingOutcomes, observationReviews, outcomeSyncAudits, providerReadRetryResets, reconciliationSnapshots, savedDeals, thesisContradictionReviews, thesisDraftRevisions, userPreferences, users } from "../drizzle/schema";
+import { characteristicCheckAudits, ebayListingEvents, ebayNotificationEvents, evidenceExportAudits, InsertCharacteristicCheckAudit, InsertEbayListingEvent, InsertEbayNotificationEvent, InsertEvidenceExportAudit, InsertListingOutcome, InsertObservationReview, InsertOutcomeSyncAudit, InsertProviderReadRetryReset, InsertReconciliationSnapshot, InsertResearchListing, InsertSavedDeal, InsertThesisContradictionReview, InsertThesisDraftRevision, InsertUser, listingOutcomes, observationReviews, outcomeSyncAudits, providerReadRetryResets, reconciliationSnapshots, researchListings, savedDeals, thesisContradictionReviews, thesisDraftRevisions, userPreferences, users } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import { buildEbayMarketSignals } from "../shared/ebay-signals";
 
@@ -182,6 +182,23 @@ export async function listReconciliationSnapshots(userId: number, limit = 100) {
   const db = await getDb();
   if (!db) return [];
   return db.select().from(reconciliationSnapshots).where(eq(reconciliationSnapshots.userId, userId)).orderBy(desc(reconciliationSnapshots.capturedAt)).limit(limit);
+}
+
+export async function reconcileResearchListing(listing: InsertResearchListing) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const existing = await db.select().from(researchListings).where(and(eq(researchListings.userId, listing.userId), eq(researchListings.marketplaceId, listing.marketplaceId), eq(researchListings.providerListingId, listing.providerListingId))).limit(1);
+  const prior = existing[0];
+  const observationCount = prior ? (prior.latestSnapshotId === listing.latestSnapshotId ? prior.observationCount : prior.observationCount + 1) : 1;
+  await db.insert(researchListings).values({ ...listing, observationCount }).onDuplicateKeyUpdate({ set: { sourceSlug: listing.sourceSlug, query: listing.query, profileSlug: listing.profileSlug, title: listing.title, askingPrice: listing.askingPrice, currency: listing.currency ?? null, condition: listing.condition, location: listing.location ?? null, sellerId: listing.sellerId ?? null, sourceUrl: listing.sourceUrl ?? null, latestSnapshotId: listing.latestSnapshotId, lastObservedAt: listing.lastObservedAt, observationCount } });
+  const result = await db.select().from(researchListings).where(and(eq(researchListings.userId, listing.userId), eq(researchListings.marketplaceId, listing.marketplaceId), eq(researchListings.providerListingId, listing.providerListingId))).limit(1);
+  return result[0];
+}
+
+export async function listResearchListings(userId: number, limit = 100) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(researchListings).where(eq(researchListings.userId, userId)).orderBy(desc(researchListings.lastObservedAt)).limit(limit);
 }
 
 export async function reviewReconciliationSnapshot(userId: number, snapshotId: string, reconciliationStatus: "reviewed" | "superseded", reviewNote: string, reviewedAt: Date) {

@@ -8,6 +8,7 @@ import { z } from "zod";
 import { getEbaySubscriptionState } from "./ebay-monitoring";
 import { summarizeEbayMarketSignals } from "../shared/ebay-signals";
 import { thesisDraftSchema } from "../shared/versioned-drafts";
+import { buildResearchListingFromSnapshot } from "../shared/reconciliation-snapshots";
 
 const savedDealInput = z.object({
   listingId: z.string().min(1).max(128),
@@ -83,6 +84,8 @@ const reconciliationSnapshotInput = z.object({
   sourceFetchedAt: z.string().datetime(),
   reconciliationStatus: z.enum(["observed", "reviewed", "superseded"]).default("observed"),
 });
+
+const researchListingInput = reconciliationSnapshotInput.omit({ reconciliationStatus: true });
 
 const reconciliationSnapshotReviewInput = z.object({
   snapshotId: z.string().min(1).max(160),
@@ -194,6 +197,10 @@ export const appRouter = router({
     characteristicCheckAudits: protectedProcedure.input(characteristicCheckAuditListInput).query(({ ctx, input }) => db.listCharacteristicCheckAudits(ctx.user.id, input)),
     retryResetAudits: protectedProcedure.input(providerReadRetryResetListInput).query(({ ctx, input }) => db.listProviderReadRetryResets(ctx.user.id, input.providerListingId)),
     appendRetryResetAudit: protectedProcedure.input(providerReadRetryResetInput).mutation(({ ctx, input }) => db.appendProviderReadRetryReset({ userId: ctx.user.id, ...input, occurredAt: new Date(input.occurredAt) })),
+  }),
+  researchListings: router({
+    list: protectedProcedure.query(({ ctx }) => db.listResearchListings(ctx.user.id)),
+    reconcile: protectedProcedure.input(researchListingInput).mutation(({ ctx, input }) => { const mapped = buildResearchListingFromSnapshot({ ...input, reconciliationStatus: "observed" }); return db.reconcileResearchListing({ userId: ctx.user.id, ...mapped, firstObservedAt: new Date(mapped.firstObservedAt), lastObservedAt: new Date(mapped.lastObservedAt) }); }),
   }),
   evidenceExportAudits: router({
     list: protectedProcedure.query(({ ctx }) => db.listEvidenceExportAudits(ctx.user.id)),

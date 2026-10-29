@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildEbayReconciliationSnapshot, classifyProviderReadError, compareCurrentProviderReadToSnapshot, compareSnapshotToPrior, evaluateEbayItemDetailCoverage, evaluateSnapshotReconciliation, getProviderReadRetryDelayMs, getSnapshotFreshness, nextSnapshotFreshnessThreshold, normalizeSnapshotFreshnessThreshold, PROVIDER_READ_MAX_RETRIES, summarizeSnapshotSourceQuality } from "../shared/reconciliation-snapshots";
+import { buildEbayReconciliationSnapshot, buildResearchListingFromSnapshot, classifyProviderReadError, compareCurrentProviderReadToSnapshot, compareSnapshotToPrior, evaluateEbayItemDetailCoverage, evaluateSnapshotReconciliation, getProviderReadRetryDelayMs, getSnapshotFreshness, nextSnapshotFreshnessThreshold, normalizeSnapshotFreshnessThreshold, PROVIDER_READ_MAX_RETRIES, summarizeSnapshotSourceQuality } from "../shared/reconciliation-snapshots";
 
 const listing = {
   listingId: "v1|123456",
@@ -78,6 +78,23 @@ describe("reconciliation snapshots", () => {
     const snapshot = buildEbayReconciliationSnapshot({ listing: { ...listing, sellerId: undefined, url: undefined }, marketplaceId: "EBAY_GB", query: "luxury watch", profileSlug: "luxury_watches", sourceFetchedAt: "2026-10-23T10:00:00.000Z" });
     expect(snapshot).not.toHaveProperty("sellerId");
     expect(snapshot).not.toHaveProperty("sourceUrl");
+  });
+
+  it("maps a normalized observation into the primary research store without valuation fields", () => {
+    const snapshot = buildEbayReconciliationSnapshot({ listing, marketplaceId: "EBAY_GB", query: "luxury watch", profileSlug: "luxury_watches", sourceFetchedAt: "2026-10-23T10:00:00.000Z" });
+    const record = buildResearchListingFromSnapshot(snapshot);
+    expect(record).toMatchObject({
+      marketplaceId: "EBAY_GB",
+      query: "luxury watch",
+      providerListingId: "v1|123456",
+      latestSnapshotId: snapshot.snapshotId,
+      firstObservedAt: snapshot.sourceFetchedAt,
+      lastObservedAt: snapshot.sourceFetchedAt,
+      observationCount: 1,
+    });
+    expect(record).not.toHaveProperty("marketValue");
+    expect(record).not.toHaveProperty("score");
+    expect(record).not.toHaveProperty("allocation");
   });
 
   it("reports only currency-matched movement from an earlier provider observation", () => {
