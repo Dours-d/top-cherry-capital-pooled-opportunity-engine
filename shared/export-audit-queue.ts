@@ -37,6 +37,20 @@ export type EvidenceExportAuditMaintenance = { action: "compacted" | "reset-note
 export type EvidenceExportAuditIntegrity = { status: "verified" | "review-needed"; checkedAt: string };
 export type EvidenceExportAuditIntegrityFilter = "all" | EvidenceExportAuditIntegrity["status"];
 export type EvidenceExportAuditSyncHealth = { lastSuccessfulAt?: string; lastFailedAt?: string; successfulDays?: Record<string, number>; failedDays?: Record<string, number> };
+export type EvidenceExportAuditSyncHealthTrendEntry = { date: string; successful: number; failed: number };
+
+export function buildEvidenceExportAuditSyncHealthTrend(
+  health: EvidenceExportAuditSyncHealth | null,
+  anchorDate: string | Date = new Date(),
+): EvidenceExportAuditSyncHealthTrendEntry[] {
+  const anchor = new Date(anchorDate);
+  if (Number.isNaN(anchor.getTime())) return [];
+  const day = Date.UTC(anchor.getUTCFullYear(), anchor.getUTCMonth(), anchor.getUTCDate());
+  return Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(day - (6 - index) * 86_400_000).toISOString().slice(0, 10);
+    return { date, successful: health?.successfulDays?.[date] ?? 0, failed: health?.failedDays?.[date] ?? 0 };
+  });
+}
 
 export function filterEvidenceExportAuditQueueByIntegrity(
   queue: PendingEvidenceExportAudit[],
