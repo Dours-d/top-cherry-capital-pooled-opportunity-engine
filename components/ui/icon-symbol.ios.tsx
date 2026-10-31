@@ -1,7 +1,15 @@
 import { SymbolView, SymbolViewProps, SymbolWeight } from "expo-symbols";
 import { StyleProp, ViewStyle } from "react-native";
 
-const nativeNames: Record<string, SymbolViewProps["name"]> = {
+type IconSymbolName =
+  | "house.fill"
+  | "paperplane.fill"
+  | "chevron.left.forwardslash.chevron.right"
+  | "chevron.right"
+  | "chart.bar.fill"
+  | "arrow.triangle.2.circlepath";
+
+const nativeNames: Partial<Record<IconSymbolName, SymbolViewProps["name"]>> = {
   "paperplane.fill": "bookmark.fill",
   "chevron.left.forwardslash.chevron.right": "person.fill",
 };
@@ -13,7 +21,7 @@ export function IconSymbol({
   style,
   weight = "regular",
 }: {
-  name: SymbolViewProps["name"];
+  name: IconSymbolName;
   size?: number;
   color: string;
   style?: StyleProp<ViewStyle>;

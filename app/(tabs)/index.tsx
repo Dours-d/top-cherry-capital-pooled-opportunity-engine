@@ -399,7 +399,7 @@ export default function HomeScreen() {
             <Text style={[styles.emptyText, { color: colors.muted }]}>Try a different search or filter.</Text>
           </View>
         }
-        ListFooterComponent={feedMode === "live" ? <LiveFeedFooter loading={liveSearch.isFetching} hasMore={Boolean(liveSearch.data?.hasMore)} onRefresh={() => { setLiveOffset(0); void liveSearch.refetch(); }} onNext={() => setLiveOffset((current) => current + 20)} colors={colors} /> : null}
+        ListFooterComponent={feedMode === "live" ? <LiveFeedFooter loading={liveSearch.isFetching} hasMore={Boolean(liveSearch.data?.hasMore)} onRefresh={() => { setLiveOffset(0); void liveSearch.refetch(); }} onNext={() => setLiveOffset((current) => current + 20)} colors={colors} /> : undefined}
       />
       <Modal visible={Boolean(selectedListing)} transparent animationType="slide" onRequestClose={() => setSelectedListing(null)}>
         {selectedListing ? (
